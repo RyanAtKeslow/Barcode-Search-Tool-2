@@ -60,37 +60,28 @@ function prepBayAddExport() {
       return;
     }
     
-    // Get the add barcodes column (one column left of username)
+    // Get the add-barcodes column (one column left of username)
     const addBarcodesCol = usernameCell.getColumn() - 1;
-    const addItemNamesCol = usernameCell.getColumn() - 1;  // Item names are in the same column as barcodes
-    Logger.log(`Add barcodes column: ${addBarcodesCol}, Item names column: ${addItemNamesCol}`);
+    Logger.log(`Add barcodes column: ${addBarcodesCol}`);
     
-    // Get all values in both columns starting from row 4
-    const columnA = sheet.getRange(4, addBarcodesCol, sheet.getLastRow() - 3, 1).getValues();
-    const columnB = sheet.getRange(4, addItemNamesCol, sheet.getLastRow() - 3, 1).getValues();
+    // Pull barcodes column once; we don’t need the neighbouring item-name column
+    const lastRow = sheet.getLastRow();
+    const columnA = sheet.getRange(4, addBarcodesCol, lastRow - 3, 1).getValues();
     
-    // Find the last row with data and any existing exportTag
-    let lastDataRow = -1;
+    // Scan once from bottom to find both export-tag row and last data row
     let exportTagRow = -1;
-    
-    // First find the most recent export tag, ignoring empty cells
+    let lastDataRow = -1;
     for (let i = columnA.length - 1; i >= 0; i--) {
-      const value = columnA[i][0];
-      if (value) {  // Only check non-empty cells
-        if (value.toString().includes("Above was exported @")) {
-          exportTagRow = i + 4; // +4 because we started at row 4
-          break;
-        }
+      const cellVal = columnA[i][0];
+      if (!cellVal) continue;
+      const str = cellVal.toString();
+      if (lastDataRow === -1 && !str.includes("Above was exported @")) {
+        lastDataRow = i + 4; // offset for header rows
       }
-    }
-    
-    // Now find the last barcode after the export tag, ignoring empty cells
-    for (let i = columnA.length - 1; i >= 0; i--) {
-      const value = columnA[i][0];
-      if (value && !value.toString().includes("Above was exported @")) {
-        lastDataRow = i + 4; // +4 because we started at row 4
-        break;
+      if (exportTagRow === -1 && str.includes("Above was exported @")) {
+        exportTagRow = i + 4;
       }
+      if (lastDataRow !== -1 && exportTagRow !== -1) break; // found both
     }
     
     // If we couldn't find any barcodes, show message and return
@@ -140,11 +131,10 @@ function prepBayAddExport() {
     const file = DriveApp.createFile(filename, csvContent, MimeType.CSV);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
-    // Create or get the 'Prep Bay Scans' folder in the user's Drive
+    // Create or get the 'Prep Bay Scans' folder in the user's Drive and create file directly inside it
     let folders = DriveApp.getFoldersByName('Prep Bay Scans');
     let prepBayFolder = folders.hasNext() ? folders.next() : DriveApp.createFolder('Prep Bay Scans');
-    prepBayFolder.addFile(file);
-    DriveApp.getRootFolder().removeFile(file); // Remove from root
+    prepBayFolder.createFile(file); // Drive API allows createFile on folder object so file is born inside folder
 
     // Create a download URL
     const downloadUrl = file.getDownloadUrl().replace('export=download', 'export=download&confirm=no_antivirus');
@@ -175,7 +165,7 @@ function prepBayAddExport() {
     const exportTag = `Above was exported @ ${new Date().toLocaleString()}`;
     sheet.getRange(lastDataRow + 1, addBarcodesCol).setValue(exportTag);
     
-    Logger.log(`✅ Exported ${filteredData.length} items to ${filename}`);
+    Logger.log(`✅ Export complete | items: ${filteredData.length}`);
     
     // Get job name from username cell value
     const jobName = cellValue.toString().trim();
@@ -192,85 +182,49 @@ function prepBayAddExport() {
   }
 }
 
+/**
+ * Callback after user clicks download link. Re-runs SendStatus to ensure Pulled status is recorded
+ * even if the initial call failed (rare), and handles multi-prep-bay username selection.
+ */
 function afterExportComplete() {
   try {
-    // Get user's email and extract username
     const { email: userEmail, nickname: username } = fetchUserEmailandNickname();
-    
-    // Get the active sheet
     const sheet = SpreadsheetApp.getActiveSheet();
-    
-    // Search for username in row 2
-    let usernameMatches = [];
+    // Find username cells in row 2
     const row2 = sheet.getRange(2, 1, 1, sheet.getLastColumn()).getValues()[0];
-    
-    for (let j = 0; j < row2.length; j++) {
-      if (row2[j] && row2[j].toString().toLowerCase().includes(username.toLowerCase())) {
-        usernameMatches.push({
-          cell: sheet.getRange(2, j + 1),
-          value: row2[j]
-        });
+    const matches = [];
+    row2.forEach((v, idx) => {
+      if (v && v.toString().toLowerCase().includes(username.toLowerCase())) {
+        matches.push({ cell: sheet.getRange(2, idx + 1), value: v });
       }
-    }
-    
+    });
+
     let usernameCell;
-    
-    // Handle multiple matches
-    if (usernameMatches.length > 1) {
-      Logger.log(`Multiple matches found: ${usernameMatches.length}`);
-      const html = HtmlService.createHtmlOutput(`
-        <form id="matchForm">
-          <div style="margin-bottom: 10px;">
-            <label>Oops! It looks like you have your name on multiple prep bays. Please select the correct entry:</label>
-            <select id="matchSelect" style="margin-top: 10px; width: 100%;">
-              ${usernameMatches.map((match, index) => 
-                `<option value="${index}">${match.value}</option>`
-              ).join('')}
-            </select>
-          </div>
-          <input type="button" value="Select" onclick="submitSelection()" style="
-            padding: 5px 15px;
-            background-color: #4285f4;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-          ">
-        </form>
-        <script>
-          function submitSelection() {
-            const index = document.getElementById('matchSelect').value;
-            google.script.run
-              .withSuccessHandler(() => google.script.host.close())
-              .withFailureHandler((error) => alert(error))
-              .setSelectedMatch(index);
-          }
-        </script>
-      `)
-      .setWidth(400)
-      .setHeight(200);
-      
-      SpreadsheetApp.getUi().showModalDialog(html, 'Select Correct Entry');
-      return;
-    } else if (usernameMatches.length === 1) {
-      usernameCell = usernameMatches[0].cell;
-    } else {
+    if (matches.length === 0) {
       Logger.log('❌ No username match found in prep bays sheet');
       return;
+    } else if (matches.length === 1) {
+      usernameCell = matches[0].cell;
+    } else {
+      // Multiple matches – ask user which one (kept original HTML dialog)
+      const html = HtmlService.createHtmlOutput(`
+        <form id="matchForm">
+          <label>Select the correct entry:</label><br/>
+          <select id="matchSelect">${matches.map((m,i)=>`<option value="${i}">${m.value}</option>`).join('')}</select><br/>
+          <input type="button" value="Select" onclick="google.script.run.withSuccessHandler(()=>google.script.host.close()).setSelectedMatch(document.getElementById('matchSelect').value)" />
+        </form>`).setWidth(300).setHeight(150);
+      SpreadsheetApp.getUi().showModalDialog(html, 'Select Prep Bay');
+      return;
     }
-    
+
     const jobName = usernameCell.getValue().toString().trim();
-    
-    // Get barcodes from the sheet
     const barcodes = sheet.getRange(4, 1, sheet.getLastRow() - 3, 1)
       .getValues()
-      .map(row => row[0])
-      .filter(barcode => barcode && !barcode.toString().includes("Above was exported @"));
-    
-    // Send digital cameras to database with Pulled status
+      .map(r => r[0])
+      .filter(b => b && !b.toString().includes('Above was exported @'));
     const uniqueBarcodes = Array.from(new Set(barcodes));
-    SendStatus("Pulled", uniqueBarcodes, username, jobName, userEmail);
-    
+    SendStatus('Pulled', uniqueBarcodes, username, jobName, userEmail);
+
   } catch (error) {
     Logger.log(`❌ Error in afterExportComplete: ${error.toString()}`);
     Logger.log(`Stack trace: ${error.stack}`);

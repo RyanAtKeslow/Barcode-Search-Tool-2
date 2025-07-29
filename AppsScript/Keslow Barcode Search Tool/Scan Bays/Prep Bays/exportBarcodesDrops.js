@@ -1,6 +1,6 @@
 function prepBayDropExport() {
   try {
-    Logger.log('Starting prepBayDropExport...');
+    Logger.log('prepBayDropExport start');
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getActiveSheet();
     const ui = SpreadsheetApp.getUi();
@@ -37,36 +37,26 @@ function prepBayDropExport() {
     }
     
     // Get the drop barcodes column (two columns right of username)
-    const dropBarcodesCol = usernameCell.getColumn() + 2;
-    const dropItemNamesCol = usernameCell.getColumn() + 2;  // Item names are in the same column as barcodes
-    Logger.log(`Drop barcodes column: ${dropBarcodesCol}, Item names column: ${dropItemNamesCol}`);
+    const dropBarcodesCol = usernameCell.getColumn() + 2; // two cols right
+    Logger.log(`Drop barcodes column: ${dropBarcodesCol}`);
     
     // Get all values in both columns starting from row 4
-    const columnD = sheet.getRange(4, dropBarcodesCol, sheet.getLastRow() - 3, 1).getValues();
-    const columnE = sheet.getRange(4, dropItemNamesCol, sheet.getLastRow() - 3, 1).getValues();
+    const lastRow = sheet.getLastRow();
+    const columnD = sheet.getRange(4, dropBarcodesCol, lastRow - 3, 1).getValues();
     
-    // Find the last row with data and any existing exportTag
-    let lastDataRow = -1;
     let exportTagRow = -1;
-    
-    // First find the most recent export tag, ignoring empty cells
+    let lastDataRow = -1;
     for (let i = columnD.length - 1; i >= 0; i--) {
-      const value = columnD[i][0];
-      if (value) {  // Only check non-empty cells
-        if (value.toString().includes("Above was exported @")) {
-          exportTagRow = i + 4; // +4 because we started at row 4
-          break;
-        }
+      const cellVal = columnD[i][0];
+      if (!cellVal) continue;
+      const str = cellVal.toString();
+      if (lastDataRow === -1 && !str.includes("Above was exported @")) {
+        lastDataRow = i + 4;
       }
-    }
-    
-    // Now find the last barcode after the export tag, ignoring empty cells
-    for (let i = columnD.length - 1; i >= 0; i--) {
-      const value = columnD[i][0];
-      if (value && !value.toString().includes("Above was exported @")) {
-        lastDataRow = i + 4; // +4 because we started at row 4
-        break;
+      if (exportTagRow === -1 && str.includes("Above was exported @")) {
+        exportTagRow = i + 4;
       }
+      if (lastDataRow !== -1 && exportTagRow !== -1) break;
     }
     
     // If we couldn't find any barcodes, show message and return
@@ -119,11 +109,9 @@ function prepBayDropExport() {
     const file = DriveApp.createFile(filename, csvContent, MimeType.CSV);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
-    // Create or get the 'Prep Bay Scans' folder in the user's Drive
     let folders = DriveApp.getFoldersByName('Prep Bay Scans');
     let prepBayFolder = folders.hasNext() ? folders.next() : DriveApp.createFolder('Prep Bay Scans');
-    prepBayFolder.addFile(file);
-    DriveApp.getRootFolder().removeFile(file); // Remove from root
+    prepBayFolder.createFile(file);
 
     // Create a download URL
     const downloadUrl = file.getDownloadUrl().replace('export=download', 'export=download&confirm=no_antivirus');
@@ -154,7 +142,7 @@ function prepBayDropExport() {
     const exportTag = `Above was exported @ ${new Date().toLocaleString()}`;
     sheet.getRange(lastDataRow + 1, dropBarcodesCol).setValue(exportTag);
     
-    Logger.log(`✅ Exported ${filteredData.length} items to ${filename}`);
+    Logger.log(`✅ Drop export complete | items: ${filteredData.length}`);
     
     // Get job name from username cell value
     const jobName = cellValue.toString().trim();
