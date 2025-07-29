@@ -1,0 +1,48 @@
+=IF(ISNUMBER(SEARCH("Disposed", B4)), "DISPOSED", 
+   IF(ISNUMBER(SEARCH("Lost", B4)), "LOST", 
+   IF(ISNUMBER(SEARCH("Repair", B4)), "REPAIR", 
+   IF(ISNUMBER(SEARCH("Sale", B4)), "SALE", 
+   IF(ISNUMBER(SEARCH("Inactive", B4)), "INACTIVE", 
+   IF(ISNUMBER(SEARCH("Pending QC", B4)), "PENDING QC", 
+   IF(ISNUMBER(SEARCH("|", B4)), 
+      LET(
+         pipeValue, MID(B4, SEARCH("|", B4) + 1, LEN(B4)),
+         IFERROR(INDEX(FILTER('Consignment Rooms'!$A:$A, 'Consignment Rooms'!$B:$B=pipeValue), 1), "Consigner Item")
+      ),
+   IF(B4="Temporary Barcode", "Temporary Barcode", 
+   IF(B4="Personal Gear", "Personal Gear", 
+   IF(LEFT(B4, 1) = "|", 
+      LET(
+         pipeValue, MID(B4, 2, LEN(B4)),
+         IFERROR(INDEX(FILTER('Consignment Rooms'!$A:$A, 'Consignment Rooms'!$B:$B=pipeValue), 1), "Consigner Item")
+      ), 
+   IF(B4="", "", 
+      LET(
+         result, TEXTJOIN(", ", TRUE, 
+            IFERROR(FILTER('ER Aisle 1'!$AA:$AA, 'ER Aisle 1'!$Z:$Z=B4), ""), 
+            IFERROR(FILTER('ER Aisle 2'!$AA:$AA, 'ER Aisle 2'!$Z:$Z=B4), ""), 
+            IFERROR(FILTER('ER Aisle 3'!$AA:$AA, 'ER Aisle 3'!$Z:$Z=B4), ""), 
+            IFERROR(FILTER('ER Aisle 4'!$AA:$AA, 'ER Aisle 4'!$Z:$Z=B4), ""), 
+            IFERROR(FILTER('ER Aisle 5'!$AA:$AA, 'ER Aisle 5'!$Z:$Z=B4), ""), 
+            IFERROR(FILTER('ER Aisle 6'!$AA:$AA, 'ER Aisle 6'!$Z:$Z=B4), ""), 
+            IFERROR(FILTER('ER Aisle 7'!$AA:$AA, 'ER Aisle 7'!$Z:$Z=B4), ""), 
+            IFERROR(FILTER('ER Aisle 8'!$AA:$AA, 'ER Aisle 8'!$Z:$Z=B4), ""), 
+            IFERROR(FILTER('ER Aisle 9'!$AA:$AA, 'ER Aisle 9'!$Z:$Z=B4), ""), 
+            IFERROR(FILTER('ER Aisle 10'!$AA:$AA, 'ER Aisle 10'!$Z:$Z=B4), ""), 
+            IFERROR(FILTER('ER Aisle 11'!$AA:$AA, 'ER Aisle 11'!$Z:$Z=B4), ""), 
+            IFERROR(FILTER('ER Aisle 12'!$AA:$AA, 'ER Aisle 12'!$Z:$Z=B4), ""), 
+            IFERROR(FILTER('ER Aisle 13'!$AA:$AA, 'ER Aisle 13'!$Z:$Z=B4), ""), 
+            IFERROR(FILTER('ER Aisle 14'!$AA:$AA, 'ER Aisle 14'!$Z:$Z=B4), ""), 
+            IFERROR(FILTER('Service Department'!$Z:$Z, 'Service Department'!$Y:$Y=B4), ""), 
+            IFERROR(FILTER('Battery Room'!$Z:$Z, 'Battery Room'!$Y:$Y=B4), ""), 
+            IFERROR(FILTER('Filter Room'!$Z:$Z, 'Filter Room'!$Y:$Y=B4), ""), 
+            IFERROR(FILTER('Purchasing Mezzanine'!$Z:$Z, 'Purchasing Mezzanine'!$Y:$Y=B4), ""), 
+            IFERROR(FILTER('Projector Room'!$Z:$Z, 'Projector Room'!$Y:$Y=B4), ""), 
+            IFERROR(FILTER('Consignment Rooms'!$Y:$Y, 'Consignment Rooms'!$X:$X=B4), ""),
+            IFERROR(FILTER('Inventory Control'!$Z:$Z, 'Inventory Control'!$Y:$Y=B4), ""),
+            IFERROR(FILTER(RnD!$Z:$Z, RnD!$Y:$Y=B4), "")
+         ),
+         IF(result = "", "No Bin", result)
+      )
+   )
+))))))))))

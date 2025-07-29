@@ -1,0 +1,49 @@
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  
+  // Create "Bin Actions" menu
+  ui.createMenu('Bin Actions')
+    .addItem('Add Bin', 'addBin')
+    .addItem('Remove Bin', 'removeBinAndUpdate') 
+    .addItem('Change Bin Name', 'changeBinName')
+    .addItem('Add Item to Existing Bin', 'addToExistingBin')
+    .addItem('Remove Item From Existing Bin', 'removeFromExistingBin')
+    .addItem('Swap Bins', 'swapBins')
+    .addItem('Add Many Items to Existing Bin', 'pasteClipboardIntoNewRows')
+    .addToUi(); 
+
+
+
+    ui.createMenu('Prep Bay Actions')
+    .addItem('Export Adds', 'prepBayAddExport')
+    .addItem('Export Drops', 'prepBayDropExport')
+    .addItem('Ship Job', 'ShipPrepBay')
+    .addToUi();
+
+    // Create "Receiving" menu
+    ui.createMenu('Receiving')
+    .addItem('Sort Receiving Bay', 'sortShippingBay')
+    .addItem('Print Receiving Bay', 'printShippingBay')
+    .addItem('Export Receiving Bay', 'exportShippingBay')
+    .addItem('Reset Receiving Bay', 'resetShippingBay')
+    .addToUi();
+
+    // Create "Generic Bay" menu
+    ui.createMenu('Generic Bay')
+    .addItem('Sort Generic Bay', 'sortGenericBay')
+    .addItem('Print Generic Bay', 'printGenericBay')
+    .addItem('Export Generic Bay', 'exportGenericBay')
+    .addItem('Reset Generic Bay', 'resetGenericBay')
+    .addToUi();
+
+      // Create "Other Scripts" menu
+  ui.createMenu('Other Scripts')
+  .addItem('Sort Flawless Data', 'consolidateEquipmentBarcodes')
+  .addItem('Search Barcode Dictionary', 'searchBarcodeDictionary')
+  .addItem('Update Name Search Formula', 'updateNameSearch')
+  .addItem('Update Bin Search Formula', 'updateBinSearch')
+  .addItem('Refresh Analytics', 'countBarcodesAndPrint')
+  .addItem('Refresh Homeless Gear Sheet', 'updateHomelessGearSheet')
+  .addItem('Balance Cameras', 'balanceCameras')
+  .addToUi();
+}

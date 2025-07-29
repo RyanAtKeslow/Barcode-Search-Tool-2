@@ -1,0 +1,40 @@
+=IF(COUNTA(O29:T29)=0,
+  "No Filters Applied",
+  IFERROR(
+    FILTER('VENICE 2 Body Status'!C2:C,
+      IF(O29<>"", 
+        IF(O29="ANY", TRUE, 'VENICE 2 Body Status'!E2:E = O29),
+        TRUE
+      ) *
+      IF(P29<>"", 
+        IF(P29="ANY", TRUE, 'VENICE 2 Body Status'!G2:G = P29),
+        TRUE
+      ) *
+      IF(Q29<>"", 
+        IF(Q29="ANY", TRUE, 'VENICE 2 Body Status'!H2:H = Q29),
+        TRUE
+      ) *
+      IF(R29<>"", 
+        IF(R29="ANY", TRUE,
+          IF(R29="Keslow Camera",
+            'VENICE 2 Body Status'!I2:I = "Keslow Camera",
+            IF(R29="Consigner",
+              'VENICE 2 Body Status'!I2:I <> "Keslow Camera",
+              TRUE
+            )
+          )
+        ),
+        TRUE
+      ) *
+      IF(S29<>"", 
+        IF(S29="ANY", TRUE, 'VENICE 2 Body Status'!J2:J = S29),
+        TRUE
+      ) *
+      IF(T29<>"", 
+        IF(T29="ANY", TRUE, 'VENICE 2 Body Status'!K2:K = T29),
+        TRUE
+      )
+    ),
+    "No Matches"
+  )
+) 

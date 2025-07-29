@@ -1,0 +1,143 @@
+function exportGenericBay() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var activeSheet = ss.getActiveSheet();
+  
+  // Check if we're in the correct sheet
+  if (activeSheet.getName() !== "Barcode SEARCH") {
+    SpreadsheetApp.getUi().alert("Please run this script from the 'Barcode SEARCH' sheet");
+    return;
+  }
+  
+  // Try to get user info with fallback logic
+  let username;
+  try {
+    const userInfo = fetchUserInfoFromEmail();
+    username = userInfo.firstName;
+  } catch (error) {
+    try {
+      const { nickname } = fetchUserEmailandNickname();
+      username = nickname;
+    } catch (error) {
+      SpreadsheetApp.getUi().alert("Could not identify user. Please ensure you are logged in with your company email.");
+      return;
+    }
+  }
+  
+  // Find all username matches in row 2
+  var row2Range = activeSheet.getRange(2, 1, 1, activeSheet.getLastColumn());
+  var row2Values = row2Range.getValues()[0];
+  var usernameMatches = [];
+  
+  for (let j = 0; j < row2Values.length; j++) {
+    if (row2Values[j] && row2Values[j].toString().toLowerCase().includes(username.toLowerCase())) {
+      usernameMatches.push({
+        cellA1: activeSheet.getRange(2, j + 1).getA1Notation(),
+        value: row2Values[j]
+      });
+    }
+  }
+  
+  // Handle multiple matches
+  if (usernameMatches.length > 1) {
+    const selectedMatch = setSelectedMatch(usernameMatches);
+    continueExportGenericBay(selectedMatch.cellA1);
+  } else if (usernameMatches.length === 1) {
+    continueExportGenericBay(usernameMatches[0].cellA1);
+  } else {
+    SpreadsheetApp.getUi().alert("Could not find your name in row 2");
+    return;
+  }
+}
+
+function continueExportGenericBay(selectedCellA1) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var activeSheet = ss.getActiveSheet();
+  var usernameCell = activeSheet.getRange(selectedCellA1);
+  
+  var userName = usernameCell.getValue().toString().trim();
+  
+  // Function to capitalize each word
+  function capitalizeWords(name) {
+    return name.replace(/\b\w/g, function(char) { return char.toUpperCase(); });
+  }
+
+  // Ensure username is properly formatted
+  if (userName !== "") {
+    userName = capitalizeWords(userName);
+    usernameCell.setValue(userName); // Ensure capitalization in the sheet
+  }
+
+  // Prompt user if no name is entered
+  if (userName === "") {
+    var ui = SpreadsheetApp.getUi();
+    var response = ui.prompt(
+      "Please Enter Your Name", 
+      "(Please sign your work by putting your name on the Barcode Bay)", 
+      ui.ButtonSet.OK_CANCEL
+    );
+
+    if (response.getSelectedButton() == ui.Button.CANCEL) {
+      ui.alert("Please sign your work to continue");
+      return;
+    }
+
+    if (response.getResponseText().trim() !== "") {
+      userName = capitalizeWords(response.getResponseText().trim());
+      usernameCell.setValue(userName);
+    } else {
+      ui.alert("You must sign your work to continue");
+      return;
+    }
+  }
+
+  // Dynamically determine the barcode column (left of username cell)
+  var userColumn = usernameCell.getColumn(); 
+  var barcodeColumn = userColumn - 1; 
+  var barcodeRange = activeSheet.getRange(4, barcodeColumn, activeSheet.getLastRow() - 3, 1); // Start from row 4
+
+  // Get the barcode values
+  var barcodes = barcodeRange.getValues().flat().filter(String);
+
+  // Ensure there's data to export
+  if (barcodes.length === 0) {
+    SpreadsheetApp.getUi().alert("No barcodes found in column " + String.fromCharCode(64 + barcodeColumn) + ".");
+    return;
+  }
+
+  // Convert the barcodes array to a CSV string (one per line)
+  var csvContent = barcodes.join("\n");
+
+  // Get current timestamp
+  var timeZone = "America/Los_Angeles";
+  var date = Utilities.formatDate(new Date(), timeZone, "MM-dd-yy_HH-mm");
+
+  // Define file name
+  var fileName = date + "_" + userName + "_Barcodes.csv";
+
+  // Get or create the "CSV Exports" folder
+  var rootFolder = DriveApp.getRootFolder();
+  var folderIterator = rootFolder.getFoldersByName("CSV Exports");
+  var csvFolder = folderIterator.hasNext() ? folderIterator.next() : rootFolder.createFolder("CSV Exports");
+
+  // Create the CSV file in Drive
+  var csvFile = csvFolder.createFile(fileName, csvContent, MimeType.PLAIN_TEXT);
+
+  // Generate the download link
+  var fileUrl = csvFile.getDownloadUrl();
+
+  // Display the download link in a dialog
+  var htmlOutput = HtmlService.createHtmlOutput(
+    '<div style="text-align: center;">' +
+    '<p>Your CSV file is ready for download.</p>' +
+    '<a href="' + fileUrl + '" target="_blank" style="font-size: 16px; color: blue; text-decoration: none;">Click here to download</a>' +
+    '</div>'
+  )
+  .setWidth(400)
+  .setHeight(120);
+
+  SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'CSV File Created');
+}
+
+function setSelectedUsernameCell(cellA1) {
+  PropertiesService.getScriptProperties().setProperty('selectedUsernameCell', cellA1);
+} 
