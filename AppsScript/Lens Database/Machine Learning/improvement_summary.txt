@@ -1,0 +1,44 @@
+Lens Parsing Improvement Summary Report
+========================================
+
+Total lenses processed: 1604
+Average confidence: 0.675
+Lenses needing review: 602
+Improvement: 120 fewer lenses need review
+
+Top Manufacturers:
+  Cooke: 261
+  Zeiss: 168
+  Canon: 129
+  Arri: 89
+  Leitz: 69
+  Tribe7: 55
+  Ancient Optics: 54
+  Dzofilm: 53
+  Laowa: 51
+
+Top Series:
+  Fd: 49
+  Master Anamorphic: 45
+  Ultra Prime: 45
+  Super Speed: 40
+  Proteus: 35
+  Gm: 34
+  Macro: 31
+  Standard Speed: 29
+  Swing Shift: 26
+
+Format Distribution:
+  FF: 97
+  S35: 53
+  16MM: 30
+  VV: 3
+  FULL FRAME: 2
+  S16: 1
+
+Mount Distribution:
+  LPL: 57
+  EF: 39
+  E-MOUNT: 20
+  PL: 4
+  EOS: 1

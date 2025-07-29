@@ -1,0 +1,465 @@
+{
+  "manufacturers": {
+    "angenieux": [
+      "angenieux",
+      "ang"
+    ],
+    "canon": [
+      "canon"
+    ],
+    "cooke": [
+      "cooke"
+    ],
+    "zeiss": [
+      "zeiss",
+      "arri/zeiss",
+      "arri / zeiss"
+    ],
+    "leica": [
+      "leica",
+      "leitz"
+    ],
+    "sigma": [
+      "sigma"
+    ],
+    "tamron": [
+      "tamron"
+    ],
+    "tokina": [
+      "tokina"
+    ],
+    "rokinon": [
+      "rokinon",
+      "samyang"
+    ],
+    "laowa": [
+      "laowa"
+    ],
+    "atlas": [
+      "atlas"
+    ],
+    "caldwell": [
+      "caldwell"
+    ],
+    "master": [
+      "master"
+    ],
+    "ancient optics": [
+      "ancient optics"
+    ],
+    "zero optik": [
+      "zero optik"
+    ],
+    "tls": [
+      "tls"
+    ],
+    "works cameras": [
+      "works cameras"
+    ],
+    "whitepoint optics": [
+      "whitepoint optics"
+    ],
+    "gl optics": [
+      "gl optics"
+    ],
+    "nanmorph": [
+      "nanmorph"
+    ],
+    "proteus": [
+      "proteus"
+    ],
+    "lomo": [
+      "lomo"
+    ],
+    "kinoptik": [
+      "kinoptik"
+    ],
+    "optex": [
+      "optex"
+    ],
+    "optika": [
+      "optika"
+    ],
+    "optar": [
+      "optar"
+    ],
+    "nikon": [
+      "nikon"
+    ],
+    "fujinon": [
+      "fujinon"
+    ],
+    "vantage": [
+      "vantage"
+    ],
+    "lensbaby": [
+      "lensbaby"
+    ],
+    "keslow": [
+      "keslow"
+    ],
+    "infinity": [
+      "infinity"
+    ],
+    "lindsey": [
+      "lindsey"
+    ],
+    "century": [
+      "century"
+    ],
+    "sony": [
+      "sony"
+    ],
+    "dzofilm": [
+      "dzofilm",
+      "dzofilms"
+    ],
+    "gecko-cam": [
+      "gecko-cam"
+    ],
+    "kowa": [
+      "kowa"
+    ],
+    "scorpio": [
+      "scorpio"
+    ],
+    "masterbuilt": [
+      "masterbuilt"
+    ],
+    "tribe7": [
+      "tribe7"
+    ],
+    "hawk": [
+      "hawk"
+    ],
+    "arri": [
+      "arri"
+    ],
+    "red": [
+      "red"
+    ],
+    "blackmagic": [
+      "blackmagic"
+    ],
+    "panasonic": [
+      "panasonic"
+    ],
+    "olympus": [
+      "olympus"
+    ],
+    "pentax": [
+      "pentax"
+    ],
+    "minolta": [
+      "minolta"
+    ],
+    "konica": [
+      "konica"
+    ],
+    "yashica": [
+      "yashica"
+    ],
+    "mamiya": [
+      "mamiya"
+    ],
+    "hasselblad": [
+      "hasselblad"
+    ],
+    "bronica": [
+      "bronica"
+    ],
+    "fuji": [
+      "fuji"
+    ],
+    "ricoh": [
+      "ricoh"
+    ],
+    "contax": [
+      "contax"
+    ]
+  },
+  "series": {
+    "master prime": [
+      "master prime"
+    ],
+    "ultra prime": [
+      "ultra prime"
+    ],
+    "super speed": [
+      "super speed"
+    ],
+    "standard speed": [
+      "standard speed"
+    ],
+    "signature prime": [
+      "signature prime"
+    ],
+    "s4/i": [
+      "s4/i",
+      "s4i"
+    ],
+    "s5/i": [
+      "s5/i",
+      "s5i"
+    ],
+    "s7/i": [
+      "s7/i",
+      "s7i"
+    ],
+    "panchro/i": [
+      "panchro/i",
+      "panchroi"
+    ],
+    "anamorphic/i": [
+      "anamorphic/i",
+      "anamorphici"
+    ],
+    "anamorphic ff plus": [
+      "anamorphic ff plus"
+    ],
+    "anamorphic sf ff plus": [
+      "anamorphic sf ff plus"
+    ],
+    "sp3": [
+      "sp3"
+    ],
+    "optimo": [
+      "optimo"
+    ],
+    "optimo ultra": [
+      "optimo ultra"
+    ],
+    "optimo ultra compact": [
+      "optimo ultra compact"
+    ],
+    "optimo dp": [
+      "optimo dp"
+    ],
+    "optimo prime": [
+      "optimo prime"
+    ],
+    "optimo style": [
+      "optimo style"
+    ],
+    "optimo vintage": [
+      "optimo vintage"
+    ],
+    "optimo hr": [
+      "optimo hr"
+    ],
+    "optimo anamorphic": [
+      "optimo anamorphic"
+    ],
+    "optimo anamorphic hr": [
+      "optimo anamorphic hr"
+    ],
+    "ez-1": [
+      "ez-1",
+      "ez1"
+    ],
+    "ez-2": [
+      "ez-2",
+      "ez2"
+    ],
+    "a-2s": [
+      "a-2s",
+      "a2s"
+    ],
+    "s2": [
+      "s2"
+    ],
+    "alura": [
+      "alura"
+    ],
+    "cabrio": [
+      "cabrio"
+    ],
+    "premier": [
+      "premier"
+    ],
+    "rangefinder": [
+      "rangefinder"
+    ],
+    "fd": [
+      "fd"
+    ],
+    "ef": [
+      "ef"
+    ],
+    "ef-s": [
+      "ef-s",
+      "efs"
+    ],
+    "l series": [
+      "l series"
+    ],
+    "k-35": [
+      "k-35",
+      "k35"
+    ],
+    "nikkor": [
+      "nikkor"
+    ],
+    "fisheye": [
+      "fisheye"
+    ],
+    "hawk 65": [
+      "hawk 65"
+    ],
+    "orion": [
+      "orion"
+    ],
+    "mercury": [
+      "mercury"
+    ],
+    "silver edition": [
+      "silver edition"
+    ],
+    "chameleon": [
+      "chameleon"
+    ],
+    "nanomorph": [
+      "nanomorph"
+    ],
+    "proteus": [
+      "proteus"
+    ],
+    "spherical primes": [
+      "spherical primes"
+    ],
+    "vintage primes": [
+      "vintage primes"
+    ],
+    "tegea": [
+      "tegea"
+    ],
+    "super cine": [
+      "super cine"
+    ],
+    "elite": [
+      "elite"
+    ],
+    "illumina": [
+      "illumina"
+    ],
+    "varopanchr": [
+      "varopanchr"
+    ],
+    "vario-sonnar": [
+      "vario-sonnar"
+    ],
+    "lwz.1": [
+      "lwz.1",
+      "lwz1"
+    ],
+    "lwz.2": [
+      "lwz.2",
+      "lwz2"
+    ],
+    "master zoom": [
+      "master zoom"
+    ],
+    "ultra wide zoom": [
+      "ultra wide zoom"
+    ],
+    "variable prime": [
+      "variable prime"
+    ],
+    "s16 zooms": [
+      "s16 zooms"
+    ],
+    "cinema zoom": [
+      "cinema zoom"
+    ],
+    "cine zoom": [
+      "cine zoom"
+    ],
+    "broadcast zoom": [
+      "broadcast zoom"
+    ],
+    "eng zoom": [
+      "eng zoom"
+    ],
+    "efp zoom": [
+      "efp zoom"
+    ],
+    "studio zoom": [
+      "studio zoom"
+    ],
+    "field zoom": [
+      "field zoom"
+    ],
+    "portrait": [
+      "portrait"
+    ],
+    "macro": [
+      "macro"
+    ],
+    "tilt-shift": [
+      "tilt-shift",
+      "tilt shift"
+    ],
+    "lensbaby": [
+      "lensbaby"
+    ],
+    "holga": [
+      "holga"
+    ],
+    "diana": [
+      "diana"
+    ],
+    "lomo": [
+      "lomo"
+    ],
+    "summilux": [
+      "summilux",
+      "summilux c",
+      "summilux-c"
+    ],
+    "summicron": [
+      "summicron",
+      "summicron c",
+      "summicron-c"
+    ],
+    "varotal": [
+      "varotal"
+    ],
+    "sk4": [
+      "sk4"
+    ],
+    "s2000": [
+      "s2000"
+    ],
+    "fe": [
+      "fe"
+    ],
+    "gm": [
+      "gm"
+    ],
+    "vario-tessar": [
+      "vario-tessar"
+    ],
+    "genesis": [
+      "genesis"
+    ],
+    "vespid": [
+      "vespid"
+    ],
+    "pavo": [
+      "pavo"
+    ],
+    "arles": [
+      "arles"
+    ],
+    "x-tract": [
+      "x-tract",
+      "x tract"
+    ],
+    "signature zoom": [
+      "signature zoom"
+    ],
+    "variable zoom": [
+      "variable zoom"
+    ]
+  }
+}

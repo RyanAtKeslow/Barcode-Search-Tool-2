@@ -1,0 +1,30 @@
+Lens Parsing Summary Report
+==============================
+
+Total lenses processed: 1633
+Average confidence: 0.598
+Lenses needing review: 269
+
+Top Manufacturers:
+  Cooke: 261
+  Zeiss: 153
+  Canon: 143
+  Leica: 106
+  Master: 61
+  Angenieux: 56
+  Tribe7: 55
+  Laowa: 48
+  Gecko-Cam: 35
+  Hawk: 35
+
+Top Series:
+  Ultra Prime: 43
+  Super Speed: 37
+  Standard Speed: 29
+  Summilux: 19
+  Compact Prime: 16
+  Master Prime: 15
+  Chameleon: 14
+  Summicron: 14
+  GM: 10
+  Panchro: 10
