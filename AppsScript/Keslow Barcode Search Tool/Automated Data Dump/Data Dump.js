@@ -1,29 +1,3 @@
-function getBayRanges(sheetName, sheet) {
-  // Returns an array of {rangeA1, col, startRow} objects for each bay in the sheet
-  const ranges = [];
-  const lastRow = sheet.getLastRow();
-  if (sheetName === 'Barcode SEARCH' || sheetName === 'Receiving Bays') {
-    // Get the last column of the sheet
-    const lastCol = sheet.getLastColumn();
-    
-    // Calculate columns to clear (every 4th column starting from A)
-    for (let col = 1; col <= lastCol; col += 4) {
-      const colLetter = String.fromCharCode(64 + col);
-      ranges.push({ rangeA1: `${colLetter}4:${colLetter}`, col, startRow: 4 });
-    }
-  } else if (sheetName === 'Prep Bays') {
-    // Get the last column of the sheet
-    const lastCol = sheet.getLastColumn();
-    
-    // Calculate columns to clear (every 3rd column starting from A)
-    for (let col = 1; col <= lastCol; col += 3) {
-      const colLetter = String.fromCharCode(64 + col);
-      ranges.push({ rangeA1: `${colLetter}4:${colLetter}`, col, startRow: 4 });
-    }
-  }
-  return ranges;
-}
-
 function F2DataDumpDirectPrint() {
   let clearedData = {};
   const sheetsToProcess = ['Barcode SEARCH', 'Receiving Bays', 'Prep Bays'];
@@ -146,6 +120,56 @@ function F2DataDumpDirectPrint() {
 
     let allData;
     if (devMode) {
+      Logger.log("🛠️ Dev mode enabled: Starting bay clearing process...");
+      
+      // Define getBayRanges function at the top of dev mode scope
+      const getBayRanges = (sheetName, sheet) => {
+        // Returns an array of {rangeA1, col, startRow} objects for each bay in the sheet
+        const ranges = [];
+        const lastRow = sheet.getLastRow();
+        if (sheetName === 'Barcode SEARCH' || sheetName === 'Receiving Bays') {
+          // Get the last column of the sheet
+          const lastCol = sheet.getLastColumn();
+          
+          // Calculate columns to clear (every 4th column starting from A)
+          for (let col = 1; col <= lastCol; col += 4) {
+            const colLetter = String.fromCharCode(64 + col);
+            ranges.push({ rangeA1: `${colLetter}4:${colLetter}`, col, startRow: 4 });
+          }
+        } else if (sheetName === 'Prep Bays') {
+          // Get the last column of the sheet
+          const lastCol = sheet.getLastColumn();
+          
+          // Calculate columns to clear (every 3rd column starting from A)
+          for (let col = 1; col <= lastCol; col += 3) {
+            const colLetter = String.fromCharCode(64 + col);
+            ranges.push({ rangeA1: `${colLetter}4:${colLetter}`, col, startRow: 4 });
+          }
+        }
+        return ranges;
+      };
+
+      // --- Step 1: Clear and store bay ranges BEFORE any other work ---
+      Logger.log("🧹 Clearing and storing bay data...");
+      clearedData = {};
+      sheetsToProcess.forEach(sheetName => {
+        const sheet = ss.getSheetByName(sheetName);
+        if (!sheet) return;
+        const ranges = getBayRanges(sheetName, sheet);
+        clearedData[sheetName] = [];
+        ranges.forEach(({ rangeA1, col, startRow }) => {
+          const lastRow = sheet.getLastRow();
+          if (lastRow < startRow) return;
+          const numRows = lastRow - startRow + 1;
+          const range = sheet.getRange(startRow, col, numRows, 1);
+          const values = range.getValues();
+          clearedData[sheetName].push({ col, startRow, values });
+          range.clearContent();
+          Logger.log(`🧹 Cleared ${sheetName} col ${col} from row ${startRow} (${numRows} rows)`);
+        });
+      });
+      Logger.log("✅ Bay data cleared and stored in memory.");
+
       Logger.log("🛠️ Dev mode enabled: Skipping email fetch and conversion. Fetching most recent 'Assets_GoogleExport' file from Drive...");
       let latestFile = null;
       let latestDate = 0;
@@ -162,6 +186,7 @@ function F2DataDumpDirectPrint() {
         return;
       }
       Logger.log(`🛠️ Found file: ${latestFile.getName()} (ID: ${latestFile.getId()})`);
+      Logger.log(`📄 Exact filename: ${latestFile.getName()}`);
       let sheetFileId;
       if (latestFile.getMimeType() === MimeType.GOOGLE_SHEETS) {
         Logger.log("🛠️ File is already a Google Sheet. Using directly.");
@@ -220,6 +245,18 @@ function F2DataDumpDirectPrint() {
         }
       });
       summaryStats.barcodeCount = processedBarcodeCount;
+      
+      // --- Secondary Database Export ---
+      Logger.log("🔄 Starting secondary database export...");
+      const secondaryExportResult = exportToSecondaryDatabase(allData, summaryStats);
+      if (secondaryExportResult.success) {
+        Logger.log(`✅ Secondary export completed: ${secondaryExportResult.rowsExported} rows exported to ${secondaryExportResult.targetSpreadsheet}`);
+        summaryStats.secondaryExport = secondaryExportResult;
+      } else {
+        Logger.log(`❌ Secondary export failed: ${secondaryExportResult.message}`);
+        summaryStats.secondaryExport = secondaryExportResult;
+      }
+      
       return;
     } else {
       Logger.log("📧 Searching for unread emails...");
@@ -237,7 +274,35 @@ function F2DataDumpDirectPrint() {
         body: `The barcode automation started running at ${new Date().toLocaleString()}.`
       });
 
-      // --- Step 1: Clear and store bay ranges ---
+      // Define getBayRanges function for non-dev mode
+      const getBayRanges = (sheetName, sheet) => {
+        // Returns an array of {rangeA1, col, startRow} objects for each bay in the sheet
+        const ranges = [];
+        const lastRow = sheet.getLastRow();
+        if (sheetName === 'Barcode SEARCH' || sheetName === 'Receiving Bays') {
+          // Get the last column of the sheet
+          const lastCol = sheet.getLastColumn();
+          
+          // Calculate columns to clear (every 4th column starting from A)
+          for (let col = 1; col <= lastCol; col += 4) {
+            const colLetter = String.fromCharCode(64 + col);
+            ranges.push({ rangeA1: `${colLetter}4:${colLetter}`, col, startRow: 4 });
+          }
+        } else if (sheetName === 'Prep Bays') {
+          // Get the last column of the sheet
+          const lastCol = sheet.getLastColumn();
+          
+          // Calculate columns to clear (every 3rd column starting from A)
+          for (let col = 1; col <= lastCol; col += 3) {
+            const colLetter = String.fromCharCode(64 + col);
+            ranges.push({ rangeA1: `${colLetter}4:${colLetter}`, col, startRow: 4 });
+          }
+        }
+        return ranges;
+      };
+
+      // --- Step 1: Clear and store bay ranges BEFORE any other work ---
+      Logger.log("🧹 Clearing and storing bay data...");
       clearedData = {};
       sheetsToProcess.forEach(sheetName => {
         const sheet = ss.getSheetByName(sheetName);
@@ -255,6 +320,7 @@ function F2DataDumpDirectPrint() {
           Logger.log(`🧹 Cleared ${sheetName} col ${col} from row ${startRow} (${numRows} rows)`);
         });
       });
+      Logger.log("✅ Bay data cleared and stored in memory.");
 
       Logger.log("🚀 Starting F2DataDumpDirectPrint function...");
       Logger.log("📧 Processing email threads...");
@@ -387,6 +453,18 @@ function F2DataDumpDirectPrint() {
         }
       });
       summaryStats.barcodeCount = processedBarcodeCount;
+      
+      // --- Secondary Database Export ---
+      Logger.log("🔄 Starting secondary database export...");
+      const secondaryExportResult = exportToSecondaryDatabase(allData, summaryStats);
+      if (secondaryExportResult.success) {
+        Logger.log(`✅ Secondary export completed: ${secondaryExportResult.rowsExported} rows exported to ${secondaryExportResult.targetSpreadsheet}`);
+        summaryStats.secondaryExport = secondaryExportResult;
+      } else {
+        Logger.log(`❌ Secondary export failed: ${secondaryExportResult.message}`);
+        summaryStats.secondaryExport = secondaryExportResult;
+      }
+      
       return;
     }
   } catch (error) {
@@ -408,12 +486,24 @@ function F2DataDumpDirectPrint() {
       if (foundMatchingEmail) {
         try {
           const subject = '✅ Barcode Automation Completed Successfully';
-          const body = `Barcode automation completed successfully.\n\n` +
+          let body = `Barcode automation completed successfully.\n\n` +
             `Dev Mode: ${devMode}\n` +
             `Source sheet rows: ${summaryStats.sourceRows}\n` +
             `Source barcode count: ${summaryStats.sourceBarcodeCount}\n` +
             `Processed rows written: ${summaryStats.totalRows}\n` +
             `Processed barcode count: ${summaryStats.barcodeCount}\n`;
+          
+          // Add secondary export information if available
+          if (summaryStats.secondaryExport) {
+            if (summaryStats.secondaryExport.success) {
+              body += `\nSecondary Database Export:\n` +
+                `✅ Success: ${summaryStats.secondaryExport.rowsExported} rows exported to ${summaryStats.secondaryExport.targetSpreadsheet}\n` +
+                `Target Sheet: ${summaryStats.secondaryExport.targetSheet}\n`;
+            } else {
+              body += `\nSecondary Database Export:\n` +
+                `❌ Failed: ${summaryStats.secondaryExport.message}\n`;
+            }
+          }
           MailApp.sendEmail({
             to: "Owen@keslowcamera.com, ryan@keslowcamera.com",
             subject,
