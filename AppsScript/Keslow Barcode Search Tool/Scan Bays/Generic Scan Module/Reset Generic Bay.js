@@ -125,6 +125,8 @@ function continueResetGenericBay(selectedCellA1) {
   var lostAndFoundItems = [];
   var csvData = [];
 
+  const keywordsRegex = /\b(?:Disposed|Repair|Lost|Inactive|Sale|Pending QC)\b(?=\s*\||$)/i;
+
   for (var i = 0; i < values.length; i++) {
     var binStatus = values[i][0];
     var itemName = itemNames[i][0];
@@ -144,16 +146,8 @@ function continueResetGenericBay(selectedCellA1) {
     } else if (["LOST", "DISPOSED", "INACTIVE"].includes(binStatus)) {
       var statusText = binStatus.charAt(0) + binStatus.slice(1).toLowerCase();
 
-      // Define unwanted keywords that might be appended to item names
-      var keywordsToRemove = ["Disposed", "Repair", "Lost", "Inactive", "Sale", "Pending QC"];
-
-      for (var j = 0; j < keywordsToRemove.length; j++) {
-        var keyword = keywordsToRemove[j];
-        var regex = new RegExp("\\b" + keyword + "\\b(?=\\s*\\||$)", "i");
-        if (regex.test(itemName)) {
-          itemName = itemName.replace(regex, "").replace(/\s+\|/, "|").trim();
-        }
-      }
+      // Remove unwanted keywords in one pass
+      itemName = itemName.replace(keywordsRegex, "").replace(/\s+\|/, "|").trim();
 
       var consigner = "";
       if (itemName.includes("|")) {
@@ -215,14 +209,14 @@ function continueResetGenericBay(selectedCellA1) {
   var currentTotal = analyticsSheet.getRange("AA2").getValue() || 0;
   var newTotal = currentTotal + statusCount;
   analyticsSheet.getRange("AA2").setValue(newTotal);
-  Logger.log(`Updated analytics: Added ${statusCount} Lost & Found items, new total is ${newTotal}`);
+  // Logger.log(`Updated analytics: Added ${statusCount} Lost & Found items, new total is ${newTotal}`); // removed detailed log
 
   // Count unique barcodes and update Z2
   var uniqueBarcodes = new Set(barcodes.flat().filter(String)).size;
   var currentTotal = analyticsSheet.getRange("Z2").getValue() || 0;
   var newTotal = currentTotal + uniqueBarcodes;
   analyticsSheet.getRange("Z2").setValue(newTotal);
-  Logger.log(`Updated analytics: Added ${uniqueBarcodes} barcodes, new total is ${newTotal}`);
+  Logger.log(`Reset Generic Bay complete. Lost & Found added: ${statusCount}, Barcodes processed: ${uniqueBarcodes}.`);
 
   // Save barcodes to CSV and clear content
   saveBarcodesToCSV(csvData, jobInfo);

@@ -124,6 +124,7 @@ function continueResetShippingBay(selectedCellA1, existingLFBarcodes) {
   var itemCounts = {};
   var lostAndFoundItems = [];
   var csvData = [];
+  const keywordsRegex = /\b(?:Disposed|Repair|Lost|Inactive|Sale|Pending QC)\b(?=\s*\||$)/i;
 
   for (var i = 0; i < values.length; i++) {
     var binStatus = values[i][0];
@@ -144,16 +145,8 @@ function continueResetShippingBay(selectedCellA1, existingLFBarcodes) {
     } else if (["LOST", "DISPOSED", "INACTIVE"].includes(binStatus)) {
       var statusText = binStatus.charAt(0) + binStatus.slice(1).toLowerCase();
 
-      // Define unwanted keywords that might be appended to item names
-      var keywordsToRemove = ["Disposed", "Repair", "Lost", "Inactive", "Sale", "Pending QC"];
-
-      for (var j = 0; j < keywordsToRemove.length; j++) {
-        var keyword = keywordsToRemove[j];
-        var regex = new RegExp("\\b" + keyword + "\\b(?=\\s*\\||$)", "i");
-        if (regex.test(itemName)) {
-          itemName = itemName.replace(regex, "").replace(/\s+\|/, "|").trim();
-        }
-      }
+      // Remove unwanted keywords in one pass (loop eliminated)
+      itemName = itemName.replace(keywordsRegex, "").replace(/\s+\|/, "|").trim();
 
       var consigner = "";
       if (itemName.includes("|")) {
@@ -215,14 +208,15 @@ function continueResetShippingBay(selectedCellA1, existingLFBarcodes) {
   var currentTotal = analyticsSheet.getRange("AA2").getValue() || 0;
   var newTotal = currentTotal + statusCount;
   analyticsSheet.getRange("AA2").setValue(newTotal);
-  Logger.log(`Updated analytics: Added ${statusCount} Lost & Found items, new total is ${newTotal}`);
+  // Suppress verbose logs in analytics section
+  // Logger.log(`Updated analytics: Added ${statusCount} Lost & Found items, new total is ${newTotal}`);
 
   // Count unique barcodes and update Z2
   var uniqueBarcodes = new Set(barcodes.flat().filter(String)).size;
   var currentTotal = analyticsSheet.getRange("Z2").getValue() || 0;
   var newTotal = currentTotal + uniqueBarcodes;
   analyticsSheet.getRange("Z2").setValue(newTotal);
-  Logger.log(`Updated analytics: Added ${uniqueBarcodes} barcodes, new total is ${newTotal}`);
+  Logger.log(`Reset Shipping Bay complete. Lost & Found added: ${statusCount}, Barcodes processed: ${uniqueBarcodes}.`);
 
   // Save barcodes to CSV and clear content
   saveBarcodesToCSV(csvData, jobInfo);
@@ -233,11 +227,12 @@ function continueResetShippingBay(selectedCellA1, existingLFBarcodes) {
   // Send status "Returned" to incoming data sheet
   // Pass all barcodes, username, and job info
   const allBarcodes = Array.from(new Set(barcodes.map(row => row[0]).filter(barcode => barcode && !barcode.toString().includes("Above was exported @"))));
-  Logger.log('=== About to call SendStatus ===');
-  Logger.log('Current Script ID: ' + ScriptApp.getScriptId());
-  Logger.log('Number of barcodes to process: ' + allBarcodes.length);
-  Logger.log('Username: ' + username);
-  Logger.log('Job Info: ' + jobInfo);
+  // Comment out detailed SendStatus debug logs
+  // Logger.log('=== About to call SendStatus ===');
+  // Logger.log('Current Script ID: ' + ScriptApp.getScriptId());
+  // Logger.log('Number of barcodes to process: ' + allBarcodes.length);
+  // Logger.log('Username: ' + username);
+  // Logger.log('Job Info: ' + jobInfo);
   SendStatus("Returned", allBarcodes, username, jobInfo, userEmail);
 
   activeSheet.getRange(4, barcodeColumn, activeSheet.getLastRow() - 3, 1).clearContent();

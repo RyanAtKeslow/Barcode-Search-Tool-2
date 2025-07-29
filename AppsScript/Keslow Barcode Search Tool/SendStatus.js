@@ -41,34 +41,73 @@ const VALID_STATUSES = {
 };
 
 /**
+ * Returns a lookup map { barcode -> {category, equipName} } for Digital Cameras.
+ * Cached in CacheService for 6 hours using the sheet's size as the version key.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} dictSheet
+ * @returns {Object}
+ */
+function getBarcodeLookup(dictSheet) {
+  const cache = CacheService.getScriptCache();
+  const versionKey = `dict_${dictSheet.getLastRow()}_${dictSheet.getLastColumn()}`;
+  const cached = cache.get(versionKey);
+  if (cached) {
+    return JSON.parse(cached);
+  }
+
+  const data = dictSheet.getDataRange().getValues();
+  const lookup = {};
+  for (let i = 1; i < data.length; i++) { // skip header row
+    const category = data[i][0];
+    if (category !== 'Digital Cameras') continue; // only store needed rows
+    const equipName = data[i][3];
+    const rawBarcodes = data[i][6];
+    splitAndNormalizeBarcodes(rawBarcodes).forEach(bc => {
+      if (!lookup[bc]) {
+        lookup[bc] = { category, equipName };
+      }
+    });
+  }
+
+  // store for 6h (21600 s) – limited by 100 KB cache size
+  try { cache.put(versionKey, JSON.stringify(lookup), 21600); } catch (e) {}
+  return lookup;
+}
+
+/**
+ * Builds / retrieves a map { email -> location } from the two utility sheets.
+ * Cached for 6 hours to avoid repeated scans of the external workbook.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} externalWb
+ * @returns {Object}
+ */
+function getUserLocationMap(externalWb) {
+  const cache = CacheService.getScriptCache();
+  const key = `userLoc_${externalWb.getId()}`;
+  const cached = cache.get(key);
+  if (cached) return JSON.parse(cached);
+
+  const map = {};
+  ['UserLocationUtilityUS', 'UserLocationUtilityCAN'].forEach(sheetName => {
+    const sh = externalWb.getSheetByName(sheetName);
+    if (!sh) return;
+    const vals = sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues();
+    vals.forEach(r => {
+      const email = (r[4] || '').toString().toLowerCase();
+      if (email) map[email] = r[0] || 'Unknown';
+    });
+  });
+  try { cache.put(key, JSON.stringify(map), 21600); } catch (e) {}
+  return map;
+}
+
+/**
  * Fetches the user's location from the UserLocationUtilityUS or UserLocationUtilityCAN sheet in the external workbook
  * @param {string} userEmail - The user's email address
  * @param {SpreadsheetApp.Spreadsheet} externalWorkbook - The external workbook object
  * @returns {string} The user's location or 'Unknown' if not found
  */
 function getUserLocationByEmail(userEmail, externalWorkbook) {
-  const sheetsToCheck = ["UserLocationUtilityUS", "UserLocationUtilityCAN"];
-  for (const sheetName of sheetsToCheck) {
-    try {
-      const utilitySheet = externalWorkbook.getSheetByName(sheetName);
-      if (!utilitySheet) {
-        Logger.log(`❌ ${sheetName} sheet not found in external workbook.`);
-        continue;
-      }
-      const data = utilitySheet.getRange(2, 1, utilitySheet.getLastRow() - 1, 5).getValues();
-      for (let i = 0; i < data.length; i++) {
-        // Email is in column E (index 4), location in column A (index 0)
-        if (data[i][4] && data[i][4].toString().toLowerCase() === userEmail.toLowerCase()) {
-          Logger.log(`✅ Found location for ${userEmail} in ${sheetName}: ${data[i][0]}`);
-          return data[i][0] || "Unknown";
-        }
-      }
-    } catch (err) {
-      Logger.log(`❌ Error fetching user location from ${sheetName}: ${err}`);
-    }
-  }
-  Logger.log(`User's location could not be derived from their email: ${userEmail}`);
-  return "Unknown";
+  const map = getUserLocationMap(externalWorkbook);
+  return map[userEmail.toLowerCase()] || 'Unknown';
 }
 
 /**
@@ -81,13 +120,7 @@ function getUserLocationByEmail(userEmail, externalWorkbook) {
  * @returns {void}
  */
 function SendStatus(status, barcodes, username, jobName, userEmail) {
-  Logger.log('🔵🔵🔵 NEW VERSION OF SENDSTATUS RUNNING 🔵🔵🔵');
-  Logger.log('=== SendStatus VERSION 2.0 START ===');
-  Logger.log('Script ID: ' + ScriptApp.getScriptId());
-  Logger.log('Status: ' + status);
-  Logger.log('Number of barcodes received: ' + barcodes.length);
-  Logger.log('Username: ' + username);
-  Logger.log('Job Name: ' + jobName);
+  Logger.log(`SendStatus start | status: ${status} | barcodes: ${barcodes.length} | user: ${username}`);
   
   if (!Object.values(VALID_STATUSES).includes(status)) {
     throw new Error(`Invalid status: ${status}. Must be one of: ${Object.values(VALID_STATUSES).join(", ")}`);
@@ -115,73 +148,15 @@ function SendStatus(status, barcodes, username, jobName, userEmail) {
     Logger.log(`Processing for username: ${username}`);
     Logger.log(`Job name: ${jobName}`);
 
-    // Get barcode dictionary data
-    const dictData = barcodeDictSheet.getDataRange().getValues();
-    Logger.log('=== Scanning barcode dictionary ===');
-    Logger.log(`Total rows in dictionary: ${dictData.length}`);
-    
-    let digitalCameras = [];
-    
-    // Log all barcodes to be checked
-    Logger.log('=== Barcodes to check ===');
+    // Retrieve (or build) cached barcode lookup map
+    const barcodeLookup = getBarcodeLookup(barcodeDictSheet);
+    const digitalCameras = [];
     barcodes.forEach(barcode => {
       if (!barcode) return;
-      const normalizedBarcode = normalizeBarcode(barcode);
-      Logger.log(`Found barcode: "${barcode}" (type: ${typeof barcode}, length: ${barcode.toString().length})`);
-      Logger.log(`Normalized to: "${normalizedBarcode}" (type: ${typeof normalizedBarcode}, length: ${normalizedBarcode.length})`);
-    });
-    Logger.log(`Total barcodes to check: ${barcodes.length}`);
-
-    barcodes.forEach(barcode => {
-      if (!barcode) return;
-      const normalizedBarcode = normalizeBarcode(barcode);
-      Logger.log(`\nChecking barcode: "${barcode}"`);
-      Logger.log(`Normalized to: "${normalizedBarcode}"`);
-      let found = false;
-      let matchAttempts = 0;
-      
-      for (let i = 1; i < dictData.length; i++) { // skip header
-        const category = dictData[i][0];          // Column A - Category
-        const equipName = dictData[i][3];         // Column D - Equipment Name
-        const rawDictBarcodes = dictData[i][6];   // Column G - Raw barcodes string
-        
-        // Split the pipe-delimited barcodes and check each one
-        const dictBarcodes = splitAndNormalizeBarcodes(rawDictBarcodes);
-        
-        // Only log the first 5 comparison attempts to avoid flooding the logs
-        if (matchAttempts < 5) {
-          Logger.log(`\nChecking dictionary row ${i + 1}:`);
-          Logger.log(`Raw dictionary barcodes: "${rawDictBarcodes}"`);
-          Logger.log(`Split into: ${JSON.stringify(dictBarcodes)}`);
-          Logger.log(`Looking for: "${normalizedBarcode}"`);
-          matchAttempts++;
-        }
-        
-        // Check if our barcode matches any of the split barcodes
-        if (dictBarcodes.includes(normalizedBarcode)) {
-          Logger.log(`\n✅ MATCH FOUND in row ${i + 1}:`);
-          Logger.log(`- Category: ${category}`);
-          Logger.log(`- Equipment Name: ${equipName}`);
-          Logger.log(`- Matching barcode: "${normalizedBarcode}"`);
-          Logger.log(`- From barcode list: "${rawDictBarcodes}"`);
-          
-          if (category == "Digital Cameras") {
-            digitalCameras.push({
-              barcode: barcode,
-              equipmentName: equipName
-            });
-            Logger.log('✅ Added to digital cameras list');
-            found = true;
-            break;
-          } else {
-            Logger.log('❌ Not a digital camera, skipping');
-          }
-        }
-      }
-      
-      if (!found) {
-        Logger.log(`❌ No dictionary match found for barcode: "${barcode}"`);
-        Logger.log(`Attempted ${matchAttempts} comparisons (showing first 5 in logs)`);
+      const normalized = normalizeBarcode(barcode);
+      const match = barcodeLookup[normalized];
+      if (match && match.category === 'Digital Cameras') {
+        digitalCameras.push({ barcode, equipmentName: match.equipName || match.equipmentName || match.equipName });
       }
     });
 
@@ -191,35 +166,24 @@ function SendStatus(status, barcodes, username, jobName, userEmail) {
     }
 
     // Append data to Cameras sheet in external workbook
-    Logger.log('Appending data to external Cameras sheet...');
     const timestamp = new Date().toLocaleString();
-    digitalCameras.forEach(camera => {
-      const newRow = Array(7).fill(''); // Initialize array with 7 empty strings
-      newRow[IncomingCOLS.TIMESTAMP] = timestamp;
-      newRow[IncomingCOLS.BARCODE] = camera.barcode;
-      newRow[IncomingCOLS.EQUIP_NAME] = camera.equipmentName;
-      newRow[IncomingCOLS.STATUS] = status;
-      newRow[IncomingCOLS.USERNAME] = username;
-      newRow[IncomingCOLS.JOB_NAME] = jobName;
-      newRow[IncomingCOLS.LOCATION] = getUserLocationByEmail(userEmail, externalWorkbook);
-      try {
-        incomingDataSheet.appendRow(newRow);
-        Logger.log(`✅ Appended row to external sheet:`);
-        Logger.log(`- Timestamp: ${newRow[IncomingCOLS.TIMESTAMP]}`);
-        Logger.log(`- Barcode: ${newRow[IncomingCOLS.BARCODE]}`);
-        Logger.log(`- Equipment Name: ${newRow[IncomingCOLS.EQUIP_NAME]}`);
-        Logger.log(`- Status: ${newRow[IncomingCOLS.STATUS]}`);
-        Logger.log(`- Username: ${newRow[IncomingCOLS.USERNAME]}`);
-        Logger.log(`- Job Name: ${newRow[IncomingCOLS.JOB_NAME]}`);
-        Logger.log(`- Location: ${newRow[IncomingCOLS.LOCATION]}`);
-      } catch (appendError) {
-        Logger.log(`❌ Error appending row: ${appendError.toString()}`);
-        throw appendError;
-      }
+    const rowsToAppend = digitalCameras.map(cam => {
+      const row = Array(7).fill('');
+      row[IncomingCOLS.TIMESTAMP] = timestamp;
+      row[IncomingCOLS.BARCODE] = cam.barcode;
+      row[IncomingCOLS.EQUIP_NAME] = cam.equipmentName;
+      row[IncomingCOLS.STATUS] = status;
+      row[IncomingCOLS.USERNAME] = username;
+      row[IncomingCOLS.JOB_NAME] = jobName;
+      row[IncomingCOLS.LOCATION] = getUserLocationByEmail(userEmail, externalWorkbook);
+      return row;
     });
 
-    Logger.log(`✅ Successfully processed ${digitalCameras.length} digital cameras`);
-    Logger.log('=== SendStatus END ===');
+    if (rowsToAppend.length > 0) {
+      const startRow = incomingDataSheet.getLastRow() + 1;
+      incomingDataSheet.getRange(startRow, 1, rowsToAppend.length, 7).setValues(rowsToAppend);
+    }
+    Logger.log(`SendStatus complete | digital cameras appended: ${rowsToAppend.length}`);
     
   } catch (error) {
     Logger.log(`❌ Error in SendStatus: ${error.toString()}`);

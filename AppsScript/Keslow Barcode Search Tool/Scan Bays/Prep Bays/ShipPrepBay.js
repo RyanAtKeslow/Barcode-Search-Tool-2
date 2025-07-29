@@ -114,23 +114,17 @@ function processLostAndFoundItems(addItemNames, dropItemNames, addBarcodes, drop
  */
 function updateAnalyticsBarcodeCount(barcodeCount) {
   try {
-    Logger.log('=== updateAnalyticsBarcodeCount START ===');
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const analyticsSheet = ss.getSheetByName("Analytics");
     
     // Get current value from Z2
     const currentTotal = analyticsSheet.getRange("Z2").getValue() || 0;
-    Logger.log(`Current total in Z2: ${currentTotal}`);
     
     // Calculate new total
     const newTotal = currentTotal + barcodeCount;
-    Logger.log(`Adding ${barcodeCount} barcodes, new total will be: ${newTotal}`);
     
     // Update Z2 with new total
     analyticsSheet.getRange("Z2").setValue(newTotal);
-    Logger.log('✅ Successfully updated Z2 with new total');
-    
-    Logger.log('=== updateAnalyticsBarcodeCount END ===');
     return newTotal;
   } catch (error) {
     Logger.log(`❌ Error in updateAnalyticsBarcodeCount: ${error.toString()}`);
@@ -146,23 +140,17 @@ function updateAnalyticsBarcodeCount(barcodeCount) {
  */
 function updateAnalyticsLostAndFoundCount(lostAndFoundCount) {
   try {
-    Logger.log('=== updateAnalyticsLostAndFoundCount START ===');
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const analyticsSheet = ss.getSheetByName("Analytics");
     
     // Get current value from AA2
     const currentTotal = analyticsSheet.getRange("AA2").getValue() || 0;
-    Logger.log(`Current total in AA2: ${currentTotal}`);
     
     // Calculate new total
     const newTotal = currentTotal + lostAndFoundCount;
-    Logger.log(`Adding ${lostAndFoundCount} Lost & Found items, new total will be: ${newTotal}`);
     
     // Update AA2 with new total
     analyticsSheet.getRange("AA2").setValue(newTotal);
-    Logger.log('✅ Successfully updated AA2 with new total');
-    
-    Logger.log('=== updateAnalyticsLostAndFoundCount END ===');
     return newTotal;
   } catch (error) {
     Logger.log(`❌ Error in updateAnalyticsLostAndFoundCount: ${error.toString()}`);
@@ -175,7 +163,6 @@ function ShipPrepBay() {
   try {
     // Get user's email and extract username
     const { email: userEmail, nickname: username } = fetchUserEmailandNickname();
-    Logger.log(`Searching for username: ${username}`);
     
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const prepBaysSheet = ss.getSheetByName("prep bays");
@@ -183,23 +170,19 @@ function ShipPrepBay() {
     
     // Search for username in prep bays sheet using two-step process
     const usernameMatches = findUsernameInRow2(prepBaysSheet);
-    Logger.log(`Found ${usernameMatches.length} username matches`);
     
     let usernameCell;
     
     // Handle multiple matches
     if (usernameMatches.length > 1) {
-      Logger.log('Multiple matches found, showing selection dialog');
       const selectedMatch = setSelectedMatch(usernameMatches);
       if (!selectedMatch) {
         throw new Error('No match was selected');
       }
       usernameCell = prepBaysSheet.getRange(selectedMatch.cellA1);
     } else if (usernameMatches.length === 1) {
-      Logger.log(`Single match found: ${usernameMatches[0].value}`);
       usernameCell = prepBaysSheet.getRange(usernameMatches[0].cellA1);
     } else {
-      Logger.log('No matches found, showing alert...');
       ui.alert(
         'Name Not Found',
         'Please input your name as it\'s shown in your keslow email into the name fields, followed by your Job name and Contract #',
@@ -220,7 +203,6 @@ function ShipPrepBay() {
     // B2 = 1, H2 = 2, N2 = 3, etc.
     // Each prep bay is 6 columns apart (B->H->N)
     const prepBayNumber = Math.floor((usernameCol - 2) / 6) + 1;
-    Logger.log(`Username column: ${usernameCol}, Calculated Prep Bay: ${prepBayNumber}`);
     
     // Check for export tags by scanning up from the bottom
     const lastRow = prepBaysSheet.getLastRow();
@@ -355,8 +337,8 @@ function ShipPrepBay() {
     const newBarcodeTotal = updateAnalyticsBarcodeCount(barcodeCount);
     const newLostAndFoundTotal = updateAnalyticsLostAndFoundCount(lostAndFoundCount);
     
-    Logger.log(`Updated analytics: Added ${barcodeCount} barcodes, new total is ${newBarcodeTotal}`);
-    Logger.log(`Updated analytics: Added ${lostAndFoundCount} Lost & Found items, new total is ${newLostAndFoundTotal}`);
+    Logger.log(`updateAnalyticsBarcodeCount: +${barcodeCount}, new total ${newBarcodeTotal}`);
+    Logger.log(`updateAnalyticsLostAndFoundCount: +${lostAndFoundCount}, new total ${newLostAndFoundTotal}`);
     
     // Create CSV content with headers
     const headers = ['Add Barcode', 'Add Item Name', 'Drop Barcode', 'Drop Item Name'];
@@ -482,7 +464,6 @@ function showPasswordDialog() {
 
 function clearDataAfterDownload(usernameCellA1, addBarcodesCol, dropBarcodesCol) {
   try {
-    Logger.log('=== clearDataAfterDownload START ===');
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName("prep bays");
     
@@ -502,8 +483,6 @@ function clearDataAfterDownload(usernameCellA1, addBarcodesCol, dropBarcodesCol)
     dropBarcodesRange.setBackground("#ffffff");
     usernameCell.setBackground("#ffffff");
     
-    Logger.log('✅ Successfully cleared data after download');
-    Logger.log('=== clearDataAfterDownload END ===');
   } catch (error) {
     Logger.log(`❌ Error in clearDataAfterDownload: ${error.toString()}`);
     Logger.log(`Stack trace: ${error.stack}`);

@@ -50,10 +50,21 @@ function exportToSecondaryDatabase(processedData, summaryStats) {
       // Clear the target sheet
       targetSheet.clearContents();
       targetSheet.clearFormats();
+
+      // 🗑️ Trim off any unused columns before writing new data
+      const requiredColumns = secondaryHeaders.length;
+      const currentMaxColumns = targetSheet.getMaxColumns();
+      if (currentMaxColumns > requiredColumns) {
+        // Delete columns that are beyond the required range
+        targetSheet.deleteColumns(requiredColumns + 1, currentMaxColumns - requiredColumns);
+      } else if (currentMaxColumns < requiredColumns) {
+        // Ensure there are enough columns to fit the data (unlikely, but for completeness)
+        targetSheet.insertColumnsAfter(currentMaxColumns, requiredColumns - currentMaxColumns);
+      }
       
       // Add completion timestamp
       const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd MMM');
-      targetSheet.getRange(1, 1).setValue(`Secondary Database Export Completed on ${today}`);
+      targetSheet.getRange(1, 1).setValue(`Asset Database Export Completed on ${today}, Total records: ${formattedData.length}`);
       
       // Add headers starting from row 2
       targetSheet.getRange(2, 1, 1, secondaryHeaders.length).setValues([secondaryHeaders]);
