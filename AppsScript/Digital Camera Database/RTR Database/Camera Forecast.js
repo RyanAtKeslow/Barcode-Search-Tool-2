@@ -53,6 +53,49 @@ function getCameraForecast() {
   Logger.log('Today\'s date: ' + formattedDate);
   Logger.log('Current year: ' + today.getFullYear());
 
+  // Refresh AJ:AM section (tomorrow-prep) before continuing
+  try {
+    tomorrowDoubleCheck();
+  } catch (err) {
+    Logger.log('Error executing tomorrowDoubleCheck: ' + err);
+  }
+  
+  // --------------------- NEW: Tomorrow-prep utilities ---------------------
+  // Calculate tomorrow's date (start of day)
+  const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1); // midnight tomorrow
+
+  // Day prefixes used in sheet names
+  const dayPrefixes = ['Sun', 'Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat'];
+
+  // Helper: build expected sheet name for a given date
+  function expectedSheetName(dateObj) {
+    const prefix = dayPrefixes[dateObj.getDay()];
+    return `${prefix} ${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
+  }
+
+  // Helper: check if two Date objects represent the same calendar day
+  function isSameDay(d1, d2) {
+    return d1.getFullYear() === d2.getFullYear() &&
+           d1.getMonth() === d2.getMonth() &&
+           d1.getDate() === d2.getDate();
+  }
+
+  // Helper: does a free-text note contain the target MM/DD date?
+  function noteContainsDate(note, dateObj) {
+    if (!note) return false;
+    const matches = note.match(/\d{1,2}\/\d{1,2}/g);
+    if (!matches) return false;
+    const targetMonth = dateObj.getMonth() + 1;
+    const targetDay   = dateObj.getDate();
+    return matches.some(d => {
+      const [m, day] = d.split('/').map(Number);
+      return m === targetMonth && day === targetDay;
+    });
+  }
+
+  // Normalize order numbers to digits-only string
+  const normalizeOrder = val => String(val || '').replace(/[^0-9]/g, '');
+
   // Build the job date map from the Prep Bay Assignments
   Logger.log('Starting to build the Prep Bay Job Date Map.');
   const prepBaySpreadsheet = SpreadsheetApp.openById('1erp3GVvekFXUVzC4OJsTrLBgqL4d0s-HillOwyJZOTQ');
@@ -82,53 +125,53 @@ function getCameraForecast() {
     return null;
   }).filter(item => item !== null);
 
-  // Sort sheets by date in descending order
-  sortedSheets.sort((a, b) => b.sheetDate - a.sheetDate);
+  // Sort sheets by date in ASCENDING order so earlier days are processed first
+  sortedSheets.sort((a, b) => a.sheetDate - b.sheetDate);
 
-  // Select sheets from the most recent to find today's date and the next 7 days
+  /* Legacy tomorrow-prep collection logic disabled – handled by tomorrowDoubleCheck() */
+  if (false) {
+    Logger.log('Legacy tomorrow-prep logic inactive.');
+  }
+
+  // --------------------- RESTORED: Build jobDateMap for next 7 days ---------------------
   const recentSheets = sortedSheets.filter(item => item.sheetDate >= today && item.sheetDate <= sevenDaysFromNow);
 
-  // Extract jobName and orderNumber from prep bay assignments
   Logger.log('Processing prep bay assignments from recent sheets...');
   let prepBayCount = 0;
   for (const { sheet, sheetDate } of recentSheets) {
     const sheetName = sheet.getName();
-    const data = sheet.getRange('B:J').getValues(); // Get job names in column B, order numbers in column C, and notes in column J
+    const data = sheet.getRange('B:J').getValues(); // Job in B, order in C, notes in J
     for (let i = 0; i < data.length; i++) {
-      const jobName = data[i][0];
+      const jobName     = data[i][0];
       const orderNumber = data[i][1];
-      const note = data[i][8]; // Column J is index 8
-      let jobDate = '';
-      
-      // Extract date from sheet name (format like 'Mon 6/2')
+      const note        = data[i][8]; // Column J
+      let jobDate       = '';
+
+      // Default date from tab name (e.g., "Mon 6/2")
       const sheetDateMatch = sheetName.match(/\w+ (\d+)\/(\d+)/);
       if (sheetDateMatch) {
-        const month = parseInt(sheetDateMatch[1], 10) - 1; // JavaScript months are 0-based
-        const day = parseInt(sheetDateMatch[2], 10);
-        const sheetDate = new Date(today.getFullYear(), month, day);
-        
-        // Adjust year if the sheet date is in the past
-        if (sheetDate < today) {
-          sheetDate.setFullYear(today.getFullYear() + 1);
-        }
-        jobDate = formatDate(sheetDate);
+        const month = parseInt(sheetDateMatch[1], 10) - 1; // 0-based
+        const day   = parseInt(sheetDateMatch[2], 10);
+        const d     = new Date(today.getFullYear(), month, day);
+        if (d < today) d.setFullYear(today.getFullYear() + 1);
+        jobDate = formatDate(d);
       }
 
-      // Check if the note contains 'prep' and extract the earliest date
+      // Override with earliest date mentioned in a 'prep' note
       if (note && note.toLowerCase().includes('prep')) {
-        const dateMatches = note.match(/\d{1,2}\/\d{1,2}/g); // Match dates like 6/5 or 06/05
+        const dateMatches = note.match(/\d{1,2}\/\d{1,2}/g);
         if (dateMatches) {
-          const earliestDate = dateMatches.reduce((earliest, current) => {
-            const [currentMonth, currentDay] = current.split('/').map(Number);
-            const currentDate = new Date(today.getFullYear(), currentMonth - 1, currentDay);
-            return currentDate < earliest ? currentDate : earliest;
-          }, new Date(today.getFullYear() + 1, 0, 1)); // Start with a future date for comparison
-          jobDate = formatDate(earliestDate);
+          const earliest = dateMatches.reduce((earliest, cur) => {
+            const [m, d] = cur.split('/').map(Number);
+            const dt = new Date(today.getFullYear(), m - 1, d);
+            return dt < earliest ? dt : earliest;
+          }, new Date(today.getFullYear() + 1, 0, 1));
+          jobDate = formatDate(earliest);
         }
       }
 
       if (jobName && orderNumber) {
-        jobDateMap[jobName] = { date: jobDate, orderNumber: orderNumber };
+        jobDateMap[jobName] = { date: jobDate, orderNumber };
         prepBayCount++;
       }
     }
@@ -379,6 +422,101 @@ function getCameraForecast() {
   }
   Logger.log(`Camera processing complete: ${processedCameras} total cameras, ${validCameras} valid cameras, ${outputRows.length} job assignments found`);
 
+  // --------------------- PROCESS ORDER NUMBERS FROM TOMORROW DOUBLE CHECK ---------------------
+  try {
+    const forecastSheetTmp = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LA Camera Forecast');
+    if (forecastSheetTmp) {
+      const orderRange = forecastSheetTmp.getRange(2, 37, forecastSheetTmp.getLastRow() - 1, 1);
+      const orderValues = orderRange.getValues().flat().map(v => v && v.toString().trim()).filter(v => v);
+      const orderSet = new Set(orderValues);
+      Logger.log(`Processing ${orderSet.size} order numbers from AJ:AM section...`);
+
+      const bgCache = {};
+      const sheetLastCol = headerRow.length;
+
+      orderSet.forEach(ord => {
+        Logger.log(`Searching for order ${ord} across entire scheduling sheet...`);
+        let foundForOrder = false;
+
+        // Search every row in the data for the order number
+        const orderRegex = new RegExp("\\b" + ord + "\\b");
+        for (let rowIdx = 0; rowIdx < data.length; rowIdx++) {
+          const rowNum = rowIdx + 1; // Convert to 1-based
+          const rowVals = data[rowIdx];
+          
+          // Check if this is a valid camera row (has "LOS ANGELES")
+          if (rowVals[0] !== 'LOS ANGELES') continue;
+          
+          // Look for order number in any column
+          for (let colIdx = 0; colIdx < rowVals.length; colIdx++) {
+            const cellValue = rowVals[colIdx];
+            if (cellValue && orderRegex.test(cellValue.toString())) {
+              Logger.log(`  Match: Order ${ord} at row ${rowNum}, col ${colIdx+1} in cell: "${cellValue}"`);
+              
+              // Get backgrounds for this row if not cached
+              if (!bgCache[rowNum]) {
+                bgCache[rowNum] = cameraSheet.getRange(rowNum, 1, 1, sheetLastCol).getBackgrounds()[0];
+              }
+              const bgRow = bgCache[rowNum];
+              const cellBg = bgRow[colIdx];
+              
+              Logger.log(`    Cell background: ${cellBg}`);
+              if (!validTodayCellBackgrounds.includes(cellBg)) {
+                Logger.log('    Skipped due to invalid background color');
+                continue;
+              }
+              
+              // Find camera type by looking for the first empty cell above
+              let cameraType = '';
+              let typeRow = rowIdx - 1;
+              while (typeRow >= 0 && data[typeRow][0] !== '') {
+                typeRow--;
+              }
+              if (typeRow >= 0) {
+                cameraType = data[typeRow][4]; // Column E
+              }
+              
+              // Extract barcode from column E
+              const barcodeCell = rowVals[4];
+              let cameraBarcode = '';
+              if (typeof barcodeCell === 'string') {
+                const m = barcodeCell.match(/BC#\s*(\d+)/);
+                if (m) cameraBarcode = m[1];
+              }
+              
+              const headerCellVal = headerRow[colIdx];
+              const dateStr = headerCellVal instanceof Date ? formatDate(headerCellVal) : headerCellVal;
+              
+              // Look for color change in next 7 days from this match
+              let foundColor = cellBg;
+              for (let j = colIdx + 1; j <= colIdx + 7 && j < rowVals.length; j++) {
+                const nextCellBg = bgRow[j];
+                if (nextCellBg !== foundColor && nextCellBg !== '#ffffff') {
+                  foundColor = nextCellBg;
+                  break;
+                }
+              }
+              
+              Logger.log(`    Adding camera: ${cameraType}, barcode: ${cameraBarcode}, job: ${cellValue}`);
+              outputRows.push([cameraType, cameraBarcode, 'Today +0', cellValue, dateStr]);
+              outputBackgrounds.push(['', '', '', foundColor, '']);
+              rowColorMap[cameraBarcode] = foundColor;
+              foundForOrder = true;
+              break;
+            }
+          }
+          if (foundForOrder) break;
+        }
+
+        if (!foundForOrder) {
+          Logger.log(`  Order ${ord} NOT FOUND in camera scheduling sheet.`);
+        }
+      });
+    }
+  } catch (err) {
+    Logger.log('Error processing tomorrow order numbers: ' + err);
+  }
+
   // Print today's date and the next 7 days' dates to B2:I2 in the same format as in AE:AE
   const forecastSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LA Camera Forecast');
   if (forecastSheet) {
@@ -613,6 +751,44 @@ function getCameraForecast() {
       }
       Logger.log(`RTR status processing complete: ${rtrStatusResults.length} cameras processed`);
 
+      // ------------------ Remove duplicate barcode+order pairs BEFORE column swap ------------------
+      if (sortedRows.length > 0) {
+        const seenPairs = new Set();
+        const dedupRows = [];
+        const dedupBgs  = [];
+        for (let i = 0; i < sortedRows.length; i++) {
+          const row = sortedRows[i];
+          const barcode = row[1];  // Barcode is still in position 1 before swap
+          const jobText = row[3];  // Job text in position 3
+          
+          // Extract order number from job text using regex (matches Google Sheets REGEXEXTRACT)
+          let orderFromJob = '';
+          const orderMatch = jobText && jobText.toString().match(/\d{6}/);
+          if (orderMatch) {
+            orderFromJob = orderMatch[0];
+          }
+          
+          const pairKey = `${barcode}-${orderFromJob}`;
+          // Only remove duplicates if both barcode and order number are valid (not empty/null)
+          if (barcode && orderFromJob && !seenPairs.has(pairKey)) {
+            seenPairs.add(pairKey);
+            dedupRows.push(row);
+            dedupBgs.push(sortedBackgrounds[i]);
+          } else if (barcode && orderFromJob && seenPairs.has(pairKey)) {
+            Logger.log(`Removing duplicate barcode+order pair: ${barcode} + ${orderFromJob}`);
+          } else {
+            // Keep rows where barcode or order is missing/empty (no deduplication)
+            dedupRows.push(row);
+            dedupBgs.push(sortedBackgrounds[i]);
+          }
+        }
+        sortedRows.length = 0;
+        sortedBackgrounds.length = 0;
+        sortedRows.push(...dedupRows);
+        sortedBackgrounds.push(...dedupBgs);
+        Logger.log(`Duplicate barcode+order pairs removed. ${sortedRows.length} unique rows remain.`);
+      }
+
       // Build AE background color array from rowColorMap using barcode (for job info column)
       const aeBackgrounds = sortedRows.map(row => [rowColorMap[row[1]] || '#ffffff']);
 
@@ -652,12 +828,16 @@ function getCameraForecast() {
       });
 
       Logger.log(`Wrote ${sortedRows.length} rows to 'LA Camera Forecast' sheet starting at AB2, with RTR status in AA.`);
+
+      // AJ:AM already refreshed at start of getCameraForecast()
     } else {
       Logger.log("Sheet 'LA Camera Forecast' not found in the active spreadsheet.");
     }
   } else {
     Logger.log('No results to write to LA Camera Forecast sheet.');
   }
+
+  // Duplicate removal now handled before column swap above
 
 
 } 
