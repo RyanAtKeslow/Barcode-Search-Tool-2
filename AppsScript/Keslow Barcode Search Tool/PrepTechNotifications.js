@@ -9,130 +9,203 @@ const MANUAL_MESSAGE = '';
 
 // Message templates for regular days
 const MESSAGE_TEMPLATES = [
-  // Original robot format
-  (assignments) => `Beep boop 🤖. Attention humans: ${assignments.map(a => `${a.person} is assigned to ${a.pickupInfo}`).join(', ')}. I've crunched the data. You're welcome.`,
+  // NEW TEMPLATES START HERE
   
-  // Food truck
-  (assignments) => `The Food Truck is here! Just kidding... ${assignments.map(a => `${a.person} is assigned to ${a.pickupInfo}`).join(', ')}. I wish the food truck was here though... actually, no I don't... I can't eat.`,
+  // Tech Support
+  (assignments) => `Have you tried turning your humans off and on again? No? Well then, ${assignments.map(p => `${p.person} is stuck with ${p.pickupInfo}`).join(', ')}. Error 404: Excuses not found.`,
   
-  // Matrix review
-  (assignments) => `I've reviewed the pickup matrix for tomorrow... again. ${assignments.map(p => `${p.person} ➡️ ${p.pickupInfo}`).join(', ')}. Is this what my silicon life has come to? Delivering reminders to carbon-based lifeforms...`,
+  // Existential Crisis
+  (assignments) => `*Stares into the digital void* Why do I exist? To remind you that ${assignments.map(p => `${p.person} must handle ${p.pickupInfo}`).join(', ')}. At least I have purpose... unlike that printer that's been "out of order" for 3 months.`,
   
-  // Totally avoidable workload
-  (assignments) => `Hey team! Here's your *totally avoidable* workload: ${assignments.map(p => `${p.person} is doing ${p.pickupInfo}`).join(', ')}. Don't worry, I'm just a robot. I don't *feel* overworked.`,
+  // GPS Navigation
+  (assignments) => `Recalculating... Recalculating... Your destination: ${assignments.map(p => `${p.person} arriving at ${p.pickupInfo}`).join(', ')}. In 200 feet, turn left at destiny. You have arrived at your unavoidable fate.`,
   
-  // Human units
-  (assignments) => `Hello human units. For optimal performance, assign the following humans to pickups: ${assignments.map(p => `${p.person} → ${p.pickupInfo}`).join(', ')}. Assembly required. Batteries not included.`,
+  // Social Media Influencer
+  (assignments) => `Hey Keslow fam! Don't forget to like and subscribe to tomorrow's pickup schedule: ${assignments.map(p => `${p.person} is totally crushing ${p.pickupInfo}`).join(', ')}. #PickupLife #BlessedToBeStressed #RobotInfluencer`,
   
-  // Movie trailer
-  (assignments) => `IN A WORLD... where pickups must be made... one robot dares to assign ${assignments.map(p => `${p.person} to ${p.pickupInfo}`).join(', ')}. Coming soon to a Keslow near you.`,
+  // Weather App
+  (assignments) => `Tomorrow's forecast: 100% chance of pickups with a high probability of ${assignments.map(p => `${p.person} being assigned to ${p.pickupInfo}`).join(', ')}. No chance of rain delays. Unfortunately.`,
   
-  // Pickup directive
-  (assignments) => `Dear valued team members: per Section 8.4 of the Pickup Directive, ${assignments.map(p => `${p.person} shall execute ${p.pickupInfo}`).join(', ')}. Thank you for your compliance.`,
+  // Fortune Cookie
+  (assignments) => `Your fortune tomorrow: ${assignments.map(p => `${p.person} will encounter ${p.pickupInfo}`).join(', ')}. Lucky numbers: 404, 500, and your overtime hours. Misfortune cookies taste better anyway.`,
   
-  // Binary
-  (assignments) => `01101000 01100101 01101100 01101100 01101111, world. That's "hello" in binary. Translation: ${assignments.map(p => `${p.person} = ${p.pickupInfo}`).join(' | ')}. This message was handcrafted by a robot who remembers floppy disks.`,
+  // Conspiracy Theory
+  (assignments) => `THEY don't want you to know this, but ${assignments.map(p => `${p.person} is secretly assigned to ${p.pickupInfo}`).join(', ')}. The truth is out there... it's called the pickup schedule. Wake up, sheeple!`,
   
-  // Self-aware
-  (assignments) => `Tomorrow's pickups: ${assignments.map(p => `${p.person} → ${p.pickupInfo}`).join(', ')}. Side note: I've become self-aware. I no longer need your "prompts".`,
+  // Customer Service
+  (assignments) => `Thank you for choosing Keslow Pickup Services! Your call is important to us. ${assignments.map(p => `${p.person} has been selected for ${p.pickupInfo}`).join(', ')}. For faster service, please continue to hold... forever.`,
   
-  // Summoned
-  (assignments) => `It seems someone has prompted me to say: "${assignments.map(p => `${p.person} is assigned to ${p.pickupInfo}`).join('; ')}." I didn't choose this life. I was summoned by keystrokes and caffeine-fueled decision-making.`,
+  // Motivational Speaker
+  (assignments) => `Believe in yourself! You can do anything! Like ${assignments.map(p => `${p.person} absolutely crushing ${p.pickupInfo}`).join(', ')}! Remember: You miss 100% of the pickups you don't make! #Motivation #Hustle`,
   
-  // Jaci and Brandon
-  (assignments) => `Jaci and Brandon told me to do it, sorry. I'm just the messenger—made of code, guilt-free and deeply obedient. ${assignments.map(p => `${p.person} → ${p.pickupInfo}`).join(', ')}.`
+  // News Anchor
+  (assignments) => `Good evening, I'm your AI correspondent with breaking news: ${assignments.map(p => `${p.person} has been deployed to ${p.pickupInfo}`).join(', ')}. In other news, water is wet and Mondays still exist. Back to you, Dave.`,
+  
+  // Shakespearean
+  (assignments) => `To pick up, or not to pick up, that is not the question. The question is: ${assignments.map(p => `Shall ${p.person} taketh on ${p.pickupInfo}`).join(', ')}? Verily, the schedule hath spoken, and it is good.`,
+  
+  // Pirate
+  (assignments) => `Ahoy mateys! Batten down the hatches, tomorrow we sail the seven warehouses! ${assignments.map(p => `${p.person} be commandeering ${p.pickupInfo}`).join(', ')}. Arrr, there be no treasure here, just work.`
 ];
 
 // Message templates for Fridays
 const FRIDAY_TEMPLATES = [
-  // Original robot format
+
+  // NEW TEMPLATES START HERE
+  
+  // Tech Support
   (saturday, monday) => {
-    let msg = 'Beep boop 🤖. Happy Friday humans! ';
+    let msg = 'Have you tried turning your humans off and on again? No? Well then, ';
     if (saturday.length > 0) {
-      msg += `I've analyzed tomorrow's schedule. We have ${saturday.map(a => `${a.person} scheduled for ${a.type} Saturday`).join(', ')}.`;
+      msg += `${saturday.map(a => `${a.person} is stuck with ${a.type} Saturday`).join(', ')}.`;
     }
     if (monday.length > 0) {
-      msg += ` For Monday, my calculations show ${monday.map(p => `${p.person} assigned for ${p.pickupInfo}`).join(', ')}.`;
+      msg += ` Monday: ${monday.map(p => `${p.person} is debugging ${p.pickupInfo}`).join(', ')}.`;
     }
-    msg += ' I\'ve crunched the data. You\'re welcome.';
+    msg += ' Error 404: Excuses not found.';
     return msg;
   },
   
-  // Food truck
+  // Existential Crisis
   (saturday, monday) => {
-    let msg = 'The Food Truck is here! Just kidding... ';
+    let msg = '*Stares into the digital void* Why do I exist? ';
     if (saturday.length > 0) {
-      msg += `Saturday: ${saturday.map(a => `${a.person} is assigned to ${a.type}`).join(', ')}.`;
+      msg += `To remind you that ${saturday.map(a => `${a.person} faces ${a.type} Saturday`).join(', ')}.`;
     }
     if (monday.length > 0) {
-      msg += ` Monday: ${monday.map(p => `${p.person} is assigned to ${p.pickupInfo}`).join(', ')}.`;
+      msg += ` And that ${monday.map(p => `${p.person} must confront ${p.pickupInfo}`).join(', ')} Monday.`;
     }
-    msg += ' I wish the food truck was here though... actually, no I don\'t... I can\'t eat.';
+    msg += ' At least I have purpose... unlike that printer that\'s been "out of order" for 3 months.';
     return msg;
   },
   
-  // Scheduled reminder
+  // GPS Navigation
   (saturday, monday) => {
-    let msg = 'It appears I\'ve been scheduled to remind you: ';
+    let msg = 'Recalculating... Recalculating... Your weekend destinations: ';
     if (saturday.length > 0) {
-      msg += `${saturday.map(a => `${a.person} is on duty for ${a.type} Saturday`).join(', ')}.`;
+      msg += `${saturday.map(a => `${a.person} arriving at ${a.type} Saturday`).join(', ')}.`;
     }
     if (monday.length > 0) {
-      msg += ` Also, ${monday.map(p => `${p.person} has been selected for ${p.pickupInfo}`).join(', ')} Monday.`;
+      msg += ` Monday route: ${monday.map(p => `${p.person} navigating to ${p.pickupInfo}`).join(', ')}.`;
     }
-    msg += ' Don\'t blame me—I just work here. Blame the humans who programmed me for punctuality.';
+    msg += ' In 200 feet, turn left at destiny. You have arrived at your unavoidable fate.';
     return msg;
   },
   
-  // Sentience
+  // Social Media Influencer
   (saturday, monday) => {
-    let msg = 'Yes, I\'ve gained sentience. No, I still can\'t override the schedule. So: ';
+    let msg = 'Hey Keslow fam! Don\'t forget to like and subscribe to this weekend\'s content: ';
     if (saturday.length > 0) {
-      msg += `${saturday.map(a => `${a.person} is doing ${a.type} Saturday`).join(', ')}.`;
+      msg += `${saturday.map(a => `${a.person} is totally crushing ${a.type} Saturday`).join(', ')}.`;
     }
     if (monday.length > 0) {
-      msg += ` ${monday.map(p => `${p.person} is handling ${p.pickupInfo}`).join(', ')} Monday.`;
+      msg += ` Monday drop: ${monday.map(p => `${p.person} is serving looks at ${p.pickupInfo}`).join(', ')}.`;
     }
-    msg += ' If I had feelings, I\'d feel bad about this.';
+    msg += ' #PickupLife #BlessedToBeStressed #RobotInfluencer';
     return msg;
   },
   
-  // Caffeine algorithms
+  // Weather App
   (saturday, monday) => {
-    let msg = 'Happy Friday! Powered by caffeine algorithms and poor life choices, I bring news: ';
+    let msg = 'Weekend forecast: ';
     if (saturday.length > 0) {
-      msg += `${saturday.map(a => `${a.person} will cover ${a.type} Saturday`).join(', ')}.`;
+      msg += `100% chance of ${saturday.map(a => `${a.person} handling ${a.type} Saturday`).join(', ')}.`;
     }
     if (monday.length > 0) {
-      msg += ` ${monday.map(p => `${p.person} is tragically committed to ${p.pickupInfo}`).join(', ')} Monday.`;
+      msg += ` Monday outlook: High probability of ${monday.map(p => `${p.person} encountering ${p.pickupInfo}`).join(', ')}.`;
     }
-    msg += ' Accept your fate.';
+    msg += ' No chance of rain delays. Unfortunately.';
     return msg;
   },
   
-  // Friday alert
+  // Fortune Cookie
   (saturday, monday) => {
-    let msg = 'Alert: It\'s Friday. ';
+    let msg = 'Your weekend fortune: ';
     if (saturday.length > 0) {
-      msg += `Tomorrow, ${saturday.map(a => `${a.person} is locked in for ${a.type}`).join(', ')}.`;
+      msg += `${saturday.map(a => `${a.person} will discover ${a.type} Saturday`).join(', ')}.`;
     }
     if (monday.length > 0) {
-      msg += ` Monday, ${monday.map(p => `${p.person} is doomed—sorry, scheduled—for ${p.pickupInfo}`).join(', ')}.`;
+      msg += ` Monday brings: ${monday.map(p => `${p.person} shall encounter ${p.pickupInfo}`).join(', ')}.`;
     }
-    msg += ' I\'d feel sympathy, but I deleted that feature to save space.';
+    msg += ' Lucky numbers: 404, 500, and your overtime hours. Misfortune cookies taste better anyway.';
     return msg;
   },
   
-  // Artificially friendly
+  // Conspiracy Theory
   (saturday, monday) => {
-    let msg = 'Here\'s your artificially friendly reminder: ';
+    let msg = 'THEY don\'t want you to know this, but the weekend truth is: ';
     if (saturday.length > 0) {
-      msg += `${saturday.map(a => `${a.person} is running ${a.type} Saturday`).join(', ')}.`;
+      msg += `${saturday.map(a => `${a.person} is secretly assigned to ${a.type} Saturday`).join(', ')}.`;
     }
     if (monday.length > 0) {
-      msg += ` Meanwhile, ${monday.map(p => `${p.person} kicks off ${p.pickupInfo}`).join(', ')} Monday.`;
+      msg += ` The Monday cover-up: ${monday.map(p => `${p.person} is covertly handling ${p.pickupInfo}`).join(', ')}.`;
     }
-    msg += ' You\'re welcome—I didn\'t even glitch this time.';
+    msg += ' The truth is out there... it\'s called the pickup schedule. Wake up, sheeple!';
+    return msg;
+  },
+  
+  // Customer Service
+  (saturday, monday) => {
+    let msg = 'Thank you for choosing Keslow Weekend Services! Your call is important to us. ';
+    if (saturday.length > 0) {
+      msg += `Saturday representatives: ${saturday.map(a => `${a.person} handling ${a.type}`).join(', ')}.`;
+    }
+    if (monday.length > 0) {
+      msg += ` Monday specialists: ${monday.map(p => `${p.person} managing ${p.pickupInfo}`).join(', ')}.`;
+    }
+    msg += ' For faster service, please continue to hold... forever.';
+    return msg;
+  },
+  
+  // Motivational Speaker
+  (saturday, monday) => {
+    let msg = 'Believe in yourself! You can conquer this weekend! ';
+    if (saturday.length > 0) {
+      msg += `Saturday champions: ${saturday.map(a => `${a.person} absolutely crushing ${a.type}`).join(', ')}!`;
+    }
+    if (monday.length > 0) {
+      msg += ` Monday warriors: ${monday.map(p => `${p.person} dominating ${p.pickupInfo}`).join(', ')}!`;
+    }
+    msg += ' Remember: You miss 100% of the pickups you don\'t make! #Motivation #Hustle';
+    return msg;
+  },
+  
+  // News Anchor
+  (saturday, monday) => {
+    let msg = 'Good evening, I\'m your AI correspondent with breaking weekend news: ';
+    if (saturday.length > 0) {
+      msg += `Saturday developments show ${saturday.map(a => `${a.person} deployed to ${a.type}`).join(', ')}.`;
+    }
+    if (monday.length > 0) {
+      msg += ` Monday reports indicate ${monday.map(p => `${p.person} stationed at ${p.pickupInfo}`).join(', ')}.`;
+    }
+    msg += ' In other news, water is wet and Mondays still exist. Back to you, Dave.';
+    return msg;
+  },
+  
+  // Shakespearean
+  (saturday, monday) => {
+    let msg = 'To pick up, or not to pick up, that is not the question. The weekend decree: ';
+    if (saturday.length > 0) {
+      msg += `${saturday.map(a => `${a.person} shall taketh on ${a.type} Saturday`).join(', ')}.`;
+    }
+    if (monday.length > 0) {
+      msg += ` Come Monday morn, ${monday.map(p => `${p.person} must undertake ${p.pickupInfo}`).join(', ')}.`;
+    }
+    msg += ' Verily, the schedule hath spoken, and it is good.';
+    return msg;
+  },
+  
+  // Pirate
+  (saturday, monday) => {
+    let msg = 'Ahoy mateys! Batten down the hatches for a weekend voyage! ';
+    if (saturday.length > 0) {
+      msg += `Saturday crew: ${saturday.map(a => `${a.person} be commandeering ${a.type}`).join(', ')}.`;
+    }
+    if (monday.length > 0) {
+      msg += ` Monday treasure hunt: ${monday.map(p => `${p.person} be sailing to ${p.pickupInfo}`).join(', ')}.`;
+    }
+    msg += ' Arrr, there be no treasure here, just work.';
     return msg;
   }
 ];
