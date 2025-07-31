@@ -53,6 +53,8 @@ function tomorrowDoubleCheck() {
   }
 
   const outputRows = [];
+  const addedOrderNumbers = new Set(); // Track order numbers already added to prevent duplicates
+  
   if (tomorrowSheet) {
     const rows = tomorrowSheet.getRange('B:J').getValues();
     rows.forEach(r => {
@@ -67,6 +69,7 @@ function tomorrowDoubleCheck() {
       // Filters
       const wrapOut      = lowerName.includes('wrap out');
       const earlierDup   = earlierOrders.has(orderNum) || earlierJobs.has(lowerName);
+      const currentDup   = addedOrderNumbers.has(orderNum); // Check for duplicates within tomorrow's data
 
       let prepDateTooEarly = false;
       if (note && note.toLowerCase().includes('prep')) {
@@ -84,10 +87,13 @@ function tomorrowDoubleCheck() {
       }
 
       // Log decision
-      Logger.log(`[TomorrowDC] Job:"${jobName}" Ord:${orderNum} earlyDup:${earlierDup} wrapOut:${wrapOut} prepEarly:${prepDateTooEarly}`);
+      Logger.log(`[TomorrowDC] Job:"${jobName}" Ord:${orderNum} earlyDup:${earlierDup} currentDup:${currentDup} wrapOut:${wrapOut} prepEarly:${prepDateTooEarly}`);
 
-      if (!wrapOut && !earlierDup && !prepDateTooEarly) {
+      if (!wrapOut && !earlierDup && !currentDup && !prepDateTooEarly) {
         outputRows.push([jobName, orderNum, cameraInfo, note]);
+        addedOrderNumbers.add(orderNum); // Track this order number as added
+      } else if (currentDup) {
+        Logger.log(`[TomorrowDC] Skipping duplicate order number: ${orderNum} for job: "${jobName}"`);
       }
     });
   } else {
