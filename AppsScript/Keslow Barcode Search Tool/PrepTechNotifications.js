@@ -30,7 +30,7 @@ const MESSAGE_TEMPLATES = [
   (assignments) => `Your fortune tomorrow: ${assignments.map(p => `${p.person} will encounter ${p.pickupInfo}`).join(', ')}. Lucky numbers: 404, 500, and your overtime hours. Misfortune cookies taste better anyway.`,
   
   // Conspiracy Theory
-  (assignments) => `THEY don't want you to know this, but ${assignments.map(p => `${p.person} is secretly assigned to ${p.pickupInfo}`).join(', ')}. The truth is out there... it's called the pickup schedule. Wake up, sheeple!`,
+  (assignments) => `THEY don't want you to know this, but ${assignments.map(p => `${p.person} is secretly assigned to ${p.pickupInfo}`).join(', ')}. The truth is out there... it's called the pickup schedule.`,
   
   // Customer Service
   (assignments) => `Thank you for choosing Keslow Pickup Services! Your call is important to us. ${assignments.map(p => `${p.person} has been selected for ${p.pickupInfo}`).join(', ')}. For faster service, please continue to hold... forever.`,
@@ -140,7 +140,7 @@ const FRIDAY_TEMPLATES = [
     if (monday.length > 0) {
       msg += ` The Monday cover-up: ${monday.map(p => `${p.person} is covertly handling ${p.pickupInfo}`).join(', ')}.`;
     }
-    msg += ' The truth is out there... it\'s called the pickup schedule. Wake up, sheeple!';
+    msg += ' The truth is out there... it\'s called the pickup schedule.';
     return msg;
   },
   
