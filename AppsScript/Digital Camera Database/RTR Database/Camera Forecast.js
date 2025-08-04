@@ -182,13 +182,86 @@ function getCameraForecast() {
   const spreadsheet = SpreadsheetApp.openById('1uECRfnLO1LoDaGZaHTHS3EaUdf8tte5kiR6JNWAeOiw');
   const cameraSheet = spreadsheet.getSheetByName('Camera');
 
-  // Find all rows containing "LOS ANGELES" in column A
+  // Function to translate camera types based on special rules
+  function translateCameraType(cameraType) {
+    if (cameraType === 'X = Global Shutter Sensor') {
+      return 'RED V-RAPTOR XL [X] 8K VV Digital Camera';
+    }
+    return cameraType;
+  }
+
+  // Gear Transfer Check function - detects if LA is involved in any GT within the row and date is within next 7 days
+  function gtCheck(rowValues) {
+    const today = new Date();
+    const sevenDaysFromNow = new Date();
+    sevenDaysFromNow.setDate(today.getDate() + 7);
+    
+    // Look through all cells in the row for GT patterns
+    for (let i = 0; i < rowValues.length; i++) {
+      const cellValue = rowValues[i];
+      if (!cellValue || typeof cellValue !== 'string') continue;
+      
+      const cellStr = cellValue.toString().toUpperCase();
+      
+      // Check if cell contains "GT" and city direction indicators
+      if (cellStr.includes('GT') && (cellStr.includes('>') || cellStr.includes('->'))) {
+        // Extract city codes around the direction indicators
+        // Match patterns like "LA -> AT", "VN>LA", "LA>NY", etc.
+        const gtPattern = /(\w{2,3})\s*-?>\s*(\w{2,3})/;
+        const match = cellStr.match(gtPattern);
+        
+        if (match) {
+          const origin = match[1];
+          const destination = match[2];
+          
+          // Only process further if LA is involved
+          const isLAInvolved = (origin === 'LA' || destination === 'LA');
+          
+          if (isLAInvolved) {
+            // Parse date from the GT entry
+            // Look for date patterns like "8/4", "8/6", "12/25", etc.
+            const datePattern = /(\d{1,2})\/(\d{1,2})/;
+            const dateMatch = cellValue.match(datePattern);
+            
+            if (dateMatch) {
+              const month = parseInt(dateMatch[1], 10) - 1; // JavaScript months are 0-based
+              const day = parseInt(dateMatch[2], 10);
+              let gtDate = new Date(today.getFullYear(), month, day);
+              
+              // If the date appears to be in the past, it's actually next year
+              // (since sheet data is always forward-looking)
+              if (gtDate < today) {
+                gtDate = new Date(today.getFullYear() + 1, month, day);
+              }
+              
+              // Check if GT date is within the next 7 days
+              if (gtDate >= today && gtDate <= sevenDaysFromNow) {
+                Logger.log(`GT Check: LA involved in transfer (${origin} -> ${destination}) on ${dateMatch[0]} - treating as valid LA camera`);
+                return true;
+              } else {
+                Logger.log(`GT Check: LA transfer (${origin} -> ${destination}) on ${dateMatch[0]} is outside 7-day window - not valid`);
+              }
+            } else {
+              Logger.log(`GT Check: LA transfer (${origin} -> ${destination}) found but no valid date parsed from: "${cellValue}"`);
+            }
+          }
+          // Note: Not logging non-LA transfers to reduce log noise
+        }
+      }
+    }
+    return false;
+  }
+
+  // Find all rows containing "LOS ANGELES" in column A OR gear transfers involving LA
   const data = cameraSheet.getDataRange().getValues();
   const foundLACameras = [];
   const cameraTypeCount = {}; // Object to store count of each camera type
   
   for (let i = 0; i < data.length; i++) {
-    if (data[i][0] === 'LOS ANGELES') {
+    const isLACamera = data[i][0] === 'LOS ANGELES';
+    const isGTCamera = gtCheck(data[i]);
+    
+    if (isLACamera || isGTCamera) {
       foundLACameras.push(i + 1); // Adding 1 because getValues() is 0-based but sheet rows are 1-based
     }
   }
@@ -203,7 +276,8 @@ function getCameraForecast() {
       typeRow--;
     }
     // Get the camera type from column E of the first empty cell's row
-    const cameraType = data[typeRow][4]; // Column E is index 4
+    const rawCameraType = data[typeRow][4]; // Column E is index 4
+    const cameraType = translateCameraType(rawCameraType); // Apply translation rules
     cameraTypes.push({
       row: row,
       type: cameraType
@@ -264,7 +338,7 @@ function getCameraForecast() {
   const outputBackgrounds = [];
   const rowColorMap = {}; // key: barcode, value: foundColor
 
-  // List of valid camera types
+  // List of valid camera types (includes translated types)
   const validCameraTypes = [
     'ARRI Amira',
     'Arri Alexa EV High Speed',
@@ -302,7 +376,8 @@ function getCameraForecast() {
     'Arricam ST Camera',
     'Arricam ST HD IVS',
     'Arri 416 Plus Camera',
-    'Indieassist 416 HD IVS '
+    'Indieassist 416 HD IVS ',
+    'X = Global Shutter Sensor' // Raw value that gets translated
   ];
 
   // List of valid todayCell background colors
@@ -405,6 +480,7 @@ function getCameraForecast() {
             offsetApplied = true;
           }
           const offsetDateStr = `${offsetDate.getMonth() + 1}/${offsetDate.getDate()}/${offsetDate.getFullYear()}`;
+          Logger.log(`Regular forecast: Adding camera Type="${camera.type}" Barcode="${cameraBarcode}" TodayPlus="Today +${i}" Job="${val}" Date="${offsetApplied ? offsetDateStr : dateHeaders[i]}"`);
           outputRows.push([
             camera.type,
             cameraBarcode,
@@ -436,7 +512,7 @@ function getCameraForecast() {
 
       orderSet.forEach(ord => {
         Logger.log(`Searching for order ${ord} across entire scheduling sheet...`);
-        let foundForOrder = false;
+        let camerasFoundForOrder = 0;
 
         // Search every row in the data for the order number
         const orderRegex = new RegExp("\\b" + ord + "\\b");
@@ -444,8 +520,11 @@ function getCameraForecast() {
           const rowNum = rowIdx + 1; // Convert to 1-based
           const rowVals = data[rowIdx];
           
-          // Check if this is a valid camera row (has "LOS ANGELES")
-          if (rowVals[0] !== 'LOS ANGELES') continue;
+          // Check if this is a valid camera row (has "LOS ANGELES" OR is a gear transfer involving LA)
+          const isLACamera = rowVals[0] === 'LOS ANGELES';
+          const isGTCamera = gtCheck(rowVals);
+          
+          if (!isLACamera && !isGTCamera) continue;
           
           // Look for order number in any column
           for (let colIdx = 0; colIdx < rowVals.length; colIdx++) {
@@ -473,7 +552,8 @@ function getCameraForecast() {
                 typeRow--;
               }
               if (typeRow >= 0) {
-                cameraType = data[typeRow][4]; // Column E
+                const rawCameraType = data[typeRow][4]; // Column E
+                cameraType = translateCameraType(rawCameraType); // Apply translation rules
               }
               
               // Extract barcode from column E
@@ -497,19 +577,21 @@ function getCameraForecast() {
                 }
               }
               
-              Logger.log(`    Adding camera: ${cameraType}, barcode: ${cameraBarcode}, job: ${cellValue}`);
+              Logger.log(`    Adding camera to output: Type="${cameraType}" Barcode="${cameraBarcode}" Job="${cellValue}" Date="${dateStr}"`);
               outputRows.push([cameraType, cameraBarcode, 'Today +0', cellValue, dateStr]);
               outputBackgrounds.push(['', '', '', foundColor, '']);
               rowColorMap[cameraBarcode] = foundColor;
-              foundForOrder = true;
-              break;
+              camerasFoundForOrder++;
+              break; // Still break from column loop, but continue with next row
             }
           }
-          if (foundForOrder) break;
+          // Removed the foundForOrder break here - continue searching all rows
         }
 
-        if (!foundForOrder) {
+        if (camerasFoundForOrder === 0) {
           Logger.log(`  Order ${ord} NOT FOUND in camera scheduling sheet.`);
+        } else {
+          Logger.log(`  Order ${ord} FOUND: ${camerasFoundForOrder} cameras added to forecast.`);
         }
       });
     }
@@ -629,8 +711,65 @@ function getCameraForecast() {
         Logger.log(`Crew prep date updates: ${crewPrepUpdates} dates updated from crew prep notes`);
       }
 
-      // Recalculate "Today +" values and re-sort after date updates
-      Logger.log('Recalculating "Today +" values after date updates...');
+      // Function to calculate forecast day offset ensuring we never forecast FOR a weekend
+      function calculateForecastDay(fromDate, toDate) {
+        const from = new Date(fromDate);
+        const to = new Date(toDate);
+        
+        // Calculate business days between dates
+        let businessDays = 0;
+        const currentDate = new Date(from);
+        currentDate.setDate(currentDate.getDate() + 1);
+        
+        while (currentDate <= to) {
+          const dayOfWeek = currentDate.getDay();
+          if (dayOfWeek >= 1 && dayOfWeek <= 5) { // Monday through Friday
+            businessDays++;
+          }
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+        
+        // Rule: We can never forecast FOR a weekend
+        // Calculate what day "Today +businessDays" would be
+        const todayDayOfWeek = from.getDay();
+        const forecastDay = new Date(from);
+        forecastDay.setDate(forecastDay.getDate() + businessDays);
+        const forecastDayOfWeek = forecastDay.getDay();
+        
+        let adjustedOffset = businessDays;
+        
+        // If Today +X would be a weekend, adjust it to the previous business day
+        if (forecastDayOfWeek === 6) { // Saturday
+          // Move back to Friday
+          adjustedOffset = Math.max(0, businessDays - 1);
+          Logger.log(`  Weekend adjustment: Today +${businessDays} would be Saturday, adjusted to Today +${adjustedOffset}`);
+        } else if (forecastDayOfWeek === 0) { // Sunday
+          // Move back to Friday
+          adjustedOffset = Math.max(0, businessDays - 2);
+          Logger.log(`  Weekend adjustment: Today +${businessDays} would be Sunday, adjusted to Today +${adjustedOffset}`);
+        }
+        
+        // Additional rule: if today is Friday, Today +1 and Today +2 don't exist (would be weekend)
+        if (todayDayOfWeek === 5) { // Friday
+          if (adjustedOffset === 1 || adjustedOffset === 2) {
+            adjustedOffset = 0; // Move to Today
+            Logger.log(`  Friday special rule: Today +1 and +2 not allowed, changed to Today`);
+          }
+        }
+        
+        // Additional rule: if today is Thursday, Today +2 doesn't exist (would be Saturday)
+        if (todayDayOfWeek === 4) { // Thursday
+          if (adjustedOffset === 2) {
+            adjustedOffset = 1; // Move to Today +1 (Friday)
+            Logger.log(`  Thursday special rule: Today +2 would be Saturday, changed to Today +1`);
+          }
+        }
+        
+        return Math.max(0, adjustedOffset);
+      }
+
+      // Recalculate "Today +" values using business days after date updates
+      Logger.log('Recalculating "Today +" values using business days after date updates...');
       let recalculatedCount = 0;
       for (let i = 0; i < sortedRows.length; i++) {
         const row = sortedRows[i];
@@ -652,23 +791,36 @@ function getCameraForecast() {
             parsedDate = updatedDate;
           }
           
-          if (parsedDate) {
-            // Calculate days difference from today with 1-day offset
-            const timeDiff = parsedDate.getTime() - today.getTime();
-            const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+                    if (parsedDate) {
+            const crewPrepDate = new Date(parsedDate);
             
-            // Apply 1-day offset: subtract 1 from the calculated difference
-            const adjustedDaysDiff = daysDiff - 1;
+            // Calculate the service date (day before crew prep, but service cannot be on weekend)
+            const serviceDate = new Date(crewPrepDate);
+            serviceDate.setDate(serviceDate.getDate() - 1); // Start with day before
             
-            // Update the "Today +" value
-            if (adjustedDaysDiff >= 0) {
-              if (adjustedDaysDiff === 0) {
-                row[2] = 'Today';
-              } else {
-                row[2] = `Today +${adjustedDaysDiff}`;
-              }
-              recalculatedCount++;
+            // If service date would be a weekend, move it back to Friday
+            const serviceDayOfWeek = serviceDate.getDay();
+            if (serviceDayOfWeek === 0) { // Sunday → move to Friday
+              serviceDate.setDate(serviceDate.getDate() - 2);
+            } else if (serviceDayOfWeek === 6) { // Saturday → move to Friday
+              serviceDate.setDate(serviceDate.getDate() - 1);
             }
+            
+            Logger.log(`  Service date calc: CrewPrep=${formatDate(crewPrepDate)} → Service=${formatDate(serviceDate)}`);
+            
+            // Calculate ALL calendar days from today to service date
+            const timeDiff = serviceDate.getTime() - today.getTime();
+            const calendarDays = Math.ceil(timeDiff / (1000 * 3600 * 24));
+            
+            Logger.log(`  Calendar days to service: ${calendarDays}`);
+            
+            // Update the "Today +" value based on calendar days to service date
+            if (calendarDays <= 0) {
+              row[2] = 'Today';
+            } else {
+              row[2] = `Today +${calendarDays}`;
+            }
+            recalculatedCount++;
           }
         }
       }
@@ -752,14 +904,20 @@ function getCameraForecast() {
       Logger.log(`RTR status processing complete: ${rtrStatusResults.length} cameras processed`);
 
       // ------------------ Remove duplicate barcode+order pairs BEFORE column swap ------------------
+      Logger.log(`Starting deduplication process with ${sortedRows.length} rows`);
       if (sortedRows.length > 0) {
         const seenPairs = new Set();
         const dedupRows = [];
         const dedupBgs  = [];
+        let duplicatesRemoved = 0;
+        let keptWithMissingData = 0;
+        
         for (let i = 0; i < sortedRows.length; i++) {
           const row = sortedRows[i];
           const barcode = row[1];  // Barcode is still in position 1 before swap
           const jobText = row[3];  // Job text in position 3
+          const cameraType = row[0];
+          const todayPlus = row[2];
           
           // Extract order number from job text using regex (matches Google Sheets REGEXEXTRACT)
           let orderFromJob = '';
@@ -769,24 +927,32 @@ function getCameraForecast() {
           }
           
           const pairKey = `${barcode}-${orderFromJob}`;
+          
+          // Log every row being processed
+          Logger.log(`Dedup Row ${i+1}: Camera="${cameraType}" Barcode="${barcode}" Order="${orderFromJob}" Job="${jobText}" TodayPlus="${todayPlus}"`);
+          
           // Only remove duplicates if both barcode and order number are valid (not empty/null)
           if (barcode && orderFromJob && !seenPairs.has(pairKey)) {
             seenPairs.add(pairKey);
             dedupRows.push(row);
             dedupBgs.push(sortedBackgrounds[i]);
+            Logger.log(`  → KEPT: First occurrence of pair ${pairKey}`);
           } else if (barcode && orderFromJob && seenPairs.has(pairKey)) {
-            Logger.log(`Removing duplicate barcode+order pair: ${barcode} + ${orderFromJob}`);
+            duplicatesRemoved++;
+            Logger.log(`  → REMOVED: Duplicate barcode+order pair: ${barcode} + ${orderFromJob} (${cameraType})`);
           } else {
             // Keep rows where barcode or order is missing/empty (no deduplication)
             dedupRows.push(row);
             dedupBgs.push(sortedBackgrounds[i]);
+            keptWithMissingData++;
+            Logger.log(`  → KEPT: Missing data (barcode="${barcode}" order="${orderFromJob}")`);
           }
         }
         sortedRows.length = 0;
         sortedBackgrounds.length = 0;
         sortedRows.push(...dedupRows);
         sortedBackgrounds.push(...dedupBgs);
-        Logger.log(`Duplicate barcode+order pairs removed. ${sortedRows.length} unique rows remain.`);
+        Logger.log(`Deduplication complete: ${duplicatesRemoved} duplicates removed, ${keptWithMissingData} kept with missing data, ${sortedRows.length} total rows remain.`);
       }
 
       // Build AE background color array from rowColorMap using barcode (for job info column)
@@ -800,6 +966,13 @@ function getCameraForecast() {
         row[1] = row[4];     // Move date to barcode position
         row[4] = temp;       // Move barcode to date position
       }
+
+      // Log final results before writing to sheet
+      Logger.log(`Final forecast results (${sortedRows.length} cameras):`);
+      sortedRows.forEach((row, idx) => {
+        // Note: After column swap, row[4] contains barcode and row[1] contains date
+        Logger.log(`  Final Row ${idx+1}: Type="${row[0]}" Date="${row[1]}" TodayPlus="${row[2]}" Job="${row[3]}" Barcode="${row[4]}"`);
+      });
 
       // Write the rest of the output starting at AB2 (col 28)
       forecastSheet.getRange(2, 28, sortedRows.length, sortedRows[0].length).setValues(sortedRows);

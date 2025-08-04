@@ -5,10 +5,29 @@
  */
 function tomorrowDoubleCheck() {
   // --- Date helpers ---
-  const today     = new Date();
-  const tomorrow  = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1); // midnight
+  const today = new Date();
   const dayPrefixes = [ 'Sun', 'Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat' ];
   const expectedSheetName = (dateObj) => `${dayPrefixes[dateObj.getDay()]} ${dateObj.getMonth()+1}/${dateObj.getDate()}`;
+  
+  // Calculate next business day (skip weekends)
+  function getNextBusinessDay(date) {
+    const nextDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    
+    if (dayOfWeek === 5) { // Friday
+      nextDay.setDate(date.getDate() + 3); // Skip to Monday
+    } else if (dayOfWeek === 6) { // Saturday
+      nextDay.setDate(date.getDate() + 2); // Skip to Monday
+    } else if (dayOfWeek === 0) { // Sunday
+      nextDay.setDate(date.getDate() + 1); // Skip to Monday
+    } else { // Monday-Thursday
+      nextDay.setDate(date.getDate() + 1); // Next day
+    }
+    
+    return nextDay;
+  }
+  
+  const nextBusinessDay = getNextBusinessDay(today);
 
   // --- Small helpers reused from Camera Forecast script ---
   const normalizeString = (str) => String(str || '').trim().toLowerCase().replace(/\s+/g, ' ');
@@ -29,11 +48,11 @@ function tomorrowDoubleCheck() {
   const prepBaySS = SpreadsheetApp.openById('1erp3GVvekFXUVzC4OJsTrLBgqL4d0s-HillOwyJZOTQ');
   const visibleSheets = prepBaySS.getSheets().filter(sh => !sh.isSheetHidden());
 
-  // Locate today & tomorrow sheets
-  const todaySheetName     = expectedSheetName(today);
-  const tomorrowSheetName  = expectedSheetName(tomorrow);
-  const todaySheet         = visibleSheets.find(sh => sh.getName() === todaySheetName);
-  const tomorrowSheet      = visibleSheets.find(sh => sh.getName() === tomorrowSheetName);
+  // Locate today & next business day sheets
+  const todaySheetName = expectedSheetName(today);
+  const nextBusinessDaySheetName = expectedSheetName(nextBusinessDay);
+  const todaySheet = visibleSheets.find(sh => sh.getName() === todaySheetName);
+  const nextBusinessDaySheet = visibleSheets.find(sh => sh.getName() === nextBusinessDaySheetName);
 
   const earlierOrders = new Set();
   const earlierJobs   = new Set();
@@ -47,16 +66,16 @@ function tomorrowDoubleCheck() {
       earlierOrders.add(orderNum);
       earlierJobs.add(normalizeString(jobName));
     });
-    Logger.log(`todayDoubleCheck: collected ${earlierOrders.size} order numbers & ${earlierJobs.size} job names from today (${todaySheetName}).`);
+    Logger.log(`tomorrowDoubleCheck: collected ${earlierOrders.size} order numbers & ${earlierJobs.size} job names from today (${todaySheetName}).`);
   } else {
-    Logger.log(`todayDoubleCheck: today's sheet "${todaySheetName}" not found.`);
+    Logger.log(`tomorrowDoubleCheck: today's sheet "${todaySheetName}" not found.`);
   }
 
   const outputRows = [];
-  const addedOrderNumbers = new Set(); // Track order numbers already added to prevent duplicates
+  const addedEntries = new Set(); // Track complete entries (job+order+camera) to prevent duplicates
   
-  if (tomorrowSheet) {
-    const rows = tomorrowSheet.getRange('B:J').getValues();
+  if (nextBusinessDaySheet) {
+    const rows = nextBusinessDaySheet.getRange('B:J').getValues();
     rows.forEach(r => {
       const jobName    = r[0];
       const orderNum   = normalizeOrder(r[1]);
@@ -66,10 +85,13 @@ function tomorrowDoubleCheck() {
 
       const lowerName = normalizeString(jobName);
 
+      // Create unique key for this specific entry (job + order + camera info)
+      const entryKey = `${lowerName}-${orderNum}-${normalizeString(cameraInfo)}`;
+
       // Filters
       const wrapOut      = lowerName.includes('wrap out');
       const earlierDup   = earlierOrders.has(orderNum) || earlierJobs.has(lowerName);
-      const currentDup   = addedOrderNumbers.has(orderNum); // Check for duplicates within tomorrow's data
+      const currentDup   = addedEntries.has(entryKey); // Check for duplicates of this specific entry
 
       let prepDateTooEarly = false;
       if (note && note.toLowerCase().includes('prep')) {
@@ -77,33 +99,33 @@ function tomorrowDoubleCheck() {
         if (matches) {
           const earliest = matches.reduce((earliest, str) => {
             const [m, d] = str.split('/').map(Number);
-            const dt = new Date(tomorrow.getFullYear(), m-1, d);
+            const dt = new Date(nextBusinessDay.getFullYear(), m-1, d);
             return dt < earliest ? dt : earliest;
-          }, new Date(tomorrow.getFullYear()+1,0,1));
-          prepDateTooEarly = earliest < tomorrow;
+          }, new Date(nextBusinessDay.getFullYear()+1,0,1));
+          prepDateTooEarly = earliest < nextBusinessDay;
         } else {
           prepDateTooEarly = true; // 'prep' mentioned but no date
         }
       }
 
       // Log decision
-      Logger.log(`[TomorrowDC] Job:"${jobName}" Ord:${orderNum} earlyDup:${earlierDup} currentDup:${currentDup} wrapOut:${wrapOut} prepEarly:${prepDateTooEarly}`);
+      Logger.log(`[TomorrowDC] Job:"${jobName}" Ord:${orderNum} Camera:"${cameraInfo}" earlyDup:${earlierDup} currentDup:${currentDup} wrapOut:${wrapOut} prepEarly:${prepDateTooEarly}`);
 
       if (!wrapOut && !earlierDup && !currentDup && !prepDateTooEarly) {
         outputRows.push([jobName, orderNum, cameraInfo, note]);
-        addedOrderNumbers.add(orderNum); // Track this order number as added
+        addedEntries.add(entryKey); // Track this specific entry as added
       } else if (currentDup) {
-        Logger.log(`[TomorrowDC] Skipping duplicate order number: ${orderNum} for job: "${jobName}"`);
+        Logger.log(`[TomorrowDC] Skipping duplicate entry: ${entryKey}`);
       }
     });
   } else {
-    Logger.log(`todayDoubleCheck: tomorrow's sheet "${tomorrowSheetName}" not found.`);
+    Logger.log(`tomorrowDoubleCheck: next business day sheet "${nextBusinessDaySheetName}" not found.`);
   }
 
   // --- Write to LA Camera Forecast sheet (AJ:AM) ---
   const forecastSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LA Camera Forecast');
   if (!forecastSheet) {
-    Logger.log('todayDoubleCheck: LA Camera Forecast sheet not found.');
+    Logger.log('tomorrowDoubleCheck: LA Camera Forecast sheet not found.');
     return;
   }
 
@@ -116,5 +138,5 @@ function tomorrowDoubleCheck() {
   if (outputRows.length > 0) {
     forecastSheet.getRange(2, 36, outputRows.length, 4).setValues(outputRows);
   }
-  Logger.log(`todayDoubleCheck: wrote ${outputRows.length} rows to AJ:AM.`);
+  Logger.log(`tomorrowDoubleCheck: wrote ${outputRows.length} rows to AJ:AM.`);
 } 
