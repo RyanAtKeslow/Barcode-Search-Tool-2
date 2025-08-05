@@ -7,15 +7,17 @@ function sortFlawlessDataAutomationMode(inputData) {
     Logger.log("🔄 Processing and concatenating barcodes...");
     const uniqueRows = new Map();
     
-    // Column mapping for clarity
+    // Updated column mapping for the new structure
     const COLUMNS = {
-      UUID: 0,         // Column A
-      EQUIPMENT: 1,    // Column B
-      BARCODE: 2,      // Column C
-      CATEGORY: 3,     // Column D
-      STATUS: 4,       // Column E
-      OWNER: 5,        // Column F
-      LOCATION: 6      // Column G
+      ASSET_ID: 0,        // Column A - Asset ID (will be ignored)
+      UUID: 1,            // Column B
+      EQUIPMENT: 2,       // Column C - Equipment Name
+      CATEGORY: 3,        // Column D - Equipment Category
+      BARCODE: 4,         // Column E
+      ASSET_SERIAL: 5,    // Column F - Asset Serial Number (will be ignored)
+      STATUS: 6,          // Column G
+      OWNER: 7,           // Column H
+      LOCATION: 8         // Column I
     };
     
     // Process each row (skip header row)

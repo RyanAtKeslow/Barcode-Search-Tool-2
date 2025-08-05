@@ -93,25 +93,28 @@ function tomorrowDoubleCheck() {
       const earlierDup   = earlierOrders.has(orderNum) || earlierJobs.has(lowerName);
       const currentDup   = addedEntries.has(entryKey); // Check for duplicates of this specific entry
 
-      let prepDateTooEarly = false;
+      let prepDateTooLate = false;
       if (note && note.toLowerCase().includes('prep')) {
         const matches = note.match(/\d{1,2}\/\d{1,2}/g);
         if (matches) {
           const earliest = matches.reduce((earliest, str) => {
             const [m, d] = str.split('/').map(Number);
             const dt = new Date(nextBusinessDay.getFullYear(), m-1, d);
+            // If the date appears to be in the past, it's actually next year
+            if (dt < today) {
+              dt.setFullYear(nextBusinessDay.getFullYear() + 1);
+            }
             return dt < earliest ? dt : earliest;
           }, new Date(nextBusinessDay.getFullYear()+1,0,1));
-          prepDateTooEarly = earliest < nextBusinessDay;
-        } else {
-          prepDateTooEarly = true; // 'prep' mentioned but no date
+          // Filter out jobs where prep starts AFTER the next business day
+          prepDateTooLate = earliest > nextBusinessDay;
         }
       }
 
       // Log decision
-      Logger.log(`[TomorrowDC] Job:"${jobName}" Ord:${orderNum} Camera:"${cameraInfo}" earlyDup:${earlierDup} currentDup:${currentDup} wrapOut:${wrapOut} prepEarly:${prepDateTooEarly}`);
+      Logger.log(`[TomorrowDC] Job:"${jobName}" Ord:${orderNum} Camera:"${cameraInfo}" earlyDup:${earlierDup} currentDup:${currentDup} wrapOut:${wrapOut} prepLate:${prepDateTooLate}`);
 
-      if (!wrapOut && !earlierDup && !currentDup && !prepDateTooEarly) {
+      if (!wrapOut && !earlierDup && !currentDup && !prepDateTooLate) {
         outputRows.push([jobName, orderNum, cameraInfo, note]);
         addedEntries.add(entryKey); // Track this specific entry as added
       } else if (currentDup) {

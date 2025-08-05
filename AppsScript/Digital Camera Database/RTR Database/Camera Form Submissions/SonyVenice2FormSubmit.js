@@ -213,11 +213,9 @@ function SonyVenice2FormSubmit(e) {
     newMount = "Other";
     
     // Send chat notification about non-standard mount using database values
-    var msg = cameraName + ' SN(' + currentSerial + ') BC#(' + currentBarcode + 
-              ') has been changed from ' + oldMount + ' -> Other (Original input: ' + formData[Venice2ResponseCOLS.LENS_MOUNT] + 
-              ') by ' + userInfo.fullName;
-    venice2LensMountRobot(msg);
-    Logger.log('Sent chat notification: ' + msg);
+    const mountDisplayValue = `Other (Original input: ${formData[Venice2ResponseCOLS.LENS_MOUNT]})`;
+    lensMountRobot(cameraName, currentSerial, currentBarcode, oldMount, mountDisplayValue, userInfo.fullName);
+    Logger.log(`Sent lens mount change notification: ${cameraName} SN(${currentSerial}) BC(${currentBarcode}) changed from ${oldMount} -> ${mountDisplayValue} by ${userInfo.fullName}`);
   }
   
   // Update location with user's city
@@ -240,9 +238,8 @@ function SonyVenice2FormSubmit(e) {
     }
   }
   if (trigger) {
-    var msg = cameraName + ' SN(' + currentSerial + ') BC#(' + currentBarcode + ') has been changed from ' + oldMount + ' -> ' + newMount + ' by ' + userInfo.fullName;
-    venice2LensMountRobot(msg);
-    Logger.log('Sent chat notification: ' + msg);
+    lensMountRobot(cameraName, currentSerial, currentBarcode, oldMount, newMount, userInfo.fullName);
+    Logger.log(`Sent lens mount change notification: ${cameraName} SN(${currentSerial}) BC(${currentBarcode}) changed from ${oldMount} -> ${newMount} by ${userInfo.fullName}`);
   }
   if (newMount) {
     dbSheet.getRange(targetRow, Venice2DatabaseCOLS.MOUNT).setValue(newMount);    // Mount Type
@@ -359,7 +356,7 @@ function SonyVenice2FormSubmit(e) {
         const cameraName = currentValues[Venice2DatabaseCOLS.CAMERA - 1];
         const cameraSN = currentValues[Venice2DatabaseCOLS.SERIAL - 1];
         const cameraBC = currentValues[Venice2DatabaseCOLS.BARCODE - 1];
-        cameraRepairRobot(cameraName, cameraSN, cameraBC);
+        cameraRepairRobot(cameraName, cameraSN, cameraBC, userInfo.fullName);
       }
     } else {
       console.log(`⚠️ Skipped setting invalid status "${status}" - must be one of: ${allowedStatuses.join(", ")}`);
@@ -378,24 +375,4 @@ function SonyVenice2FormSubmit(e) {
   Logger.log('🏁 SonyVenice2FormSubmit completed - existing camera updated');
 }
 
-function venice2LensMountRobot(message) {
-  var webhookUrl = 'https://chat.googleapis.com/v1/spaces/AAAAwjNel5g/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=21igE1u4jF3E4TtaoM-dMgiLL7IdQvO_F_opVXrYkbM';
-  var payload = JSON.stringify({ text: message });
-  var options = {
-    method: 'post',
-    contentType: 'application/json',
-    payload: payload
-  };
-  UrlFetchApp.fetch(webhookUrl, options);
-}
-
-function venice2SensorRobot(message) {
-  var webhookUrl = 'https://chat.googleapis.com/v1/spaces/AAAAwjNel5g/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=-TLPuHM_flh2NmnTQtSpJIyVkL2RtMmxZajHEmX51Ew';
-  var payload = JSON.stringify({ text: message });
-  var options = {
-    method: 'post',
-    contentType: 'application/json',
-    payload: payload
-  };
-  UrlFetchApp.fetch(webhookUrl, options);
-} 
+ 

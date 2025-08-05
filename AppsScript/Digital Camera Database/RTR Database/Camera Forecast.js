@@ -18,8 +18,10 @@ function getCameraForecast() {
 
   // Function to extract order number and job name from scheduling sheet values
   function extractOrderAndJobNameFromSchedule(value) {
-    const orderMatch = value.match(/\b\d{6}\b/); // Match a 6-digit order number
-    const nameMatch = value.match(/"([^"]+)"/); // Match text within quotes
+    // Convert to string and handle null/undefined values
+    const stringValue = (value !== null && value !== undefined) ? value.toString() : '';
+    const orderMatch = stringValue.match(/\b\d{6}\b/); // Match a 6-digit order number
+    const nameMatch = stringValue.match(/"([^"]+)"/); // Match text within quotes
     const orderNumber = orderMatch ? orderMatch[0] : '';
     const jobName = nameMatch ? nameMatch[1] : '';
     return { orderNumber, jobName };
@@ -27,8 +29,10 @@ function getCameraForecast() {
 
   // Function to extract order number and job name from prep bay assignments
   function extractOrderAndJobName(jobString) {
-    const orderMatch = jobString.match(/\b(\d+)\b/);
-    const nameMatch = jobString.match(/"([^"]+)"/);
+    // Convert to string and handle null/undefined values
+    const stringValue = (jobString !== null && jobString !== undefined) ? jobString.toString() : '';
+    const orderMatch = stringValue.match(/\b(\d+)\b/);
+    const nameMatch = stringValue.match(/"([^"]+)"/);
     const orderNumber = orderMatch ? orderMatch[1] : '';
     const jobName = nameMatch ? nameMatch[1] : '';
     return { orderNumber, jobName };
@@ -513,6 +517,8 @@ function getCameraForecast() {
       orderSet.forEach(ord => {
         Logger.log(`Searching for order ${ord} across entire scheduling sheet...`);
         let camerasFoundForOrder = 0;
+        let totalMatches = 0;
+        let skippedMatches = 0;
 
         // Search every row in the data for the order number
         const orderRegex = new RegExp("\\b" + ord + "\\b");
@@ -520,14 +526,33 @@ function getCameraForecast() {
           const rowNum = rowIdx + 1; // Convert to 1-based
           const rowVals = data[rowIdx];
           
-          // Check if this is a valid camera row (has "LOS ANGELES" OR is a gear transfer involving LA)
-          const isLACamera = rowVals[0] === 'LOS ANGELES';
-          const isGTCamera = gtCheck(rowVals);
+          // First check if the order number exists in columns F and beyond
+          let hasOrderNumber = false;
+          for (let colIdx = 5; colIdx < rowVals.length; colIdx++) {
+            const cellValue = rowVals[colIdx];
+            if (cellValue && orderRegex.test(cellValue.toString())) {
+              hasOrderNumber = true;
+              totalMatches++;
+              break;
+            }
+          }
           
-          if (!isLACamera && !isGTCamera) continue;
+          // If we found the order number, check if this is a valid camera row
+          if (hasOrderNumber) {
+            const isLACamera = rowVals[0] === 'LOS ANGELES';
+            const isGTCamera = gtCheck(rowVals);
+            
+            if (!isLACamera && !isGTCamera) {
+              skippedMatches++;
+              Logger.log(`  Found order ${ord} at row ${rowNum} but SKIPPED - Column A: "${rowVals[0]}" (not LA camera or valid GT)`);
+              continue;
+            }
+          } else {
+            continue; // No order number in this row, skip entirely
+          }
           
-          // Look for order number in any column
-          for (let colIdx = 0; colIdx < rowVals.length; colIdx++) {
+          // Look for order number starting from column F (index 5) and beyond
+          for (let colIdx = 5; colIdx < rowVals.length; colIdx++) {
             const cellValue = rowVals[colIdx];
             if (cellValue && orderRegex.test(cellValue.toString())) {
               Logger.log(`  Match: Order ${ord} at row ${rowNum}, col ${colIdx+1} in cell: "${cellValue}"`);
@@ -577,7 +602,7 @@ function getCameraForecast() {
                 }
               }
               
-              Logger.log(`    Adding camera to output: Type="${cameraType}" Barcode="${cameraBarcode}" Job="${cellValue}" Date="${dateStr}"`);
+              Logger.log(`    Adding camera to output: Type="${cameraType}" Barcode="${cameraBarcode}" Job="${cellValue}" Date="${dateStr}" (found at row ${rowNum}, col ${colIdx+1})`);
               outputRows.push([cameraType, cameraBarcode, 'Today +0', cellValue, dateStr]);
               outputBackgrounds.push(['', '', '', foundColor, '']);
               rowColorMap[cameraBarcode] = foundColor;
@@ -588,8 +613,9 @@ function getCameraForecast() {
           // Removed the foundForOrder break here - continue searching all rows
         }
 
+        Logger.log(`  Order ${ord} search complete: ${totalMatches} total matches found, ${skippedMatches} skipped (wrong location/GT), ${camerasFoundForOrder} cameras added to forecast.`);
         if (camerasFoundForOrder === 0) {
-          Logger.log(`  Order ${ord} NOT FOUND in camera scheduling sheet.`);
+          Logger.log(`  Order ${ord} NOT FOUND in valid camera rows (LA or valid GT).`);
         } else {
           Logger.log(`  Order ${ord} FOUND: ${camerasFoundForOrder} cameras added to forecast.`);
         }
@@ -598,6 +624,8 @@ function getCameraForecast() {
   } catch (err) {
     Logger.log('Error processing tomorrow order numbers: ' + err);
   }
+
+
 
   // Print today's date and the next 7 days' dates to B2:I2 in the same format as in AE:AE
   const forecastSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LA Camera Forecast');
@@ -694,8 +722,10 @@ function getCameraForecast() {
       let crewPrepUpdates = 0;
       sortedRows.forEach((row, index) => {
         const note = row[3]; // Assuming note is in the 4th column of sortedRows
-        if (note && note.toLowerCase().includes('crew prep')) {
-          const dateMatches = note.match(/\d{1,2}\/\d{1,2}/g); // Match dates like 6/5 or 06/05
+        // Convert to string and handle null/undefined values
+        const noteString = (note !== null && note !== undefined) ? note.toString() : '';
+        if (noteString && noteString.toLowerCase().includes('crew prep')) {
+          const dateMatches = noteString.match(/\d{1,2}\/\d{1,2}/g); // Match dates like 6/5 or 06/05
           if (dateMatches) {
             const earliestDate = dateMatches.reduce((earliest, current) => {
               const [month, day] = current.split('/').map(Number);
@@ -965,6 +995,41 @@ function getCameraForecast() {
         const temp = row[1]; // Store barcode
         row[1] = row[4];     // Move date to barcode position
         row[4] = temp;       // Move barcode to date position
+      }
+
+      // --------------------- ADJUST CAMERAS FOR TOMORROW PREP ORDERS ---------------------
+      // Read the tomorrow prep order numbers and adjust any matching cameras to "Today"
+      try {
+        const tomorrowPrepOrderRange = forecastSheet.getRange(2, 37, forecastSheet.getLastRow() - 1, 1); // Column AK
+        const tomorrowPrepOrders = tomorrowPrepOrderRange.getValues().flat()
+          .map(v => v && v.toString().trim())
+          .filter(v => v)
+          .map(v => v.replace(/[^0-9]/g, '')); // Normalize to digits only
+        
+        const tomorrowPrepOrderSet = new Set(tomorrowPrepOrders);
+        Logger.log(`Adjusting cameras for ${tomorrowPrepOrderSet.size} tomorrow prep orders...`);
+        
+        let adjustedCameras = 0;
+        for (let i = 0; i < sortedRows.length; i++) {
+          const row = sortedRows[i];
+          const jobText = row[3]; // Job text column
+          
+          // Extract order number from job text
+          const jobString = (jobText !== null && jobText !== undefined) ? jobText.toString() : '';
+          const orderMatch = jobString.match(/\b\d{6}\b/);
+          const orderNumber = orderMatch ? orderMatch[0] : '';
+          
+          // If this camera's order is in the tomorrow prep list, adjust to "Today"
+          if (orderNumber && tomorrowPrepOrderSet.has(orderNumber)) {
+            const oldTodayPlus = row[2];
+            row[2] = 'Today';
+            adjustedCameras++;
+            Logger.log(`  Adjusted camera: Order ${orderNumber} changed from "${oldTodayPlus}" to "Today" (tomorrow prep confirmed)`);
+          }
+        }
+        Logger.log(`Tomorrow prep adjustment complete: ${adjustedCameras} cameras adjusted to "Today"`);
+      } catch (err) {
+        Logger.log('Error adjusting cameras for tomorrow prep: ' + err);
       }
 
       // Log final results before writing to sheet

@@ -134,6 +134,14 @@ function alexa35FormSubmit(e) {
 
   const targetRow = dbRowIndex + 2; // Adjust for header
 
+  // Get all current values from database for this row
+  const currentValues = dbSheet.getRange(targetRow, 1, 1, 15).getValues()[0]; // Get all columns A-O
+  const cameraName = currentValues[1]; // Column B - Camera name
+  const currentSerial = currentValues[Alexa35DatabaseCOLS.SERIAL - 1];
+  const currentBarcode = currentValues[Alexa35DatabaseCOLS.BARCODE - 1];
+  const oldMount = currentValues[Alexa35DatabaseCOLS.MOUNT - 1];
+  const newMount = formData[Alexa35ResponseCOLS.MOUNT];
+
   // Update database with form data
   if (serviceDate) {
     dbSheet.getRange(targetRow, Alexa35DatabaseCOLS.SERVICE).setValue(serviceDate);  // Most Recent Service
@@ -176,7 +184,7 @@ function alexa35FormSubmit(e) {
         const cameraName = "ALEXA 35"; // Alexa 35 is the camera name
         const cameraSN = dbSheet.getRange(targetRow, Alexa35DatabaseCOLS.SERIAL).getValue();
         const cameraBC = dbSheet.getRange(targetRow, Alexa35DatabaseCOLS.BARCODE).getValue();
-        cameraRepairRobot(cameraName, cameraSN, cameraBC);
+        cameraRepairRobot(cameraName, cameraSN, cameraBC, userInfo.fullName);
       }
     } else {
       console.log(`⚠️ Skipped setting invalid status "${status}" - must be one of: ${allowedStatuses.join(", ")}`);
@@ -195,6 +203,12 @@ function alexa35FormSubmit(e) {
     console.log(`✅ Updated VISUAL to '${formData[Alexa35ResponseCOLS.VISUAL]}' for row ${targetRow}`);
   }
 
+  // Mount change detection and notification
+  if (oldMount && newMount && oldMount !== newMount) {
+    lensMountRobot(cameraName, currentSerial, currentBarcode, oldMount, newMount, userInfo.fullName);
+    Logger.log(`Sent lens mount change notification: ${cameraName} SN(${currentSerial}) BC(${currentBarcode}) changed from ${oldMount} -> ${newMount} by ${userInfo.fullName}`);
+  }
+  
   // Update mount type
   if (formData[Alexa35ResponseCOLS.MOUNT]) {
     dbSheet.getRange(targetRow, Alexa35DatabaseCOLS.MOUNT).setValue(formData[Alexa35ResponseCOLS.MOUNT]);

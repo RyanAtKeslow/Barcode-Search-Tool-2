@@ -65,29 +65,7 @@ function FetchUserFromFormSubmitViaEmail(email) {
   return userInfo;
 } 
 
-function cameraRepairRobot(cameraName, cameraSN, cameraBC) {
-  const userInfo = fetchUserInfoFromEmail();
-  const message = `${cameraName} SN${cameraSN} BC${cameraBC} has been put into REPAIR by ${userInfo.fullName}`;
-  
-  // Send message to Google Chat
-  const webhookUrl = 'https://chat.googleapis.com/v1/spaces/AAAAwjNel5g/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=Ihcxnkjwf2Dr9oRTMGo-t0WtRX_l8vPK0NJ9bWXPTX4'; // You'll need to replace this with your actual webhook URL
-  const payload = {
-    'text': message
-  };
-  
-  const options = {
-    'method': 'post',
-    'contentType': 'application/json',
-    'payload': JSON.stringify(payload)
-  };
-  
-  try {
-    UrlFetchApp.fetch(webhookUrl, options);
-    Logger.log('Repair message sent successfully');
-  } catch (error) {
-    Logger.log('Error sending repair message: ' + error.toString());
-  }
-} 
+ 
 
 function FetchUserEmailFromInfo(firstName) {
   // Special case for JT

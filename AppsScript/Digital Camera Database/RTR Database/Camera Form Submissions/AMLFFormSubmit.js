@@ -242,7 +242,7 @@ function AMLFFormSubmit(e) {
       
       // Add repair notification
       if (status === "Repair") {
-        cameraRepairRobot(cameraName, currentSerial, currentBarcode);
+        cameraRepairRobot(cameraName, currentSerial, currentBarcode, userInfo.fullName);
       }
     } else {
       console.log(`⚠️ Skipped setting invalid status "${status}" - must be one of: ${allowedStatuses.join(", ")}`);
