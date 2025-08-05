@@ -35,15 +35,20 @@ function processLostAndFoundItems(addItemNames, dropItemNames, addBarcodes, drop
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const lostAndFoundSheet = ss.getSheetByName("Lost & Found");
   
-  // Get existing barcodes in Lost & Found to avoid duplicates
-  const existingLFBarcodes = new Set(
-    lostAndFoundSheet.getRange("A:A")
-      .getValues()
-      .flat()
-      .filter(String)
-  );
+  // Get existing data from Lost & Found to check for duplicates and update quantities
+  const existingData = lostAndFoundSheet.getRange("A:D").getValues();
+  const existingBarcodeMap = new Map(); // Map barcode to row index
+  
+  // Build map of existing barcodes and their row positions
+  for (let i = 0; i < existingData.length; i++) {
+    const barcode = existingData[i][0];
+    if (barcode && barcode.toString().trim() !== "") {
+      existingBarcodeMap.set(barcode.toString(), i + 1); // +1 for 1-based row indexing
+    }
+  }
   
   const lostAndFoundItems = [];
+  const quantityUpdates = []; // Track quantity updates for existing items
   const keywordsToRemove = ["Disposed", "Repair", "Lost", "Inactive", "Sale", "Pending QC"];
   
   // Process both add and drop items
@@ -82,9 +87,21 @@ function processLostAndFoundItems(addItemNames, dropItemNames, addBarcodes, drop
         // Clean up dangling pipes or extra spaces
         modifiedItemName = modifiedItemName.replace(/\|\s*$/, "").trim();
         
-        // Add to Lost & Found if barcode doesn't exist
-        if (!existingLFBarcodes.has(barcode)) {
+        // Check if barcode already exists in Lost & Found
+        if (existingBarcodeMap.has(barcode.toString())) {
+          // Increment quantity for existing item
+          const rowIndex = existingBarcodeMap.get(barcode.toString());
+          const currentQuantity = lostAndFoundSheet.getRange(rowIndex, 4).getValue() || 0;
+          quantityUpdates.push({
+            row: rowIndex,
+            newQuantity: currentQuantity + 1,
+            jobInfo: jobInfo
+          });
+        } else {
+          // Add new item to Lost & Found
           lostAndFoundItems.push([barcode, modifiedItemName, statusText, 1, jobInfo, "", consigner]);
+          // Add to map to track for subsequent duplicates in this batch
+          existingBarcodeMap.set(barcode.toString(), "pending");
         }
       }
     }
@@ -94,7 +111,13 @@ function processLostAndFoundItems(addItemNames, dropItemNames, addBarcodes, drop
   processItems(addItemNames, addBarcodes);
   processItems(dropItemNames, dropBarcodes);
   
-  // Append lost and found items if any found
+  // Update quantities for existing items
+  quantityUpdates.forEach(update => {
+    lostAndFoundSheet.getRange(update.row, 4).setValue(update.newQuantity);
+    lostAndFoundSheet.getRange(update.row, 5).setValue(update.jobInfo); // Overwrite column E
+  });
+  
+  // Append new lost and found items if any found
   if (lostAndFoundItems.length > 0) {
     const lastDataRowLF = lostAndFoundSheet.getRange("B:B").getValues().filter(row => row[0].toString().trim() !== "").length;
     const targetRangeLF = lostAndFoundSheet.getRange(lastDataRowLF + 1, 1, lostAndFoundItems.length, 7);

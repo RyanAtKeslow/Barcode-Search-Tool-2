@@ -16,14 +16,6 @@ function resetShippingBay() {
   var homelessGearSheet = ss.getSheetByName("HOMELESS GEAR");
   var lostAndFoundSheet = ss.getSheetByName("Lost & Found");
   var analyticsSheet = ss.getSheetByName("Analytics");
-  
-  // Get existing barcodes in Lost & Found to avoid duplicates
-  var existingLFBarcodes = new Set(
-    lostAndFoundSheet.getRange("A:A")
-      .getValues()
-      .flat()
-      .filter(String)
-  );
 
   // Try to get user info with fallback logic
   let userFirstName;
@@ -57,16 +49,16 @@ function resetShippingBay() {
   // Handle multiple matches
   if (usernameMatches.length > 1) {
     const selectedMatch = setSelectedMatch(usernameMatches);
-    continueResetShippingBay(selectedMatch.cellA1, existingLFBarcodes);
+    continueResetShippingBay(selectedMatch.cellA1);
   } else if (usernameMatches.length === 1) {
-    continueResetShippingBay(usernameMatches[0].cellA1, existingLFBarcodes);
+    continueResetShippingBay(usernameMatches[0].cellA1);
   } else {
     SpreadsheetApp.getUi().alert("Could not find your name in row 2");
     return;
   }
 }
 
-function continueResetShippingBay(selectedCellA1, existingLFBarcodes) {
+function continueResetShippingBay(selectedCellA1) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var activeSheet = ss.getActiveSheet();
   var usernameCell = activeSheet.getRange(selectedCellA1);
@@ -74,6 +66,18 @@ function continueResetShippingBay(selectedCellA1, existingLFBarcodes) {
   var homelessGearSheet = ss.getSheetByName("HOMELESS GEAR");
   var lostAndFoundSheet = ss.getSheetByName("Lost & Found");
   var analyticsSheet = ss.getSheetByName("Analytics");
+  
+  // Get existing data from Lost & Found to check for duplicates and update quantities
+  const existingData = lostAndFoundSheet.getRange("A:D").getValues();
+  const existingBarcodeMap = new Map(); // Map barcode to row index
+  
+  // Build map of existing barcodes and their row positions
+  for (let i = 0; i < existingData.length; i++) {
+    const barcode = existingData[i][0];
+    if (barcode && barcode.toString().trim() !== "") {
+      existingBarcodeMap.set(barcode.toString(), i + 1); // +1 for 1-based row indexing
+    }
+  }
   
   var jobInfo = usernameCell.getValue().toString().trim();
 
@@ -123,6 +127,7 @@ function continueResetShippingBay(selectedCellA1, existingLFBarcodes) {
 
   var itemCounts = {};
   var lostAndFoundItems = [];
+  var quantityUpdates = []; // Track quantity updates for existing items
   var csvData = [];
   const keywordsRegex = /\b(?:Disposed|Repair|Lost|Inactive|Sale|Pending QC)\b(?=\s*\||$)/i;
 
@@ -169,9 +174,21 @@ function continueResetShippingBay(selectedCellA1, existingLFBarcodes) {
       // Clean up dangling pipes or extra spaces again
       itemName = itemName.replace(/\|\s*$/, "").trim();
 
-      // Push to Lost & Found with consigner in column H if barcode doesn't exist
-      if (!existingLFBarcodes.has(barcode)) {
+      // Check if barcode already exists in Lost & Found
+      if (existingBarcodeMap.has(barcode.toString())) {
+        // Increment quantity for existing item
+        const rowIndex = existingBarcodeMap.get(barcode.toString());
+        const currentQuantity = lostAndFoundSheet.getRange(rowIndex, 4).getValue() || 0;
+        quantityUpdates.push({
+          row: rowIndex,
+          newQuantity: currentQuantity + 1,
+          jobInfo: jobInfo
+        });
+      } else {
+        // Add new item to Lost & Found
         lostAndFoundItems.push([barcode, itemName, statusText, 1, jobInfo, "", consigner]);
+        // Add to map to track for subsequent duplicates in this batch
+        existingBarcodeMap.set(barcode.toString(), "pending");
       }
     }
 
@@ -192,6 +209,12 @@ function continueResetShippingBay(selectedCellA1, existingLFBarcodes) {
     var targetRange = homelessGearSheet.getRange(lastDataRow + 1, 1, dataToAppend.length, 5);
     targetRange.setValues(dataToAppend);
   }
+
+  // Update quantities for existing items
+  quantityUpdates.forEach(update => {
+    lostAndFoundSheet.getRange(update.row, 4).setValue(update.newQuantity);
+    lostAndFoundSheet.getRange(update.row, 5).setValue(update.jobInfo); // Overwrite column E
+  });
 
   // Append lost and found items
   if (lostAndFoundItems.length > 0) {
