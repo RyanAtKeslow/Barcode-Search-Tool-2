@@ -194,6 +194,56 @@ function getCameraForecast() {
     return cameraType;
   }
 
+  // Function to detect if a job starts with a two-letter city abbreviation 
+  function hasOutOfTownPrefix(jobString) {
+    if (!jobString || typeof jobString !== 'string') return false;
+    
+    // Match jobs that start with a two-letter abbreviation followed by a space
+    // Examples: "AT xxxxx job name", "NY xxxxx job name", "VN xxxxx job name"
+    const outOfTownPattern = /^[A-Z]{2}\s/;
+    return outOfTownPattern.test(jobString.toString().toUpperCase());
+  }
+
+  // Function to check if a colored segment ends with "returns to LA" or similar
+  function checkForReturnToLA(rowValues, rowBackgrounds, startCol, maxCols) {
+    if (!rowValues || !rowBackgrounds || startCol < 0) return false;
+    
+    const startColor = rowBackgrounds[startCol];
+    if (!startColor || startColor === '#ffffff') return false;
+    
+    // Find the end of the colored segment
+    let endCol = startCol;
+    for (let col = startCol + 1; col < Math.min(rowValues.length, maxCols); col++) {
+      if (rowBackgrounds[col] === startColor) {
+        endCol = col;
+      } else {
+        break; // Color changed, segment ended
+      }
+    }
+    
+    // Check cells in the colored segment for "returns to LA" or similar phrases
+    const returnPatterns = [
+      /returns?\s*to\s*la/i,
+      /back\s*to\s*la/i,
+      /return\s*la/i,
+      /la\s*return/i
+    ];
+    
+    for (let col = startCol; col <= endCol; col++) {
+      const cellValue = rowValues[col];
+      if (cellValue && typeof cellValue === 'string') {
+        for (const pattern of returnPatterns) {
+          if (pattern.test(cellValue)) {
+            Logger.log(`Found return to LA pattern in cell at column ${col + 1}: "${cellValue}"`);
+            return true;
+          }
+        }
+      }
+    }
+    
+    return false;
+  }
+
   // Gear Transfer Check function - detects if LA is involved in any GT within the row and date is within next 7 days
   function gtCheck(rowValues) {
     const today = new Date();
@@ -459,6 +509,33 @@ function getCameraForecast() {
           !val.toLowerCase().includes('in progress') &&
           !val.toLowerCase().includes('rtr')
         ) {
+          // Check if this is an out-of-town job for an LA camera
+          const isOutOfTownJob = hasOutOfTownPrefix(val);
+          let shouldSkipCamera = false;
+          
+          if (isOutOfTownJob) {
+            Logger.log(`Out-of-town job detected for LA camera "${cameraBarcode}": "${val}"`);
+            
+            // Get the full row data for this camera to check for return to LA
+            const fullRowValues = data[camera.row - 1];
+            const fullRowBackgrounds = cameraSheet.getRange(camera.row, 1, 1, fullRowValues.length).getBackgrounds()[0];
+            
+            // Check if the colored segment contains "returns to LA" or similar
+            const hasReturnToLA = checkForReturnToLA(fullRowValues, fullRowBackgrounds, startCol + i - 1, fullRowValues.length);
+            
+            if (hasReturnToLA) {
+              shouldSkipCamera = true;
+              Logger.log(`Camera "${cameraBarcode}" EXCLUDED from forecast - out-of-town job with return to LA (will leave LA): "${val}"`);
+            } else {
+              Logger.log(`Camera "${cameraBarcode}" INCLUDED in forecast - out-of-town job without return to LA (stays in LA): "${val}"`);
+            }
+          }
+          
+          // Skip this camera if it's an out-of-town job with return to LA
+          if (shouldSkipCamera) {
+            break;
+          }
+          
           // Set foundColor to the background of the first valid non-empty cell
           if (foundColor === null) {
             foundColor = backgrounds[i];
@@ -591,6 +668,29 @@ function getCameraForecast() {
               
               const headerCellVal = headerRow[colIdx];
               const dateStr = headerCellVal instanceof Date ? formatDate(headerCellVal) : headerCellVal;
+              
+              // Check if this is an out-of-town job for an LA camera
+              const isOutOfTownJob = hasOutOfTownPrefix(cellValue);
+              let shouldSkipCamera = false;
+              
+              if (isOutOfTownJob) {
+                Logger.log(`    Out-of-town job detected for LA camera "${cameraBarcode}": "${cellValue}"`);
+                
+                // Check if the colored segment contains "returns to LA" or similar
+                const hasReturnToLA = checkForReturnToLA(rowVals, bgRow, colIdx, rowVals.length);
+                
+                if (hasReturnToLA) {
+                  shouldSkipCamera = true;
+                  Logger.log(`    Camera "${cameraBarcode}" EXCLUDED from forecast - out-of-town job with return to LA (will leave LA): "${cellValue}"`);
+                } else {
+                  Logger.log(`    Camera "${cameraBarcode}" INCLUDED in forecast - out-of-town job without return to LA (stays in LA): "${cellValue}"`);
+                }
+              }
+              
+              // Skip this camera if it's an out-of-town job with return to LA
+              if (shouldSkipCamera) {
+                break;
+              }
               
               // Look for color change in next 7 days from this match
               let foundColor = cellBg;
