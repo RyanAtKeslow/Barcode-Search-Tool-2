@@ -10,6 +10,24 @@ function translateCity(val) {
   return val;
 }
 
+// Translates full city names from dropdown selections to two-letter abbreviations
+function translateCityDropDowns(val) {
+  if (!val) return val;
+  const str = val.toString().toUpperCase();
+  
+  // Handle full city names and convert to two-letter codes
+  if (str.includes('ALBUQUERQUE') || str.includes('NEW MEXICO')) return 'ABQ';
+  if (str.includes('VANCOUVER') || str.includes('BRITISH COLUMBIA')) return 'VN';
+  if (str.includes('TORONTO') || str.includes('ONTARIO')) return 'TO';
+  if (str.includes('LOS ANGELES') || str.includes('CULVER CITY') || str.includes('CALIFORNIA')) return 'LA';
+  if (str.includes('ATLANTA') || str.includes('GEORGIA')) return 'AT';
+  if (str.includes('NEW ORLEANS') || str.includes('LOUISIANA')) return 'NO';
+  if (str.includes('CHICAGO') || str.includes('ILLINOIS')) return 'CH';
+  
+  // If no match found, return first two letters
+  return str.substring(0, 2);
+}
+
 // Returns only a two-letter city code (VN, TO, LA, AT, NO, CH), with an exception for ABQ
 function translateCityCode(val) {
   if (!val) return val;

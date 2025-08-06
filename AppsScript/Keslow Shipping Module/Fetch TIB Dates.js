@@ -34,11 +34,17 @@ function fetchTIBDates() {
   Logger.log('Loaded Shipping Dashboard data');
 
   // Get all barcodes from column F (BARCODE), starting from row 12, only if TIB Y/N (column A) is TRUE
-  const barcodes = dashboardData.slice(11)
-    .filter(row => row[COLS.TIB_YN - 1] === true)
-    .map(row => row[COLS.BARCODE - 1])
-    .filter(bc => bc && bc !== '');
-  Logger.log('Barcodes to process: ' + barcodes.join(', '));
+  const barcodesWithIndices = [];
+  dashboardData.slice(11).forEach((row, index) => {
+    if (row[COLS.TIB_YN - 1] === true && row[COLS.BARCODE - 1] && row[COLS.BARCODE - 1] !== '') {
+      barcodesWithIndices.push({
+        barcode: row[COLS.BARCODE - 1],
+        originalIndex: index + 11, // Keep track of original row index
+        dashboardRowNumber: index + 12 // Row number in spreadsheet (1-based)
+      });
+    }
+  });
+  Logger.log('Barcodes to process: ' + barcodesWithIndices.map(item => item.barcode).join(', '));
 
   // Open ESC spreadsheet and get all sheet names
   const escSpreadsheet = SpreadsheetApp.openById(ESC_ID);
@@ -77,12 +83,16 @@ function fetchTIBDates() {
   const tibDashboardRows = [];
 
   // For each barcode, process
-  barcodes.forEach((barcode, idx) => {
-    Logger.log('Processing barcode: ' + barcode);
+  barcodesWithIndices.forEach((barcodeInfo) => {
+    const barcode = barcodeInfo.barcode;
+    const originalIndex = barcodeInfo.originalIndex;
+    const dashboardRowNumber = barcodeInfo.dashboardRowNumber;
+    
+    Logger.log('Processing barcode: ' + barcode + ' (dashboard row ' + dashboardRowNumber + ')');
     let found = false;
     let foundSheet, foundRow, foundCol, foundContract, foundContractCol, foundContractDate, foundReturnDate, foundReturnMonths;
-    const contractNumber = dashboardData[idx + 11][COLS.CONTRACT - 1];
-    let dashboardRow = dashboardData[idx + 11];
+    const contractNumber = dashboardData[originalIndex][COLS.CONTRACT - 1];
+    let dashboardRow = dashboardData[originalIndex];
     let description = dashboardRow[COLS.DESCRIPTION - 1];
     let serial = dashboardRow[COLS.SERIAL - 1];
     let assetId = dashboardRow[COLS.ASSET_ID - 1];
@@ -154,14 +164,14 @@ function fetchTIBDates() {
             'VN': 'CA', 'TO': 'CA'
           };
 
-          // Get current location from E8 and translate to code
-          const currentLocationRaw = dashboardSheet.getRange('E8').getValue().toString().trim();
+          // Get current location from D2 and translate to code
+          const currentLocationRaw = dashboardSheet.getRange('D2').getValue().toString().trim();
           const currentLocation = translateCityCode(currentLocationRaw);
           const currentCountry = cityCountryMap[currentLocation] || 'UNK';
-          Logger.log(`Current location from E8 (translated): ${currentLocation}, country: ${currentCountry}`);
+          Logger.log(`Current location from D2 (translated): ${currentLocation}, country: ${currentCountry}`);
 
-          // Get origin city from B8 in the dashboard and translate to code
-          const originCityRaw = dashboardSheet.getRange('B8').getValue().toString().trim();
+          // Get origin city from B2 in the dashboard and translate to code
+          const originCityRaw = dashboardSheet.getRange('B2').getValue().toString().trim();
           const originCity = translateCityCode(originCityRaw);
           Logger.log(`Origin city from dashboard (translated): ${originCity}`);
 
@@ -243,8 +253,8 @@ function fetchTIBDates() {
           Logger.log(`Original return date: ${returnDate}, Normalized return date: ${normalizedReturnDate.toLocaleDateString()}, Days until return: ${daysDiff}`);
 
           // Write to dashboard
-          dashboardSheet.getRange(idx + 12, COLS.TIB_DATE, 1, 2).setValues([[normalizedReturnDate.toLocaleDateString(), months]]);
-          Logger.log(`Wrote normalized return date and months to dashboard for barcode ${barcode}`);
+          dashboardSheet.getRange(dashboardRowNumber, COLS.TIB_DATE, 1, 2).setValues([[normalizedReturnDate.toLocaleDateString(), months]]);
+          Logger.log(`Wrote normalized return date and months to dashboard row ${dashboardRowNumber} for barcode ${barcode}`);
 
           // After determining returnDate and months, set tibDate, tibMonths, and tibDays
           tibDate = normalizedReturnDate.toLocaleDateString();
@@ -268,7 +278,7 @@ function fetchTIBDates() {
     }
     if (!found) {
       Logger.log('Barcode not found in ESC: ' + barcode);
-      dashboardSheet.getRange(idx + 12, COLS.TIB_DATE, 1, 2).setValues([['Not found', '']]);
+      dashboardSheet.getRange(dashboardRowNumber, COLS.TIB_DATE, 1, 2).setValues([['Not found', '']]);
     }
   });
 
