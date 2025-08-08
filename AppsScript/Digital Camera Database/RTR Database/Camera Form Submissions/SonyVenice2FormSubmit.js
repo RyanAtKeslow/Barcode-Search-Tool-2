@@ -201,7 +201,7 @@ function SonyVenice2FormSubmit(e) {
   const allowedMountTypes = ['PL', 'LPL Only', 'LPL with PL Adaptor'];
   
   // Handle non-standard mount types
-  if (newMount && !allowedMountTypes.includes(newMount)) {
+  if (newMount && !allowedMountTypes.includes(newMount) && oldMount && oldMount.toString().trim().toLowerCase() !== 'unknown') {
     // Get existing notes
     let existingNotes = dbSheet.getRange(targetRow, Venice2DatabaseCOLS.NOTES).getValue() || '';
     // Add mount information to notes
@@ -237,7 +237,7 @@ function SonyVenice2FormSubmit(e) {
       trigger = true;
     }
   }
-  if (trigger) {
+  if (trigger && oldMount && oldMount.toString().trim().toLowerCase() !== 'unknown') {
     lensMountRobot(cameraName, currentSerial, currentBarcode, oldMount, newMount, userInfo.fullName);
     Logger.log(`Sent lens mount change notification: ${cameraName} SN(${currentSerial}) BC(${currentBarcode}) changed from ${oldMount} -> ${newMount} by ${userInfo.fullName}`);
   }

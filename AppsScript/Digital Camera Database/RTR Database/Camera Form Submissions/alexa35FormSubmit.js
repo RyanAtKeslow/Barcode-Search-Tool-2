@@ -204,7 +204,21 @@ function alexa35FormSubmit(e) {
   }
 
   // Mount change detection and notification
-  if (oldMount && newMount && oldMount !== newMount) {
+  const cleanedOldMount = oldMount ? oldMount.toString().trim().toLowerCase() : '';
+  const cleanedNewMount = newMount ? newMount.toString().trim().toLowerCase() : '';
+
+  // Normalize mounts so that all LPL variants are considered equivalent
+  const normalizeMount = (m) => {
+    if (!m) return '';
+    const mount = m.toString().trim().toLowerCase();
+    return mount.startsWith('lpl') ? 'lpl' : mount;
+  };
+
+  if (cleanedOldMount &&
+      cleanedOldMount !== 'unknown' &&
+      cleanedNewMount &&
+      cleanedOldMount !== cleanedNewMount &&
+      normalizeMount(oldMount) !== normalizeMount(newMount)) {
     lensMountRobot(cameraName, currentSerial, currentBarcode, oldMount, newMount, userInfo.fullName);
     Logger.log(`Sent lens mount change notification: ${cameraName} SN(${currentSerial}) BC(${currentBarcode}) changed from ${oldMount} -> ${newMount} by ${userInfo.fullName}`);
   }
