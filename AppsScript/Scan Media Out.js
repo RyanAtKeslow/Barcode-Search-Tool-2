@@ -39,21 +39,25 @@ function ScanOutMedia() {
     if (!barcode || barcode.toString().trim() === "") return;
 
     // Check if barcode already exists in log sheet
-    const existingRowIndex = existingLogData.findIndex(logRow => 
-      logRow[2] && logRow[2].toString().trim() === barcode.toString().trim()
-    );
-
-    if (existingRowIndex !== -1) {
-      // Barcode exists, check if column H contains "NO"
-      const existingRow = existingLogData[existingRowIndex];
-      if (existingRow[7] && existingRow[7].toString().trim().toUpperCase() === "NO") {
-        // Update the existing row's column H from "NO" to "YES"
-        const actualRowNumber = existingRowIndex + 9; // +9 because log data starts at row 9
-        log.getRange(actualRowNumber, 8).setValue("YES");
-        Logger.log(`Updated existing barcode ${barcode} from NO to YES at row ${actualRowNumber}`);
-      } else {
-        Logger.log(`Barcode ${barcode} already exists but column H is not 'NO' (current value: ${existingRow[7]})`);
+    // Gather all rows in the log that match this barcode (prior to adding the new row)
+    const matchingRowIndexes = [];
+    existingLogData.forEach((logRow, idx) => {
+      if (logRow[2] && logRow[2].toString().trim() === barcode.toString().trim()) {
+        matchingRowIndexes.push(idx);
       }
+    });
+
+    if (matchingRowIndexes.length > 0) {
+      matchingRowIndexes.forEach(idx => {
+        const existingRow = existingLogData[idx];
+        const actualRowNumber = idx + 9; // +9 because log data starts at row 9
+
+        // Only update if column H is currently not "YES"
+        if (!existingRow[7] || existingRow[7].toString().trim().toUpperCase() !== "YES") {
+          log.getRange(actualRowNumber, 8).setValue("YES");
+          Logger.log(`Updated existing barcode ${barcode} to YES at row ${actualRowNumber}`);
+        }
+      });
       // Continue with normal logic (don't return here)
     }
 
