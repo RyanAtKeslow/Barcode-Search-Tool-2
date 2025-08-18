@@ -5,13 +5,15 @@ const Alexa35DatabaseCOLS = {
   SERVICE: 6,           // Column F (Most Recent Service Date)
   LOCATION: 7,          // Column G
   MOUNT: 8,             // Column H (MOUNT TYPE)
-  OWNER: 9,             // Column I (OWNER)
-  BATTERY: 10,          // Column J (Battery Plate Type)
-  FIRMWARE: 11,         // Column K
-  HOURS: 12,            // Column L
-  NOTES: 13,            // Column M
-  LAST_SERVICED_BY: 14, // Column N
-  VISUAL: 15            // Column O
+  LPL_BARCODE: 9,       // Column I (LPL Barcode)
+  PL_BARCODE: 10,       // Column J (PL Barcode)
+  OWNER: 11,             // Column K (OWNER)
+  BATTERY: 12,          // Column L (Battery Plate Type)
+  FIRMWARE: 13,         // Column M
+  HOURS: 14,            // Column N
+  NOTES: 15,            // Column O
+  LAST_SERVICED_BY: 16, // Column P
+  VISUAL: 17            // Column Q
 };
 
 const Alexa35ResponseCOLS = {
@@ -23,7 +25,10 @@ const Alexa35ResponseCOLS = {
   VISUAL: 8,         // Column I - Visual
   FIRMWARE: 9,       // Column J - Firmware Version
   STATUS: 17,        // Column R - Status
-  NOTES: 18          // Column S - Notes
+  NOTES: 18,         // Column S - Notes
+  PL_BARCODE: 19,    // Column T - PL Barcode
+  LPL_BARCODE: 20,   // Column U - LPL Barcode
+  ORDER_NUMBER: 21         // Column V - ORDER NUMBER 
 };
 
 function alexa35FormSubmit(e) {
@@ -85,6 +90,10 @@ function alexa35FormSubmit(e) {
       newRow[Alexa35DatabaseCOLS.VISUAL - 1] = formData[Alexa35ResponseCOLS.VISUAL];
       newRow[Alexa35DatabaseCOLS.LAST_SERVICED_BY - 1] = formData[Alexa35ResponseCOLS.EMAIL];
       newRow[Alexa35DatabaseCOLS.LOCATION - 1] = userInfo.city; // Add location from user info
+      
+      // Add LPL and PL barcodes - use whitespace if empty
+      newRow[Alexa35DatabaseCOLS.LPL_BARCODE - 1] = formData[Alexa35ResponseCOLS.LPL_BARCODE] || ' ';
+      newRow[Alexa35DatabaseCOLS.PL_BARCODE - 1] = formData[Alexa35ResponseCOLS.PL_BARCODE] || ' ';
       
       // Set status based on form data
       const status = formData[Alexa35ResponseCOLS.STATUS];
@@ -234,4 +243,14 @@ function alexa35FormSubmit(e) {
     dbSheet.getRange(targetRow, Alexa35DatabaseCOLS.LOCATION).setValue(userInfo.city);
     console.log(`✅ Updated location to '${userInfo.city}' for row ${targetRow}`);
   }
+
+  // Update LPL barcode - always overwrite, use whitespace if empty
+  const lplBarcode = formData[Alexa35ResponseCOLS.LPL_BARCODE] || ' ';
+  dbSheet.getRange(targetRow, Alexa35DatabaseCOLS.LPL_BARCODE).setValue(lplBarcode);
+  console.log(`✅ Updated LPL barcode to '${lplBarcode}' for row ${targetRow}`);
+
+  // Update PL barcode - always overwrite, use whitespace if empty
+  const plBarcode = formData[Alexa35ResponseCOLS.PL_BARCODE] || ' ';
+  dbSheet.getRange(targetRow, Alexa35DatabaseCOLS.PL_BARCODE).setValue(plBarcode);
+  console.log(`✅ Updated PL barcode to '${plBarcode}' for row ${targetRow}`);
 } 
