@@ -40,6 +40,37 @@ function prepBayDropExport() {
     const dropBarcodesCol = usernameCell.getColumn() + 2; // two cols right
     Logger.log(`Drop barcodes column: ${dropBarcodesCol}`);
     
+    // Get the add barcodes column (three columns left of drop column)
+    const addBarcodesCol = dropBarcodesCol - 3;
+    Logger.log(`Add barcodes column: ${addBarcodesCol}`);
+    
+    // Check for duplicates between add and drop columns
+    const { addBarcodes, dropBarcodes, duplicates } = checkForDuplicates(sheet, addBarcodesCol, dropBarcodesCol);
+    
+    // If duplicates found, stop the script with UI alert and highlight cells
+    if (duplicates.length > 0) {
+      Logger.log(`Found ${duplicates.length} duplicates, stopping script...`);
+      
+      // Highlight duplicate cells in yellow
+      duplicates.forEach(duplicate => {
+        // Highlight add column barcode cell
+        sheet.getRange(duplicate.addRow, addBarcodesCol).setBackground("#fff2cc");
+        // Highlight drop column barcode cell
+        sheet.getRange(duplicate.dropRow, dropBarcodesCol).setBackground("#fff2cc");
+      });
+      
+      let message = `Duplicate barcodes found, are these adds or drops?\n\n`;
+      message += `Duplicate cells have been highlighted in YELLOW for your review.\n\n`;
+      duplicates.forEach((duplicate, index) => {
+        message += `${index + 1}. Barcode: ${duplicate.barcode}\n`;
+        message += `   Add Column: (Row ${duplicate.addRow}) ${duplicate.addItemName || 'N/A'} \n`;
+        message += `   Drop Column: (Row ${duplicate.dropRow}) ${duplicate.dropItemName || 'N/A'} \n\n`;
+      });
+      
+      ui.alert('Duplicate Barcodes Found', message, ui.ButtonSet.OK);
+      return;
+    }
+    
     // Get all values in both columns starting from row 4
     const lastRow = sheet.getLastRow();
     const columnD = sheet.getRange(4, dropBarcodesCol, lastRow - 3, 1).getValues();
@@ -346,6 +377,103 @@ function afterExportComplete() {
     
   } catch (error) {
     Logger.log(`❌ Error in afterExportComplete: ${error.toString()}`);
+    Logger.log(`Stack trace: ${error.stack}`);
+    throw error;
+  }
+} 
+
+function checkForDuplicates(sheet, addColumn, dropColumn) {
+  try {
+    Logger.log(`Checking for duplicates between columns ${addColumn} and ${dropColumn}`);
+    
+    // Get all values from both columns starting from row 4
+    const lastRow = sheet.getLastRow();
+    const addColumnData = sheet.getRange(4, addColumn, lastRow - 3, 2).getValues(); // barcode + item name
+    const dropColumnData = sheet.getRange(4, dropColumn, lastRow - 3, 2).getValues(); // barcode + item name
+    
+    // Find the most recent export tag row for each column
+    let addExportTagRow = -1;
+    let dropExportTagRow = -1;
+    
+    // Find add column export tag (scan from bottom)
+    for (let i = addColumnData.length - 1; i >= 0; i--) {
+      const cellVal = addColumnData[i][0];
+      if (cellVal && cellVal.toString().includes("Above was exported @")) {
+        addExportTagRow = i + 4;
+        break;
+      }
+    }
+    
+    // Find drop column export tag (scan from bottom)
+    for (let i = dropColumnData.length - 1; i >= 0; i--) {
+      const cellVal = dropColumnData[i][0];
+      if (cellVal && cellVal.toString().includes("Above was exported @")) {
+        dropExportTagRow = i + 4;
+        break;
+      }
+    }
+    
+    Logger.log(`Add column export tag row: ${addExportTagRow}, Drop column export tag row: ${dropExportTagRow}`);
+    
+    // Find duplicate barcodes between the two columns (only below export tags)
+    const addBarcodes = new Map();
+    const dropBarcodes = new Map();
+    const duplicates = [];
+    
+    // Process add column data (only below export tag)
+    const addStartRow = addExportTagRow > -1 ? addExportTagRow + 1 : 4;
+    for (let i = addStartRow - 4; i < addColumnData.length; i++) {
+      const barcode = addColumnData[i][0];
+      const itemName = addColumnData[i][1];
+      if (barcode && barcode.toString().trim() && !barcode.toString().includes("Above was exported @")) {
+        addBarcodes.set(barcode.toString().trim(), { row: i + 4, itemName: itemName });
+      }
+    }
+    
+    // Process drop column data and find duplicates (only below export tag)
+    const dropStartRow = dropExportTagRow > -1 ? dropExportTagRow + 1 : 4;
+    for (let i = dropStartRow - 4; i < dropColumnData.length; i++) {
+      const barcode = dropColumnData[i][0];
+      const itemName = dropColumnData[i][1];
+      if (barcode && barcode.toString().trim() && !barcode.toString().includes("Above was exported @")) {
+        dropBarcodes.set(barcode.toString().trim(), { row: i + 4, itemName: itemName });
+        
+        // Check if this barcode exists in add column (below export tag)
+        if (addBarcodes.has(barcode.toString().trim())) {
+          duplicates.push({
+            barcode: barcode.toString().trim(),
+            addRow: addBarcodes.get(barcode.toString().trim()).row,
+            addItemName: addBarcodes.get(barcode.toString().trim()).itemName,
+            dropRow: i + 4,
+            dropItemName: itemName
+          });
+        }
+      }
+    }
+    
+    // Convert maps to arrays for return
+    const addBarcodesArray = Array.from(addBarcodes.entries()).map(([barcode, data]) => ({
+      barcode: barcode,
+      itemName: data.itemName,
+      row: data.row
+    }));
+    
+    const dropBarcodesArray = Array.from(dropBarcodes.entries()).map(([barcode, data]) => ({
+      barcode: barcode,
+      itemName: data.itemName,
+      row: data.row
+    }));
+    
+    Logger.log(`Found ${duplicates.length} duplicates, ${addBarcodesArray.length} add barcodes, ${dropBarcodesArray.length} drop barcodes`);
+    
+    return {
+      addBarcodes: addBarcodesArray,
+      dropBarcodes: dropBarcodesArray,
+      duplicates: duplicates
+    };
+    
+  } catch (error) {
+    Logger.log(`❌ Error in checkForDuplicates: ${error.toString()}`);
     Logger.log(`Stack trace: ${error.stack}`);
     throw error;
   }
