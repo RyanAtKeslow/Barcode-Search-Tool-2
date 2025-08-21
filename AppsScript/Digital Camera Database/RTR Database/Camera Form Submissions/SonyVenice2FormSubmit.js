@@ -3,17 +3,19 @@ const Venice2DatabaseCOLS = {
   SERIAL: 3,                // Column C
   BARCODE: 4,               // Column D
   STATUS: 5,                // Column E
-  SERVICE: 6,               // Column F (Most Recent Service Date)
-  LOCATION: 7,              // Column G
-  OWNER: 8,                 // Column H (new)
-  SENSOR_BLOCK: 9,          // Column I
-  SENSOR_BLOCK_BARCODE: 10, // Column J
-  MOUNT: 11,                // Column K
-  FIRMWARE: 12,             // Column L
-  HOURS: 13,                // Column M
-  LAST_SERVICED_BY: 14,     // Column N
-  VISUAL: 15,               // Column O
-  NOTES: 16                 // Column P
+  LOCATION: 6,              // Column F
+  OWNER: 7,                 // Column G
+  MOUNT: 8,                 // Column H (MOUNT TYPE)
+  Camera_Mount: 9,          // Column I (Camera Mount)
+  Mount_Adaptor: 10,        // Column J (Mount Adaptor)
+  SENSOR_BLOCK: 11,         // Column K (Sensor Block Type)
+  SENSOR_BLOCK_BARCODE: 12, // Column L (Sensor Block Barcode)
+  FIRMWARE: 13,             // Column M
+  HOURS: 14,                // Column N
+  LAST_SERVICED_BY: 15,     // Column O
+  SERVICE: 16,              // Column P (Most Recent Service Date)
+  VISUAL: 17,               // Column Q
+  NOTES: 18                 // Column R
 };
 
 const Venice2ResponseCOLS = {

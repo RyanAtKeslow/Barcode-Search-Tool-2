@@ -3,17 +3,19 @@ const AMLFDatabaseCOLS = {
   SERIAL: 3,            // Column C
   BARCODE: 4,           // Column D
   STATUS: 5,            // Column E (RTR STATUS)
-  SERVICE: 6,           // Column F (Most Recent Service Date)
-  LOCATION: 7,          // Column G
+  LOCATION: 6,          // Column F
+  OWNER: 7,             // Column G
   MOUNT: 8,             // Column H (MOUNT TYPE)
-  OWNER: 9,             // Column I
-  CAGE: 10,             // Column J (CAGE TYPE)
-  BATTERY: 11,          // Column K (Battery Plate Type)
-  FIRMWARE: 12,         // Column L
-  HOURS: 13,            // Column M
-  NOTES: 14,            // Column N
+  Camera_Mount_BC: 9,   // Column I (Camera Mount BC)
+  Mount_Adaptor_BC: 10, // Column J (Mount Adaptor BC)
+  CAGE: 11,             // Column K (CAGE TYPE)
+  BATTERY: 12,          // Column L (Battery Plate Type)
+  FIRMWARE: 13,         // Column M
+  HOURS: 14,            // Column N
   LAST_SERVICED_BY: 15, // Column O
-  VISUAL: 16            // Column P
+  SERVICE: 16,          // Column P (Most Recent Service Date)
+  VISUAL: 17,           // Column Q
+  NOTES: 18             // Column R
 };
 
 const AMLFResponseCOLS = {
@@ -93,7 +95,7 @@ function AMLFFormSubmit(e) {
       }
       
       // Prepare the new row data
-      const newRow = new Array(17).fill(''); // Initialize array with 17 empty strings
+      const newRow = new Array(18).fill(''); // Initialize array with 18 empty strings
       newRow[1] = "ARRI ALEXA Mini LF Camera Body"; // CAMERA
       newRow[AMLFDatabaseCOLS.SERIAL - 1] = formData[AMLFResponseCOLS.SERIAL].toString(); // Ensure serial is treated as text
       newRow[AMLFDatabaseCOLS.BARCODE - 1] = formData[AMLFResponseCOLS.BARCODE].toString(); // Ensure barcode is treated as text
@@ -102,7 +104,12 @@ function AMLFFormSubmit(e) {
       newRow[AMLFDatabaseCOLS.MOUNT - 1] = formData[AMLFResponseCOLS.MOUNT];
       newRow[AMLFDatabaseCOLS.OWNER - 1] = "Keslow Camera"; // Default owner
       newRow[AMLFDatabaseCOLS.CAGE - 1] = formData[AMLFResponseCOLS.CAGE_TYPE];
-      newRow[AMLFDatabaseCOLS.BATTERY - 1] = formData[AMLFResponseCOLS.BATTERY_PLATE];
+      // Handle battery plate type - check for "Keslow Hypercell"
+      let batteryPlateType = formData[AMLFResponseCOLS.BATTERY_PLATE];
+      if (batteryPlateType && batteryPlateType.toString().toLowerCase().includes("keslow hypercell")) {
+        batteryPlateType = "Keslow Hypercell";
+      }
+      newRow[AMLFDatabaseCOLS.BATTERY - 1] = batteryPlateType;
       newRow[AMLFDatabaseCOLS.FIRMWARE - 1] = formData[AMLFResponseCOLS.FIRMWARE];
       newRow[AMLFDatabaseCOLS.HOURS - 1] = formData[AMLFResponseCOLS.HOURS];
       newRow[AMLFDatabaseCOLS.VISUAL - 1] = formData[AMLFResponseCOLS.VISUAL_RATING];
@@ -124,7 +131,7 @@ function AMLFFormSubmit(e) {
       }
       
       // Write the new row
-      dbSheet.getRange(targetRow, 1, 1, 17).setValues([newRow]);
+      dbSheet.getRange(targetRow, 1, 1, 18).setValues([newRow]);
       
       // Format serial and barcode columns as text to preserve leading zeros
       dbSheet.getRange(targetRow, AMLFDatabaseCOLS.SERIAL).setNumberFormat('@');
@@ -165,10 +172,10 @@ function AMLFFormSubmit(e) {
   const targetRow = dbRowIndex + 2; // Adjust for header
   
   // Insert a snapshot of the found row before making changes
-  Logger.log('Snapshot before changes for row ' + targetRow + ': ' + JSON.stringify(dbSheet.getRange(targetRow, 1, 1, 16).getValues()[0]));
+  Logger.log('Snapshot before changes for row ' + targetRow + ': ' + JSON.stringify(dbSheet.getRange(targetRow, 1, 1, 18).getValues()[0]));
 
   // Get current values from database for this row
-  var currentValues = dbSheet.getRange(targetRow, 1, 1, 16).getValues()[0]; // Get all columns A-P
+  var currentValues = dbSheet.getRange(targetRow, 1, 1, 18).getValues()[0]; // Get all columns A-R
   var cameraName = currentValues[AMLFDatabaseCOLS.CAMERA - 1];
   var currentSerial = currentValues[AMLFDatabaseCOLS.SERIAL - 1];
   var currentBarcode = currentValues[AMLFDatabaseCOLS.BARCODE - 1];
@@ -198,8 +205,15 @@ function AMLFFormSubmit(e) {
 
   // Update battery plate type
   if (formData[AMLFResponseCOLS.BATTERY_PLATE]) {
-    dbSheet.getRange(targetRow, AMLFDatabaseCOLS.BATTERY).setValue(formData[AMLFResponseCOLS.BATTERY_PLATE]);
-    console.log(`✅ Updated battery plate type to '${formData[AMLFResponseCOLS.BATTERY_PLATE]}' for row ${targetRow}`);
+    let batteryPlateType = formData[AMLFResponseCOLS.BATTERY_PLATE];
+    
+    // Check if response contains "Keslow Hypercell" and use just that
+    if (batteryPlateType.toString().toLowerCase().includes("keslow hypercell")) {
+      batteryPlateType = "Keslow Hypercell";
+    }
+    
+    dbSheet.getRange(targetRow, AMLFDatabaseCOLS.BATTERY).setValue(batteryPlateType);
+    console.log(`✅ Updated battery plate type to '${batteryPlateType}' for row ${targetRow}`);
   }
 
   // Update camera hours
@@ -262,7 +276,7 @@ function AMLFFormSubmit(e) {
   }
 
   // Insert a snapshot of the found row after making changes
-  Logger.log('Snapshot after changes for row ' + targetRow + ': ' + JSON.stringify(dbSheet.getRange(targetRow, 1, 1, 16).getValues()[0]));
+  Logger.log('Snapshot after changes for row ' + targetRow + ': ' + JSON.stringify(dbSheet.getRange(targetRow, 1, 1, 18).getValues()[0]));
   
   Logger.log('🏁 AMLFFormSubmit completed - existing camera updated');
 } 

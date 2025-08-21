@@ -2,18 +2,18 @@ const Alexa35DatabaseCOLS = {
   SERIAL: 3,            // Column C
   BARCODE: 4,           // Column D
   STATUS: 5,            // Column E (RTR STATUS)
-  SERVICE: 6,           // Column F (Most Recent Service Date)
-  LOCATION: 7,          // Column G
+  LOCATION: 6,          // Column F
+  OWNER: 7,             // Column G
   MOUNT: 8,             // Column H (MOUNT TYPE)
-  LPL_BARCODE: 9,       // Column I (LPL Barcode)
-  PL_BARCODE: 10,       // Column J (PL Barcode)
-  OWNER: 11,             // Column K (OWNER)
-  BATTERY: 12,          // Column L (Battery Plate Type)
-  FIRMWARE: 13,         // Column M
-  HOURS: 14,            // Column N
-  NOTES: 15,            // Column O
-  LAST_SERVICED_BY: 16, // Column P
-  VISUAL: 17            // Column Q
+  Camera_Mount: 9,      // Column I (Camera Mount)
+  Mount_Adaptor: 10,    // Column J (Mount Adaptor)
+  BATTERY: 11,          // Column K (Battery Plate Type)
+  FIRMWARE: 12,         // Column L
+  HOURS: 13,            // Column M
+  LAST_SERVICED_BY: 14, // Column N
+  SERVICE: 15,          // Column O (Most Recent Service Date)
+  VISUAL: 16,           // Column P
+  NOTES: 17             // Column Q
 };
 
 const Alexa35ResponseCOLS = {
@@ -79,7 +79,7 @@ function alexa35FormSubmit(e) {
       }
       
       // Prepare the new row data
-      const newRow = new Array(16).fill(''); // Initialize array with 16 empty strings
+      const newRow = new Array(17).fill(''); // Initialize array with 17 empty strings
       
       newRow[1] = "ARRI ALEXA 35 Camera Body"; // CAMERA
       newRow[Alexa35DatabaseCOLS.SERIAL - 1] = formData[Alexa35ResponseCOLS.SERIAL].toString(); // Ensure serial is treated as text
@@ -91,9 +91,9 @@ function alexa35FormSubmit(e) {
       newRow[Alexa35DatabaseCOLS.LAST_SERVICED_BY - 1] = formData[Alexa35ResponseCOLS.EMAIL];
       newRow[Alexa35DatabaseCOLS.LOCATION - 1] = userInfo.city; // Add location from user info
       
-      // Add LPL and PL barcodes - use whitespace if empty
-      newRow[Alexa35DatabaseCOLS.LPL_BARCODE - 1] = formData[Alexa35ResponseCOLS.LPL_BARCODE] || ' ';
-      newRow[Alexa35DatabaseCOLS.PL_BARCODE - 1] = formData[Alexa35ResponseCOLS.PL_BARCODE] || ' ';
+      // Add Camera Mount and Mount Adaptor - use whitespace if empty
+      newRow[Alexa35DatabaseCOLS.Camera_Mount - 1] = formData[Alexa35ResponseCOLS.LPL_BARCODE] || ' ';
+      newRow[Alexa35DatabaseCOLS.Mount_Adaptor - 1] = formData[Alexa35ResponseCOLS.PL_BARCODE] || ' ';
       
       // Set status based on form data
       const status = formData[Alexa35ResponseCOLS.STATUS];
@@ -111,7 +111,7 @@ function alexa35FormSubmit(e) {
       }
       
       // Write the new row
-      dbSheet.getRange(targetRow, 1, 1, 16).setValues([newRow]);
+      dbSheet.getRange(targetRow, 1, 1, 17).setValues([newRow]);
       
       // Format serial and barcode columns as text to preserve leading zeros
       dbSheet.getRange(targetRow, Alexa35DatabaseCOLS.SERIAL).setNumberFormat('@');
@@ -244,13 +244,13 @@ function alexa35FormSubmit(e) {
     console.log(`✅ Updated location to '${userInfo.city}' for row ${targetRow}`);
   }
 
-  // Update LPL barcode - always overwrite, use whitespace if empty
-  const lplBarcode = formData[Alexa35ResponseCOLS.LPL_BARCODE] || ' ';
-  dbSheet.getRange(targetRow, Alexa35DatabaseCOLS.LPL_BARCODE).setValue(lplBarcode);
-  console.log(`✅ Updated LPL barcode to '${lplBarcode}' for row ${targetRow}`);
+  // Update Camera Mount - always overwrite, use whitespace if empty
+  const cameraMount = formData[Alexa35ResponseCOLS.LPL_BARCODE] || ' ';
+  dbSheet.getRange(targetRow, Alexa35DatabaseCOLS.Camera_Mount).setValue(cameraMount);
+  console.log(`✅ Updated Camera Mount to '${cameraMount}' for row ${targetRow}`);
 
-  // Update PL barcode - always overwrite, use whitespace if empty
-  const plBarcode = formData[Alexa35ResponseCOLS.PL_BARCODE] || ' ';
-  dbSheet.getRange(targetRow, Alexa35DatabaseCOLS.PL_BARCODE).setValue(plBarcode);
-  console.log(`✅ Updated PL barcode to '${plBarcode}' for row ${targetRow}`);
+  // Update Mount Adaptor - always overwrite, use whitespace if empty
+  const mountAdaptor = formData[Alexa35ResponseCOLS.PL_BARCODE] || ' ';
+  dbSheet.getRange(targetRow, Alexa35DatabaseCOLS.Mount_Adaptor).setValue(mountAdaptor);
+  console.log(`✅ Updated Mount Adaptor to '${mountAdaptor}' for row ${targetRow}`);
 } 
