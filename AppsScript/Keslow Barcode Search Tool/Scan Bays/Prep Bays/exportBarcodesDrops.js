@@ -109,11 +109,13 @@ function prepBayDropExport() {
     const barcodeRange = sheet.getRange(startRow, dropBarcodesCol, lastDataRow - startRow + 1, 1);
     const barcodes = barcodeRange.getValues();
     
-    // Filter out any empty cells
+    // Filter out any empty cells and normalize barcodes
     const filteredData = [];
     for (let i = 0; i < barcodes.length; i++) {
-      if (barcodes[i][0]) {  // Only include non-empty cells
-        filteredData.push([barcodes[i][0]]);  // Only include the barcode
+      const barcode = barcodes[i][0];
+      if (barcode && barcode.toString().trim() && !barcode.toString().includes("Above was exported @")) {
+        // Only include non-empty, non-export-tag cells with trimmed values
+        filteredData.push([barcode.toString().trim()]);
       }
     }
     
@@ -425,8 +427,10 @@ function checkForDuplicates(sheet, addColumn, dropColumn) {
     for (let i = addStartRow - 4; i < addColumnData.length; i++) {
       const barcode = addColumnData[i][0];
       const itemName = addColumnData[i][1];
+      // Ensure barcode is not empty, whitespace-only, or an export tag
       if (barcode && barcode.toString().trim() && !barcode.toString().includes("Above was exported @")) {
-        addBarcodes.set(barcode.toString().trim(), { row: i + 4, itemName: itemName });
+        const normalizedBarcode = barcode.toString().trim();
+        addBarcodes.set(normalizedBarcode, { row: i + 4, itemName: itemName });
       }
     }
     
@@ -435,15 +439,17 @@ function checkForDuplicates(sheet, addColumn, dropColumn) {
     for (let i = dropStartRow - 4; i < dropColumnData.length; i++) {
       const barcode = dropColumnData[i][0];
       const itemName = dropColumnData[i][1];
+      // Ensure barcode is not empty, whitespace-only, or an export tag
       if (barcode && barcode.toString().trim() && !barcode.toString().includes("Above was exported @")) {
-        dropBarcodes.set(barcode.toString().trim(), { row: i + 4, itemName: itemName });
+        const normalizedBarcode = barcode.toString().trim();
+        dropBarcodes.set(normalizedBarcode, { row: i + 4, itemName: itemName });
         
         // Check if this barcode exists in add column (below export tag)
-        if (addBarcodes.has(barcode.toString().trim())) {
+        if (addBarcodes.has(normalizedBarcode)) {
           duplicates.push({
-            barcode: barcode.toString().trim(),
-            addRow: addBarcodes.get(barcode.toString().trim()).row,
-            addItemName: addBarcodes.get(barcode.toString().trim()).itemName,
+            barcode: normalizedBarcode,
+            addRow: addBarcodes.get(normalizedBarcode).row,
+            addItemName: addBarcodes.get(normalizedBarcode).itemName,
             dropRow: i + 4,
             dropItemName: itemName
           });

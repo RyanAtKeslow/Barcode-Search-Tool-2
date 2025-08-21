@@ -162,7 +162,7 @@ function getCameraForecast() {
       }
 
       // Override with earliest date mentioned in a 'prep' note
-      if (note && note.toLowerCase().includes('prep')) {
+      if (note && typeof note === 'string' && note.toLowerCase().includes('prep')) {
         const dateMatches = note.match(/\d{1,2}\/\d{1,2}/g);
         if (dateMatches) {
           const earliest = dateMatches.reduce((earliest, cur) => {
@@ -480,16 +480,16 @@ function getCameraForecast() {
   
   // Process each valid camera
   for (const camera of validCamerasToProcess) {
-    // Extract barcode from column E of the found row
-    const barcodeCell = data[camera.row - 1][4]; // Column E, 0-based index
-    let cameraBarcode = '';
-    if (typeof barcodeCell === 'string') {
-      // Updated regex to handle space between BC# and barcode number
-      const match = barcodeCell.match(/BC#\s*(\d+)/);
-      if (match) {
-        cameraBarcode = match[1];
+          // Extract barcode from column E of the found row
+      const barcodeCell = data[camera.row - 1][4]; // Column E, 0-based index
+      let cameraBarcode = '';
+      if (typeof barcodeCell === 'string') {
+        // Updated regex to handle alphanumeric barcodes with hyphens (e.g., BC#ALX35-3)
+        const match = barcodeCell.match(/BC#\s*([A-Z0-9-]+)/);
+        if (match) {
+          cameraBarcode = match[1];
+        }
       }
-    }
 
     // Get cached data for this camera
     const rowData = rowDataMap[camera.row];
@@ -662,7 +662,7 @@ function getCameraForecast() {
               const barcodeCell = rowVals[4];
               let cameraBarcode = '';
               if (typeof barcodeCell === 'string') {
-                const m = barcodeCell.match(/BC#\s*(\d+)/);
+                const m = barcodeCell.match(/BC#\s*([A-Z0-9-]+)/);
                 if (m) cameraBarcode = m[1];
               }
               
