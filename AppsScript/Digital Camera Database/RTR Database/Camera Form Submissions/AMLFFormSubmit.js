@@ -37,7 +37,9 @@ const AMLFResponseCOLS = {
   INTERNAL_REC: 16,     // Column Q - INTERNAL RECORDING
   LENS_INTERFACE: 17,   // Column R - LENS INTERFACE
   STATUS: 18,           // Column S - Status
-  NOTES: 19             // Column T - Technician Notes (Optional)
+  NOTES: 19,            // Column T - Technician Notes (Optional)
+  Mount_Adaptor_BC: 20, // Column U - Mount Adaptor BC
+  Camera_Mount_BC: 21   // Column V - Camera Mount BC
 };
 
 function AMLFFormSubmit(e) {
@@ -110,6 +112,8 @@ function AMLFFormSubmit(e) {
         batteryPlateType = "Keslow Hypercell";
       }
       newRow[AMLFDatabaseCOLS.BATTERY - 1] = batteryPlateType;
+      newRow[AMLFDatabaseCOLS.Camera_Mount_BC - 1] = formData[AMLFResponseCOLS.Camera_Mount_BC] || ' ';
+      newRow[AMLFDatabaseCOLS.Mount_Adaptor_BC - 1] = formData[AMLFResponseCOLS.Mount_Adaptor_BC] || ' ';
       newRow[AMLFDatabaseCOLS.FIRMWARE - 1] = formData[AMLFResponseCOLS.FIRMWARE];
       newRow[AMLFDatabaseCOLS.HOURS - 1] = formData[AMLFResponseCOLS.HOURS];
       newRow[AMLFDatabaseCOLS.VISUAL - 1] = formData[AMLFResponseCOLS.VISUAL_RATING];
@@ -273,6 +277,18 @@ function AMLFFormSubmit(e) {
   if (userInfo.city && userInfo.city !== 'City not found') {
     dbSheet.getRange(targetRow, AMLFDatabaseCOLS.LOCATION).setValue(userInfo.city);
     console.log(`✅ Updated location to '${userInfo.city}' for row ${targetRow}`);
+  }
+
+  // Update Camera Mount BC - always overwrite, use whitespace if empty
+  if (formData[AMLFResponseCOLS.Camera_Mount_BC]) {
+    dbSheet.getRange(targetRow, AMLFDatabaseCOLS.Camera_Mount_BC).setValue(formData[AMLFResponseCOLS.Camera_Mount_BC]);
+    console.log(`✅ Updated Camera Mount BC to '${formData[AMLFResponseCOLS.Camera_Mount_BC]}' for row ${targetRow}`);
+  }
+
+  // Update Mount Adaptor BC - always overwrite, use whitespace if empty
+  if (formData[AMLFResponseCOLS.Mount_Adaptor_BC]) {
+    dbSheet.getRange(targetRow, AMLFDatabaseCOLS.Mount_Adaptor_BC).setValue(formData[AMLFResponseCOLS.Mount_Adaptor_BC]);
+    console.log(`✅ Updated Mount Adaptor BC to '${formData[AMLFResponseCOLS.Mount_Adaptor_BC]}' for row ${targetRow}`);
   }
 
   // Insert a snapshot of the found row after making changes
