@@ -89,8 +89,15 @@ function processLostAndFoundItems(addItemNames, dropItemNames, addBarcodes, drop
         
         // Check if barcode already exists in Lost & Found
         if (existingBarcodeMap.has(barcode.toString())) {
+          const existingValue = existingBarcodeMap.get(barcode.toString());
+          
+          // Skip if this barcode is marked as "pending" (already processed in this batch)
+          if (existingValue === "pending") {
+            continue;
+          }
+          
           // Increment quantity for existing item
-          const rowIndex = existingBarcodeMap.get(barcode.toString());
+          const rowIndex = existingValue;
           const currentQuantity = lostAndFoundSheet.getRange(rowIndex, 4).getValue() || 0;
           quantityUpdates.push({
             row: rowIndex,
