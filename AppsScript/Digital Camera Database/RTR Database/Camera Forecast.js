@@ -972,7 +972,13 @@ function getCameraForecast() {
         'ARRI ALEXA Mini LF Camera Body': 'Alexa Mini LF Body Status',
         'ARRI ALEXA Mini Camera Body': 'Alexa Mini Body Status',
         'SONY VENICE 2': 'VENICE 2 Body Status',
-        'SONY VENICE 1': 'Venice 1 Body Status'
+        'SONY VENICE 1': 'Venice 1 Body Status',
+        "Sony BURANO Digital Camera" : "BURANO STATUS",
+        "Sony FX3 Digital Camera" : "FX3 STATUS",
+        "Sony FX6 Digital Camera" : "FX6 STATUS",
+        "Sony PXW-FX9 Digital Camera" : "FX9 STATUS",
+        "RED V-RAPTOR DSMC3 [X] 8K VV Digital Camera" : "V-RAPTOR [X] STATUS",
+        "RED V-RAPTOR XL [X] 8K VV Digital Camera" : "V-RAPTOR XL [X] STATUS"
       };
       // Initialize rtrStatusResults array
       const rtrStatusResults = [];
