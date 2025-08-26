@@ -45,5 +45,6 @@ function onOpen() {
   .addItem('Refresh Analytics', 'countBarcodesAndPrint')
   .addItem('Refresh Homeless Gear Sheet', 'updateHomelessGearSheet')
   .addItem('Balance Cameras', 'balanceCameras')
+  .addItem('Bulk Scan to Bin', 'bulkScanToBin')
   .addToUi();
 }
