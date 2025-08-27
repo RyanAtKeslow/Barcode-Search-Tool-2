@@ -77,6 +77,84 @@ function refreshAnalyticsWeekly() {
   Logger.log("Analytics refresh completed");
 }
 
+function refreshLostAndFoundWeekly() {
+  Logger.log("Starting Lost and Found analytics refresh");
+  
+  // Get the active spreadsheet and the Lost and Found sheet
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("Lost and Found");
+  
+  // Find the first empty row in columns AF:AP (columns 32-42)
+  const lastRow = sheet.getLastRow();
+  let firstEmptyRow = 1;
+  
+  for (let i = 1; i <= lastRow + 1; i++) {
+    if (sheet.getRange(i, 32).getValue() === "") { // Column AF is the 32nd column
+      firstEmptyRow = i;
+      break;
+    }
+  }
+  
+  Logger.log(`First empty row found: ${firstEmptyRow}`);
+  
+  // Get values from source cells
+  const totalValue = sheet.getRange("Y2").getValue();
+  const dailyRateUSD = sheet.getRange("Z2").getValue();
+  const consignerValue = sheet.getRange("AA2").getValue();
+  const resolvedAmount = sheet.getRange("AB2").getValue();
+  const consignerDailyRate = sheet.getRange("AC2").getValue();
+  const disposedValue = sheet.getRange("X2").getValue();
+  const lostValue = sheet.getRange("X3").getValue();
+  const inactiveValue = sheet.getRange("X4").getValue();
+  const repairValue = sheet.getRange("X5").getValue();
+  
+  // Calculate growth rate (difference from previous row)
+  let growthRate = 0;
+  if (firstEmptyRow > 1) {
+    const previousTotal = sheet.getRange(firstEmptyRow - 1, 33).getValue(); // Column AG (33)
+    if (previousTotal !== "") {
+      growthRate = totalValue - previousTotal;
+    }
+  }
+  
+  // Write data to columns AF:AP
+  const dataToWrite = [
+    new Date(),                    // AF - Date
+    totalValue,                    // AG - Total
+    growthRate,                    // AH - "Total" Growth Rate /Week
+    dailyRateUSD,                  // AI - Daily Rate USD Total
+    consignerValue,                // AJ - Consigner Value Total
+    resolvedAmount,                // AK - Resolved Amount
+    consignerDailyRate,            // AL - Consigner Daily Rate Total
+    disposedValue,                 // AM - Disposed
+    lostValue,                     // AN - Lost
+    inactiveValue,                 // AO - Inactive
+    repairValue                    // AP - Repair
+  ];
+  
+  // Write all values to the row
+  for (let i = 0; i < dataToWrite.length; i++) {
+    const targetRange = sheet.getRange(firstEmptyRow, 32 + i); // Starting from column AF (32)
+    
+    if (i === 0) { // Date column
+      targetRange.setNumberFormat('mm/dd/yyyy');
+    } else if (i === 2) { // Growth Rate column
+      targetRange.setNumberFormat('0.00');
+    } else if (i === 3 || i === 6) { // Daily Rate columns
+      targetRange.setNumberFormat('$#,##0.00');
+    } else if (i === 4 || i === 5) { // Value columns
+      targetRange.setNumberFormat('$#,##0.00');
+    } else { // Other numeric columns
+      targetRange.setNumberFormat('0');
+    }
+    
+    targetRange.setValue(dataToWrite[i]);
+    Logger.log(`Writing to column ${String.fromCharCode(70 + i)}${firstEmptyRow}: ${dataToWrite[i]}`);
+  }
+  
+  Logger.log("Lost and Found analytics refresh completed");
+}
+
 function checkLostAndFoundAgainstDictionary() {
   Logger.log("Starting Lost & Found barcode dictionary check");
   
