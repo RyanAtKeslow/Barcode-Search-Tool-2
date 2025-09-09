@@ -146,14 +146,14 @@ function prepBayDropExport() {
     let prepBayFolder = folders.hasNext() ? folders.next() : DriveApp.createFolder('Prep Bay Scans');
     prepBayFolder.createFile(file);
 
-    // Create a download URL
-    const downloadUrl = file.getDownloadUrl().replace('export=download', 'export=download&confirm=no_antivirus');
+    // Create a file URL (standard Google Drive link)
+    const fileUrl = file.getUrl();
     
-    // Show success message with download link
+    // Show success message with file link
     const html = HtmlService.createHtmlOutput(`
       <p>✅ Successfully exported ${filteredData.length} items!</p>
-      <p>The file has been saved to your Google Drive and is ready to download.</p>
-      <a href="${downloadUrl}" target="_blank" onclick="google.script.run.afterExportComplete()" style="
+      <p>The file has been saved to your Google Drive.</p>
+      <a href="${fileUrl}" target="_blank" onclick="google.script.run.afterExportComplete()" style="
         display: inline-block;
         padding: 10px 20px;
         background-color: #4285f4;
@@ -161,10 +161,11 @@ function prepBayDropExport() {
         text-decoration: none;
         border-radius: 4px;
         margin-top: 10px;
-      ">Download CSV File</a>
+      ">Open File in Google Drive</a>
+      <p style="font-size: 12px; color: #666; margin-top: 10px;">Once opened, you can download it using the download button in Google Drive.</p>
     `)
-    .setWidth(400)
-    .setHeight(200);
+    .setWidth(450)
+    .setHeight(220);
     
     ui.showModalDialog(html, 'Export Complete');
     
