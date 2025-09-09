@@ -91,19 +91,22 @@ function processLostAndFoundItems(addItemNames, dropItemNames, addBarcodes, drop
         if (existingBarcodeMap.has(barcode.toString())) {
           const existingValue = existingBarcodeMap.get(barcode.toString());
           
-          // Skip if this barcode is marked as "pending" (already processed in this batch)
-          if (existingValue === "pending") {
-            continue;
+          // Only process if it's a valid row number (not "pending")
+          if (typeof existingValue === 'number') {
+            // Increment quantity for existing item
+            const currentQuantity = lostAndFoundSheet.getRange(existingValue, 4).getValue() || 0;
+            quantityUpdates.push({
+              row: existingValue,
+              newQuantity: currentQuantity + 1,
+              jobInfo: jobInfo
+            });
+          } else {
+            // This is a "pending" item from this batch, increment its quantity in the pending items
+            const pendingIndex = lostAndFoundItems.findIndex(item => item[0] === barcode.toString());
+            if (pendingIndex !== -1) {
+              lostAndFoundItems[pendingIndex][3] += 1; // Increment quantity (column D)
+            }
           }
-          
-          // Increment quantity for existing item
-          const rowIndex = existingValue;
-          const currentQuantity = lostAndFoundSheet.getRange(rowIndex, 4).getValue() || 0;
-          quantityUpdates.push({
-            row: rowIndex,
-            newQuantity: currentQuantity + 1,
-            jobInfo: jobInfo
-          });
         } else {
           // Add new item to Lost & Found
           lostAndFoundItems.push([barcode, modifiedItemName, statusText, 1, jobInfo, "", consigner]);

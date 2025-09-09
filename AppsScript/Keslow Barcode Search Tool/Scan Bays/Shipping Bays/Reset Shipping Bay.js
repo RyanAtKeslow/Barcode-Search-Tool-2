@@ -176,14 +176,23 @@ function continueResetShippingBay(selectedCellA1) {
 
       // Check if barcode already exists in Lost & Found
       if (existingBarcodeMap.has(barcode.toString())) {
-        // Increment quantity for existing item
         const rowIndex = existingBarcodeMap.get(barcode.toString());
-        const currentQuantity = lostAndFoundSheet.getRange(rowIndex, 4).getValue() || 0;
-        quantityUpdates.push({
-          row: rowIndex,
-          newQuantity: currentQuantity + 1,
-          jobInfo: jobInfo
-        });
+        // Only process if it's a valid row number (not "pending")
+        if (typeof rowIndex === 'number') {
+          // Increment quantity for existing item
+          const currentQuantity = lostAndFoundSheet.getRange(rowIndex, 4).getValue() || 0;
+          quantityUpdates.push({
+            row: rowIndex,
+            newQuantity: currentQuantity + 1,
+            jobInfo: jobInfo
+          });
+        } else {
+          // This is a "pending" item from this batch, increment its quantity in the pending items
+          const pendingIndex = lostAndFoundItems.findIndex(item => item[0] === barcode.toString());
+          if (pendingIndex !== -1) {
+            lostAndFoundItems[pendingIndex][3] += 1; // Increment quantity (column D)
+          }
+        }
       } else {
         // Add new item to Lost & Found
         lostAndFoundItems.push([barcode, itemName, statusText, 1, jobInfo, "", consigner]);
