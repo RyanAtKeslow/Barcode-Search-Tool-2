@@ -122,18 +122,19 @@ function continueExportShippingBay(selectedCellA1) {
   // Create the CSV file in Drive
   var csvFile = csvFolder.createFile(fileName, csvContent, MimeType.PLAIN_TEXT);
 
-  // Generate the download link
-  var fileUrl = csvFile.getDownloadUrl();
+  // Generate the file link (standard Google Drive link)
+  var fileUrl = csvFile.getUrl();
 
-  // Display the download link in a dialog
+  // Display the file link in a dialog
   var htmlOutput = HtmlService.createHtmlOutput(
     '<div style="text-align: center;">' +
-    '<p>Your CSV file is ready for download.</p>' +
-    '<a href="' + fileUrl + '" target="_blank" style="font-size: 16px; color: blue; text-decoration: none;">Click here to download</a>' +
+    '<p>Your CSV file has been created in Google Drive.</p>' +
+    '<a href="' + fileUrl + '" target="_blank" style="font-size: 16px; color: blue; text-decoration: none;">Click here to open the file</a>' +
+    '<p style="font-size: 12px; color: #666; margin-top: 10px;">Once opened, you can download it using the download button in Google Drive.</p>' +
     '</div>'
   )
-  .setWidth(400)
-  .setHeight(120);
+  .setWidth(450)
+  .setHeight(140);
 
   SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'CSV File Created');
 }
