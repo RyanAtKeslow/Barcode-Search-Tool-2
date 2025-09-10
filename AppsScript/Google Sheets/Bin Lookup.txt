@@ -1,3 +1,45 @@
+/**
+ * Bin Lookup Formula - Equipment Status and Location Lookup
+ * 
+ * This Google Sheets formula determines equipment status and bin location based on
+ * the content of cell F4, with comprehensive status detection and bin searching.
+ * 
+ * Status Detection Priority:
+ * 1. "Disposed" → "DISPOSED"
+ * 2. "Lost" → "LOST" 
+ * 3. "Repair" → "REPAIR"
+ * 4. "Sale" → "SALE"
+ * 5. "Inactive" → "INACTIVE"
+ * 6. "Pending QC" → "PENDING QC"
+ * 7. Contains "|" → "Consigner Item"
+ * 8. "Temporary Barcode" → "Temporary Barcode"
+ * 9. "Personal Gear" → "Personal Gear"
+ * 10. Starts with "|" → "Consigner Item"
+ * 11. Empty cell → ""
+ * 12. Default: Search all bin sheets for location
+ * 
+ * Bin Search Logic:
+ * - Searches 20+ bin sheets for matching barcode in column Z
+ * - Returns corresponding bin name from column AA
+ * - Uses TEXTJOIN to combine multiple matches with commas
+ * - Returns "No Bin" if no matches found
+ * 
+ * Target Sheets:
+ * - ER Aisles 1-14 (columns Z=search, AA=result)
+ * - Service Department, Battery Room, Filter Room (columns Y=search, Z=result)
+ * - Purchasing Mezzanine, Projector Room (columns Y=search, Z=result)
+ * - Consignment Rooms (columns X=search, Y=result)
+ * - Inventory Control (columns Y=search, Z=result)
+ * - RnD (columns Y=search, Z=result)
+ * 
+ * Features:
+ * - Comprehensive status detection
+ * - Multi-sheet bin searching
+ * - Consigner item identification
+ * - Error handling with IFERROR
+ * - Flexible result formatting
+ * - Fallback to "No Bin" for unmatched items
+ */
 =IF(ISNUMBER(SEARCH("Disposed", F4)), "DISPOSED", 
    IF(ISNUMBER(SEARCH("Lost", F4)), "LOST", 
    IF(ISNUMBER(SEARCH("Repair", F4)), "REPAIR", 

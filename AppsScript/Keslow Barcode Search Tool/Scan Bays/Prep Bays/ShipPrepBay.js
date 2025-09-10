@@ -1,3 +1,45 @@
+/**
+ * Ship Prep Bay - Prep Bay Shipping and Data Processing Script
+ * 
+ * This script processes prep bay data for shipping, handling Lost & Found items,
+ * updating analytics, and creating comprehensive CSV exports.
+ * 
+ * Step-by-step process:
+ * 1. Identifies the current user using email lookup
+ * 2. Searches for username matches in row 2 of the prep bays sheet
+ * 3. Handles multiple username matches with user selection dialog
+ * 4. Determines column positions (add barcodes, drop barcodes, item names) relative to username
+ * 5. Calculates prep bay number from column position
+ * 6. Checks for export tags and warns if data hasn't been exported
+ * 7. Processes Lost & Found items based on status keywords in item names
+ * 8. Updates analytics counters for barcodes and Lost & Found items
+ * 9. Filters out empty rows and export tag rows
+ * 10. Creates CSV content with headers and all data
+ * 11. Generates timestamped filename with prep bay number
+ * 12. Saves CSV file to "Prep Bay Scans" folder in Google Drive
+ * 13. Displays download link with data clearing functionality
+ * 14. Sends status update to database with "Shipped" status
+ * 15. Clears bay data and resets background colors
+ * 
+ * Lost & Found Processing:
+ * - Identifies items with status keywords (Disposed, Repair, Lost, Inactive, Sale, Pending QC)
+ * - Extracts consigner information from item names
+ * - Updates quantities for existing items or adds new ones
+ * - Handles duplicate barcodes within the same batch
+ * 
+ * Analytics Updates:
+ * - Counts unique barcodes from both add and drop columns
+ * - Counts Lost & Found items based on keyword detection
+ * - Updates total counters in Analytics sheet
+ * 
+ * Features:
+ * - Comprehensive Lost & Found processing
+ * - Analytics tracking and updates
+ * - Export tag validation and warnings
+ * - Data clearing after successful export
+ * - Database status updates
+ * - Google Drive integration
+ */
 // Helper function to normalize barcodes by removing pipes and trimming
 function normalizeBarcode(barcode) {
   if (!barcode) return '';

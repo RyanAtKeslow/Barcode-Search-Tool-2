@@ -1,6 +1,37 @@
 /**
- * Script to reset a prep bay, handling homeless gear, lost & found items, and analytics.
- * This script processes items based on their bin status and maintains records in various sheets.
+ * Reset Generic Bay - Bay Reset and Data Processing Script
+ * 
+ * This script resets a barcode bay by processing items based on their bin status,
+ * organizing them into appropriate tracking sheets, and updating analytics.
+ * 
+ * Step-by-step process:
+ * 1. Validates that the script is run from the "Barcode SEARCH" sheet
+ * 2. Identifies the current user using email lookup with fallback logic
+ * 3. Searches for username matches in row 2 of the sheet
+ * 4. Handles multiple username matches with user selection dialog
+ * 5. Prompts for username if not found or empty
+ * 6. Determines column positions (barcode, item, bin) relative to username
+ * 7. Processes items based on bin status:
+ *    - "No Bin" items → HOMELESS GEAR sheet (with quantity tracking)
+ *    - "LOST/DISPOSED/INACTIVE" items → Lost & Found sheet
+ * 8. Cleans item names by removing status keywords
+ * 9. Extracts consigner information from item names
+ * 10. Updates analytics counters for barcodes and Lost & Found items
+ * 11. Saves barcode data to CSV archive
+ * 12. Clears the bay data and username cell
+ * 
+ * Data Processing:
+ * - Homeless gear: Items without assigned bins, tracked by quantity
+ * - Lost & Found: Items with status keywords, includes consigner info
+ * - Analytics: Updates total barcode count and Lost & Found count
+ * - Archive: Saves all processed barcodes to timestamped CSV files
+ * 
+ * Features:
+ * - Duplicate prevention in Lost & Found
+ * - Quantity tracking for homeless gear
+ * - Consigner extraction and default assignment
+ * - Comprehensive analytics updates
+ * - Data archiving and cleanup
  */
 
 function resetGenericBay() {

@@ -1,3 +1,41 @@
+/**
+ * Export To Secondary Database - External Database Export Script
+ * 
+ * This script exports processed barcode data to an external secondary database
+ * with proper formatting and column mapping for asset management.
+ * 
+ * Step-by-step process:
+ * 1. Connects to target spreadsheet (1-P6_duXcx3CSDecKHn-YNMj3VdIKzfVmLDecgXuNqlM)
+ * 2. Creates or accesses 'Barcode Database' sheet
+ * 3. Formats data using formatDataForSecondaryExport helper
+ * 4. Clears target sheet and removes excess columns
+ * 5. Adds completion timestamp and record count
+ * 6. Writes formatted headers and data
+ * 7. Sets frozen rows for better navigation
+ * 8. Returns success/failure status with details
+ * 
+ * Data Formatting:
+ * - Headers: Category, Location, Status, Equip Name, Owner, Equipment ID, Asset ID, Serial Number, Barcode
+ * - Column mapping: Reorganizes data from source format to target format
+ * - Data validation: Handles empty values and missing data gracefully
+ * 
+ * Target Database:
+ * - Spreadsheet ID: 1-P6_duXcx3CSDecKHn-YNMj3VdIKzfVmLDecgXuNqlM
+ * - Sheet name: Barcode Database
+ * - Format: Standardized asset management format
+ * 
+ * Column Mapping:
+ * - Source columns: Asset ID, UUID, Equipment, Category, Barcode, Asset Serial, Status, Owner, Location
+ * - Target columns: Category, Location, Status, Equip Name, Owner, Equipment ID, Asset ID, Serial Number, Barcode
+ * 
+ * Features:
+ * - External database integration
+ * - Data format transformation
+ * - Column cleanup and optimization
+ * - Timestamp and record tracking
+ * - Comprehensive error handling
+ * - Success/failure reporting
+ */
 function exportToSecondaryDatabase(processedData, summaryStats) {
   Logger.log("🔄 Starting secondary database export...");
   

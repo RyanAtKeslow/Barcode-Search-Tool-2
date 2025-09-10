@@ -1,7 +1,37 @@
 /**
- * Bulk Scan To Bin
- * Processes bulk scan data by finding appropriate sheets based on bin naming conventions
- * and inserting data in bulk operations.
+ * Bulk Scan To Bin - Bulk Data Processing Script
+ * 
+ * This script processes large batches of barcode data from the "Bulk Scan" sheet
+ * and distributes them to appropriate bin sheets based on naming conventions.
+ * 
+ * Step-by-step process:
+ * 1. Reads all data from "Bulk Scan" sheet (barcode, equipment, proposed bin, rectified status)
+ * 2. Filters out already processed rows and rows with missing data
+ * 3. Groups data by target sheet based on bin naming conventions:
+ *    - Number bins (1-10) → "ER Aisle X" sheets
+ *    - Letter bins (S,B,F,M,P,R,C,Q) → specific department sheets
+ * 4. Processes each sheet group in bulk operations
+ * 5. Checks for duplicate bin+equipment combinations
+ * 6. Inserts new rows below target bins with equipment data
+ * 7. Updates rectified status in bulk for processed items
+ * 8. Displays comprehensive summary with success/error counts
+ * 
+ * Bin Naming Conventions:
+ * - S → Service Department
+ * - B → Battery Room  
+ * - F → Filter Room
+ * - M → Mezzanine
+ * - P → Projector Room
+ * - R → RnD
+ * - C → Consignment Rooms
+ * - Q → Inventory Control
+ * - 1-10 → ER Aisle 1-10
+ * 
+ * Features:
+ * - Duplicate detection and handling
+ * - Bulk operations for performance
+ * - Comprehensive error reporting
+ * - Progress tracking and validation
  */
 function bulkScanToBin() {
   const ui = SpreadsheetApp.getUi();

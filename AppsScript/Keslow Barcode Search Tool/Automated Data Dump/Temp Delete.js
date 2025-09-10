@@ -1,3 +1,32 @@
+/**
+ * Temp Delete - Debug and Testing Scripts
+ * 
+ * This script contains debugging and testing functions for troubleshooting
+ * spreadsheet access and sheet identification issues.
+ * 
+ * Functions:
+ * 1. tempDeleteDebug() - Tests basic spreadsheet and sheet access
+ * 2. tempDeleteDebugById() - Tests sheet access by ID with hardcoded target ID
+ * 3. tempListAllSheets() - Lists all sheets with their names and IDs
+ * 
+ * Debugging Features:
+ * - Spreadsheet access validation
+ * - Sheet name and ID lookup
+ * - Error logging with stack traces
+ * - Comprehensive logging for troubleshooting
+ * 
+ * Use Cases:
+ * - Testing spreadsheet connectivity
+ * - Identifying correct sheet IDs
+ * - Troubleshooting access issues
+ * - Validating sheet existence
+ * 
+ * Features:
+ * - Multiple debugging approaches
+ * - Detailed error reporting
+ * - Sheet enumeration
+ * - ID-based sheet lookup
+ */
 function tempDeleteDebug() {
   try {
     Logger.log('🔍 Getting active spreadsheet...');

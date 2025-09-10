@@ -1,3 +1,42 @@
+/**
+ * Dashboard Filtering Formula - VENICE 2 Camera Status Filter
+ * 
+ * This Google Sheets formula creates a dynamic filter for VENICE 2 camera status data
+ * based on multiple criteria selected in cells O29:T29.
+ * 
+ * Filter Criteria (O29:T29):
+ * - O29: Status filter (ANY or specific status)
+ * - P29: Location filter (ANY or specific location) 
+ * - Q29: Owner filter (ANY or specific owner)
+ * - R29: Camera type filter (ANY, Keslow Camera, or Consigner)
+ * - S29: Mount filter (ANY or specific mount)
+ * - T29: Visual filter (ANY or specific visual status)
+ * 
+ * Logic Flow:
+ * 1. Checks if any filters are applied (COUNTA(O29:T29)=0)
+ * 2. If no filters: Returns "No Filters Applied"
+ * 3. If filters applied: Applies FILTER function with multiple conditions
+ * 4. Each condition checks if filter cell is empty, "ANY", or matches specific value
+ * 5. Uses multiplication (*) to combine all conditions (AND logic)
+ * 6. Returns filtered camera names from column C or "No Matches" if error
+ * 
+ * Data Source:
+ * - Sheet: 'VENICE 2 Body Status'
+ * - Target Column: C2:C (camera names)
+ * - Filter Columns: E=status, G=location, H=owner, I=camera type, J=mount, K=visual
+ * 
+ * Special Logic:
+ * - "ANY" values: Always return TRUE (no filtering)
+ * - Empty cells: Always return TRUE (no filtering)
+ * - Camera type: Special handling for "Keslow Camera" vs "Consigner"
+ * - Error handling: Returns "No Matches" if FILTER fails
+ * 
+ * Features:
+ * - Dynamic multi-criteria filtering
+ * - Flexible "ANY" option for each filter
+ * - Error handling and fallback messages
+ * - Real-time filtering based on cell values
+ */
 =IF(COUNTA(O29:T29)=0,
   "No Filters Applied",
   IFERROR(

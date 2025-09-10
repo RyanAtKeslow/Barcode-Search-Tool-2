@@ -1,3 +1,35 @@
+/**
+ * Clear And Insert Formula - Formula Management Script
+ * 
+ * This script manages formulas across multiple bin sheets by clearing existing
+ * content and inserting lookup formulas for barcode counting and UUID matching.
+ * 
+ * Step-by-step process:
+ * 1. Defines list of target sheets (ER Aisles 1-14, Service Department, etc.)
+ * 2. First loop: Clears content from columns F2:F and C2:C in all sheets
+ * 3. Second loop: Inserts formulas into the cleared ranges
+ * 4. Column F formula: Counts barcodes matching UUID in Barcode Dictionary
+ * 5. Column C formula: Looks up UUID from Barcode Dictionary using barcode
+ * 6. Logs progress for each sheet operation
+ * 7. Handles missing sheets gracefully with error logging
+ * 
+ * Formula Details:
+ * - Column F: Counts pipe-delimited barcodes in Barcode Dictionary column G
+ * - Column C: Matches barcode to UUID in Barcode Dictionary column D
+ * - Error handling: Returns 0 for empty cells or "UUID Not Found"
+ * 
+ * Target Sheets:
+ * - ER Aisles 1-14
+ * - Service Department, Battery Room, Filter Room
+ * - Purchasing Mezzanine, Projector Room
+ * - Consignment Rooms, Old Accounting
+ * 
+ * Features:
+ * - Batch processing across multiple sheets
+ * - Robust error handling for missing sheets
+ * - Complex formula generation for barcode counting
+ * - UUID lookup and matching functionality
+ */
 const sheets = [
   'ER Aisle 1', 'ER Aisle 2', 'ER Aisle 3', 'ER Aisle 4', 'ER Aisle 5',
   'ER Aisle 6', 'ER Aisle 7', 'ER Aisle 8', 'ER Aisle 9', 'ER Aisle 10',

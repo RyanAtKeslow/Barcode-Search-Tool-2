@@ -1,3 +1,27 @@
+/**
+ * rectifyMiniLfDatabase - ARRI ALEXA Mini LF Camera Database Processor
+ * 
+ * This script processes camera form responses and creates a comprehensive database
+ * of ARRI ALEXA Mini LF camera maintenance records.
+ * 
+ * Step-by-step process:
+ * 1. Connects to reference database to validate camera barcodes
+ * 2. Reads form responses from "ARRI ALEXA MINI LF" sheet
+ * 3. Normalizes and validates barcode-serial number pairs
+ * 4. Finds most frequent serial numbers for each barcode (handles duplicates)
+ * 5. Matches valid barcodes against reference database
+ * 6. Combines form data with barcode database information
+ * 7. Writes processed data to "Alexa Mini LF Body Status" sheet
+ * 8. Applies formatting and auto-resizes columns
+ * 
+ * Data Sources:
+ * - Form responses: Camera maintenance checklists and test results
+ * - Reference database: Valid camera barcodes and equipment info
+ * - Barcode database: Equipment names, locations, owners, status
+ * 
+ * Output: Comprehensive camera database with maintenance history, test results,
+ * and equipment status information for ARRI ALEXA Mini LF cameras.
+ */
 function rectifyMiniLfDatabase() {
   // TESTING GITHUB FOR RYAN //
     // === CONFIGURABLE CONSTANTS ===

@@ -1,3 +1,44 @@
+/**
+ * Weekly Update - Comprehensive Weekly Data Processing Script
+ * 
+ * This script performs weekly data collection, analytics updates, and validation
+ * across multiple sheets including Analytics and Lost & Found systems.
+ * 
+ * Step-by-step process:
+ * 1. Executes analytics refresh (refreshAnalyticsWeekly)
+ * 2. Performs Lost & Found barcode validation (checkLostAndFoundAgainstDictionary)
+ * 3. Collects weekly metrics from B3:B6 in Analytics sheet
+ * 4. Writes data to columns P, Q, R, S with proper formatting
+ * 5. Adds date stamps and trend analysis formulas
+ * 6. Runs barcode counting analytics for all bin sheets
+ * 7. Updates Lost & Found analytics with financial data
+ * 8. Validates Lost & Found barcodes against Barcode Dictionary
+ * 
+ * Analytics Processing:
+ * - Primary metrics: Collected from B3:B6
+ * - Data formatting: Ratio as text, percentage as percentage
+ * - Trend analysis: Difference formulas in column T
+ * - Date tracking: Timestamps in column O
+ * 
+ * Lost & Found Processing:
+ * - Financial data: Total values, daily rates, consigner amounts
+ * - Status tracking: Disposed, lost, inactive, repair values
+ * - Growth calculation: Week-over-week comparisons
+ * - Barcode validation: Cross-references with Barcode Dictionary
+ * 
+ * Barcode Counting:
+ * - Processes 20+ bin sheets (ER Aisles, Service, Toolchests, etc.)
+ * - Counts pipe-delimited barcodes in Barcode Dictionary
+ * - Updates Analytics sheet with per-sheet counts
+ * - Provides total dictionary barcode count
+ * 
+ * Features:
+ * - Comprehensive data collection and validation
+ * - Financial tracking and trend analysis
+ * - Barcode validation and status updates
+ * - Multi-sheet processing and analytics
+ * - Detailed logging and error handling
+ */
 function weeklyUpdate() {
   Logger.log("Starting Weekly Update process");
   

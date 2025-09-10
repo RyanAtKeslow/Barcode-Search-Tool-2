@@ -1,3 +1,44 @@
+/**
+ * Sync Barcode Dictionary With Temp - Data Synchronization Script
+ * 
+ * This script synchronizes the Barcode Dictionary with a Temp Sheet by comparing
+ * data and applying changes in chunks to handle large datasets efficiently.
+ * 
+ * Step-by-step process:
+ * 1. Opens both Barcode Dictionary and Temp Sheet
+ * 2. Builds lookup maps for efficient comparison using composite keys
+ * 3. Processes data in chunks of 200 rows to avoid timeout
+ * 4. Handles deletions: Marks rows in Dictionary not in Temp with red background
+ * 5. Handles additions: Adds rows from Temp not in Dictionary with green background
+ * 6. Handles updates: Updates changed cells and marks with green background/text
+ * 7. Uses PropertiesService to track progress across multiple runs
+ * 8. Implements 4-minute timeout protection with progress saving
+ * 9. Clears progress property when synchronization is complete
+ * 
+ * Data Processing:
+ * - Composite keys: Uses first 6 columns joined with '||' as unique identifiers
+ * - Chunk processing: Handles 200 rows per chunk to avoid API limits
+ * - Progress tracking: Saves current position in PropertiesService
+ * - Timeout protection: 4-minute maximum runtime with graceful exit
+ * 
+ * Visual Indicators:
+ * - Red background: Rows to be deleted (in Dictionary but not in Temp)
+ * - Green background: New rows added from Temp
+ * - Green text: Updated cells with changes
+ * 
+ * Performance Features:
+ * - Chunked processing for large datasets
+ * - Progress persistence across runs
+ * - Timeout protection and graceful handling
+ * - Efficient Map-based lookups
+ * 
+ * Features:
+ * - Large dataset handling with chunking
+ * - Progress tracking and resumption
+ * - Visual change indicators
+ * - Timeout protection
+ * - Comprehensive error handling
+ */
 function syncBarcodeDictionaryWithTemp(ss) {
   Logger.log("🔄 [syncBarcodeDictionaryWithTemp] Starting sync of Barcode Dictionary with Temp Sheet in chunks...");
   const barcodeSheet = ss.getSheetByName('Barcode Dictionary');

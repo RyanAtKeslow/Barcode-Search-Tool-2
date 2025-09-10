@@ -1,16 +1,26 @@
 /**
  * Toronto Asset Database Mirror
  * 
- * This script ingests data from the Toronto Barcode Database spreadsheet
- * and remaps the columns to match the Toronto Schema format.
+ * This script mirrors and transforms asset data from the Toronto Barcode Database.
  * 
- * Source Schema (Barcode Database):
- * A: Category, B: Asset Location, C: Asset Status, D: Asset, E: Owner, 
- * F: Equipment ID, G: Asset ID, H: Serial Number, I: Barcode
+ * Step-by-step process:
+ * 1. Connects to source spreadsheet using hardcoded ID
+ * 2. Reads all data from the "Barcode Database" sheet (columns A:I)
+ * 3. Transforms data by remapping columns to Toronto Schema format
+ * 4. Writes transformed data to "Sheet4" in the same spreadsheet
+ * 5. Applies formatting (headers, colors, borders, alternating rows)
+ * 6. Freezes header row for better navigation
  * 
- * Target Schema (Toronto Schema):
- * A: Asset, B: Barcode #, C: Serial #, D: Owner, E: Asset Code, 
- * F: Asset Location, G: Asset Status, H: Category
+ * Column Mapping:
+ * Source → Target
+ * D (Asset) → A (Asset)
+ * I (Barcode) → B (Barcode #)
+ * H (Serial Number) → C (Serial #)
+ * E (Owner) → D (Owner)
+ * G (Asset ID) → E (Asset Code)
+ * B (Asset Location) → F (Asset Location)
+ * C (Asset Status) → G (Asset Status)
+ * A (Category) → H (Category)
  */
 
 function mirrorTorontoAssetDatabase() {

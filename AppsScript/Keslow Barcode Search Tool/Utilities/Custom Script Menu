@@ -1,3 +1,58 @@
+/**
+ * Custom Script Menu - Google Sheets Menu Creation Script
+ * 
+ * This script creates custom menus in Google Sheets to provide easy access
+ * to various barcode management and data processing functions.
+ * 
+ * Menu Structure:
+ * 1. Bin Actions - Bin management operations
+ * 2. Prep Bay Actions - Prep bay data processing
+ * 3. Receiving - Receiving bay operations
+ * 4. Generic Bay - Generic bay operations
+ * 5. Other Scripts - Additional utility functions
+ * 
+ * Bin Actions Menu:
+ * - Add Bin: Creates new bins with automatic numbering
+ * - Remove Bin: Deletes bins and renumbers remaining ones
+ * - Change Bin Name: Updates existing bin names
+ * - Add Item to Existing Bin: Adds items to specific bins
+ * - Remove Item From Existing Bin: Removes items from bins
+ * - Swap Bins: Exchanges bin contents
+ * - Add Many Items to Existing Bin: Bulk item addition
+ * 
+ * Prep Bay Actions Menu:
+ * - Export Adds: Exports add barcode data
+ * - Export Drops: Exports drop barcode data
+ * - Ship Job: Processes prep bay for shipping
+ * 
+ * Receiving Menu:
+ * - Sort Receiving Bay: Sorts barcodes by bin number
+ * - Print Receiving Bay: Generates printable documents
+ * - Export Receiving Bay: Exports data to CSV
+ * - Reset Receiving Bay: Clears and processes bay data
+ * 
+ * Generic Bay Menu:
+ * - Sort Generic Bay: Sorts barcodes by bin number
+ * - Print Generic Bay: Generates printable documents
+ * - Export Generic Bay: Exports data to CSV
+ * - Reset Generic Bay: Clears and processes bay data
+ * 
+ * Other Scripts Menu:
+ * - Sort Flawless Data: Consolidates equipment barcodes
+ * - Search Barcode Dictionary: Searches barcode database
+ * - Update Name Search Formula: Updates search formulas
+ * - Update Bin Search Formula: Updates bin search formulas
+ * - Refresh Analytics: Updates analytics data
+ * - Refresh Homeless Gear Sheet: Updates homeless gear tracking
+ * - Balance Cameras: Balances camera inventory
+ * - Bulk Scan to Bin: Processes bulk scan data
+ * 
+ * Features:
+ * - Organized menu structure
+ * - Easy access to all functions
+ * - Logical grouping of related operations
+ * - User-friendly interface
+ */
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   

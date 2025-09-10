@@ -1,3 +1,39 @@
+/**
+ * Print Shipping Bay - Shipping Bay Document Generation Script
+ * 
+ * This script creates a formatted Google Doc with shipping bay data
+ * for printing and physical record keeping.
+ * 
+ * Step-by-step process:
+ * 1. Validates that the script is run from the "Receiving Bays" sheet
+ * 2. Identifies the current user using email lookup with fallback logic
+ * 3. Searches for username matches in row 2 of the sheet
+ * 4. Handles multiple username matches with user selection dialog
+ * 5. Prompts for username if not found or empty
+ * 6. Extracts barcode bay name from the merged cell above username
+ * 7. Determines column positions (barcode, item, bin) relative to username
+ * 8. Collects all data from the three columns starting from row 4
+ * 9. Filters out empty rows to create clean data set
+ * 10. Creates timestamped Google Doc with formatted content
+ * 11. Adds headers, bay name, and formatted table
+ * 12. Saves document and moves to "Barcode Bay Printouts" folder
+ * 13. Displays link to the created document
+ * 14. Updates username in "HOMELESS GEAR" sheet
+ * 
+ * Document Structure:
+ * - Header: Document creator and timestamp
+ * - Subheader: Barcode bay name
+ * - Table: Barcode | Item | Bin columns
+ * - Filename: "MM/dd/yy HH:mm Username (BayName) Printout"
+ * 
+ * Features:
+ * - User identification with multiple fallback methods
+ * - Dynamic bay name detection
+ * - Professional document formatting
+ * - Automatic folder organization
+ * - Print-ready output
+ * - Integration with HOMELESS GEAR tracking
+ */
 function printShippingBay() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var activeSheet = ss.getActiveSheet();

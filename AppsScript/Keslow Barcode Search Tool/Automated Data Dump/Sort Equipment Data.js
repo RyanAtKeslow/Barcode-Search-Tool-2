@@ -1,3 +1,42 @@
+/**
+ * Sort Equipment Data - Equipment Data Processing and Consolidation Script
+ * 
+ * This script processes equipment data by grouping rows with identical metadata
+ * and consolidating their barcodes into pipe-delimited strings for automation.
+ * 
+ * Step-by-step process:
+ * 1. Receives input data array and validates it's not empty
+ * 2. Defines target headers: Category, Location, Status, Equipment Name, Owner, UUID, Barcodes
+ * 3. Maps source columns to target structure (ignores Asset ID and Asset Serial)
+ * 4. Groups rows by unique combination of metadata (UUID, Equipment, Category, Status, Owner, Location)
+ * 5. Collects all barcodes for each unique combination using Set
+ * 6. Handles empty barcodes by setting "No Barcode" placeholder
+ * 7. Concatenates barcodes using pipe (|) separator
+ * 8. Returns processed data with consolidated barcodes
+ * 
+ * Data Processing:
+ * - Grouping: Uses Map with composite keys for efficient grouping
+ * - Barcode collection: Uses Set to avoid duplicates within groups
+ * - Concatenation: Joins barcodes with pipe separator
+ * - Empty handling: Replaces empty barcodes with "No Barcode"
+ * 
+ * Column Mapping:
+ * - Source: Asset ID, UUID, Equipment, Category, Barcode, Asset Serial, Status, Owner, Location
+ * - Target: Category, Location, Status, Equipment Name, Owner, UUID, Barcodes
+ * - Ignored: Asset ID, Asset Serial (not needed in final output)
+ * 
+ * Output Format:
+ * - Headers: Category, Location, Status, Equipment Name, Owner, UUID, Barcodes
+ * - Barcodes: Pipe-delimited string (e.g., "BC001|BC002|BC003")
+ * - Empty barcodes: Replaced with "No Barcode" placeholder
+ * 
+ * Features:
+ * - Data consolidation and deduplication
+ * - Flexible column mapping
+ * - Empty value handling
+ * - Efficient grouping algorithm
+ * - Automation-ready output format
+ */
 function sortFlawlessDataAutomationMode(inputData) {
     if (!inputData || !inputData.length) return [];
 
