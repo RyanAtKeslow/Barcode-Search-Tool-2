@@ -100,7 +100,7 @@ function F2DataDumpDirectPrint() {
     const writeChunkSize = 10000;
     const maxRetries = 3;
     const retryDelay = 5000;
-    const recipient = "Owen@keslowcamera.com, ryan@keslowcamera.com";
+    const recipient = "Share@keslowcamera.com";
 
     Logger.log("🔍 Getting active spreadsheet...");
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -505,7 +505,7 @@ function F2DataDumpDirectPrint() {
             }
           }
           MailApp.sendEmail({
-            to: "Owen@keslowcamera.com, ryan@keslowcamera.com",
+            to: "Share@keslowcamera.com",
             subject,
             body
           });
