@@ -264,16 +264,6 @@ function F2DataDumpDirectPrint() {
       });
       summaryStats.barcodeCount = processedBarcodeCount;
       
-      // --- Secondary Database Export ---
-      Logger.log("🔄 Starting secondary database export...");
-      const secondaryExportResult = exportToSecondaryDatabase(allData, summaryStats);
-      if (secondaryExportResult.success) {
-        Logger.log(`✅ Secondary export completed: ${secondaryExportResult.rowsExported} rows exported to ${secondaryExportResult.targetSpreadsheet}`);
-        summaryStats.secondaryExport = secondaryExportResult;
-      } else {
-        Logger.log(`❌ Secondary export failed: ${secondaryExportResult.message}`);
-        summaryStats.secondaryExport = secondaryExportResult;
-      }
       
       return;
     } else {
@@ -491,16 +481,6 @@ function F2DataDumpDirectPrint() {
       });
       summaryStats.barcodeCount = processedBarcodeCount;
       
-      // --- Secondary Database Export ---
-      Logger.log("🔄 Starting secondary database export...");
-      const secondaryExportResult = exportToSecondaryDatabase(allData, summaryStats);
-      if (secondaryExportResult.success) {
-        Logger.log(`✅ Secondary export completed: ${secondaryExportResult.rowsExported} rows exported to ${secondaryExportResult.targetSpreadsheet}`);
-        summaryStats.secondaryExport = secondaryExportResult;
-      } else {
-        Logger.log(`❌ Secondary export failed: ${secondaryExportResult.message}`);
-        summaryStats.secondaryExport = secondaryExportResult;
-      }
       
       return;
     }
@@ -530,17 +510,6 @@ function F2DataDumpDirectPrint() {
             `Processed rows written: ${summaryStats.totalRows}\n` +
             `Processed barcode count: ${summaryStats.barcodeCount}\n`;
           
-          // Add secondary export information if available
-          if (summaryStats.secondaryExport) {
-            if (summaryStats.secondaryExport.success) {
-              body += `\nSecondary Database Export:\n` +
-                `✅ Success: ${summaryStats.secondaryExport.rowsExported} rows exported to ${summaryStats.secondaryExport.targetSpreadsheet}\n` +
-                `Target Sheet: ${summaryStats.secondaryExport.targetSheet}\n`;
-            } else {
-              body += `\nSecondary Database Export:\n` +
-                `❌ Failed: ${summaryStats.secondaryExport.message}\n`;
-            }
-          }
           MailApp.sendEmail({
             to: "Owen@keslowcamera.com, ryan@keslowcamera.com",
             subject,
