@@ -1,3 +1,30 @@
+/**
+ * Find A Camera - Camera Availability Search Tool
+ * 
+ * This script searches for available cameras based on multiple criteria
+ * and filters results by location, date range, and group classification.
+ * 
+ * Step-by-step process:
+ * 1. Reads filter parameters from "Look Up" sheet (camera types, location, date range, group filter)
+ * 2. Expands location filters to include regional mappings (US/CAN regions)
+ * 3. Identifies date columns within the specified date range
+ * 4. Scans camera data starting from row 7 for matching criteria
+ * 5. Checks each camera for availability (empty cells with white background)
+ * 6. Extracts barcode and serial number from notes column using regex
+ * 7. Classifies cameras into two groups:
+ *    - Group 1 (Keslow): Matches specific barcode pattern with NBCA
+ *    - Group 2 (Consigner): Contains percentage symbol in notes
+ * 8. Filters results based on group selection
+ * 9. Displays results in columns F-J of "Look Up" sheet
+ * 
+ * Filter Criteria:
+ * - Camera types: Comma-separated list from A2
+ * - Locations: Supports region expansion (US → multiple cities)
+ * - Date range: From C2 to D2
+ * - Group filter: "keslow", "consigner", or both
+ * 
+ * Output: Available cameras with barcode, serial, camera type, location, and notes
+ */
 function findAvailableCameras() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName("Camera");

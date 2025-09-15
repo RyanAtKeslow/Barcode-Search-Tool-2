@@ -1,3 +1,33 @@
+/**
+ * Export Generic Bay - CSV Export Script
+ * 
+ * This script exports barcode data from a selected bay to a CSV file
+ * for external use or backup purposes.
+ * 
+ * Step-by-step process:
+ * 1. Validates that the script is run from the "Barcode SEARCH" sheet
+ * 2. Identifies the current user using email lookup with fallback logic
+ * 3. Searches for username matches in row 2 of the sheet
+ * 4. Handles multiple username matches with user selection dialog
+ * 5. Prompts for username if not found or empty
+ * 6. Capitalizes and formats the username properly
+ * 7. Determines the barcode column (left of username column)
+ * 8. Extracts all barcode values from the bay starting from row 4
+ * 9. Validates that barcodes exist before proceeding
+ * 10. Creates CSV content with one barcode per line
+ * 11. Generates timestamped filename with username
+ * 12. Creates or finds "CSV Exports" folder in Google Drive
+ * 13. Saves CSV file and displays download link
+ * 
+ * Features:
+ * - User identification with multiple fallback methods
+ * - Multiple username match handling
+ * - Automatic file naming with timestamps
+ * - Google Drive integration
+ * - User-friendly download interface
+ * 
+ * Output: CSV file with format: "MM-dd-yy_HH-mm_Username_Barcodes.csv"
+ */
 function exportGenericBay() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var activeSheet = ss.getActiveSheet();

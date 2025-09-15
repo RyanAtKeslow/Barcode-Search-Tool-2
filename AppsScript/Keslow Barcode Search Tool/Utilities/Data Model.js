@@ -1,3 +1,26 @@
+/**
+ * Data Model - Barcode Dictionary Utilities
+ * 
+ * This script provides utility functions for managing the Barcode Dictionary
+ * and user information within the Keslow Barcode Search Tool system.
+ * 
+ * Main Functions:
+ * 1. backupBarcodeDictionary() - Creates timestamped backups of barcode data
+ * 2. checkBarcodeIntegrity() - Validates data integrity between raw, formatted, and dictionary data
+ * 3. fetchUserInfoFromEmail() - Retrieves user details from company email list
+ * 4. findUsernameInRow2() - Locates user names in sheet row 2 with fallback logic
+ * 5. setSelectedMatch() - Handles multiple username matches with user selection dialog
+ * 
+ * User Management:
+ * - Fetches user info from US/CAN company email lists
+ * - Handles special cases for specific users (JT, Andy, Vinnie, Gigi, Jaz)
+ * - Provides nickname extraction and email lookup functionality
+ * 
+ * Data Integrity:
+ * - Compares barcode counts between raw data, formatted data, and dictionary
+ * - Identifies missing barcodes and new barcodes
+ * - Ensures data consistency across processing stages
+ */
 function backupBarcodeDictionary() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName("Barcode Dictionary");
@@ -22,18 +45,6 @@ function backupBarcodeDictionary() {
   DriveApp.getRootFolder().removeFile(file); // remove from root
 
   Logger.log("✅ Backup created at: " + backupName);
-}
-
-function backupBarcodeDictionary() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Barcode Dictionary");
-  const data = sheet.getDataRange().getValues();
-
-  const backupSheet = SpreadsheetApp.create("Barcode Dictionary Backup " + new Date().toISOString());
-  const backup = backupSheet.getSheets()[0];
-  backup.getRange(1, 1, data.length, data[0].length).setValues(data);
-
-  console.log("📁 Backup created: " + backupSheet.getUrl());
 }
 
 function checkBarcodeIntegrity(rawSheet, formattedSheet, barcodeDictSheet) {

@@ -1,3 +1,29 @@
+/**
+ * Add Bin - Bin Management Script
+ * 
+ * This script allows users to add new bins to the bin management system
+ * with automatic numbering and organization.
+ * 
+ * Step-by-step process:
+ * 1. Prompts user to enter new bin number (format: X-XXXX where X is number, XXXX is alphanumeric)
+ * 2. Validates bin number format using regex pattern
+ * 3. Prompts user to enter bin name/description
+ * 4. Reads existing bin data from column A
+ * 5. Finds appropriate insertion point based on bin numbering sequence
+ * 6. Inserts new row at calculated position
+ * 7. Sets bin number and name in new row
+ * 8. Automatically adjusts subsequent bin numbers (+1) to maintain sequence
+ * 9. Adds checkbox validation in column E
+ * 10. Logs changes in "Change Log" sheet with timestamp
+ * 11. Adds checkboxes in columns I-L for change tracking
+ * 
+ * Features:
+ * - Automatic bin number sequencing
+ * - Format validation (e.g., "3-A402", "S-A100")
+ * - Change logging and audit trail
+ * - Data validation with checkboxes
+ * - Intelligent insertion point calculation
+ */
 function addBin() {
   var ui = SpreadsheetApp.getUi();
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();

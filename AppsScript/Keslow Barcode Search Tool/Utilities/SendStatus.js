@@ -1,3 +1,42 @@
+/**
+ * Send Status - Digital Camera Status Management Script
+ * 
+ * This script manages digital camera status updates by sending barcode data
+ * to an external database with location tracking and validation.
+ * 
+ * Step-by-step process:
+ * 1. Validates input status against allowed values (Shipped, Returned, Pulled)
+ * 2. Normalizes barcodes by removing pipes and trimming whitespace
+ * 3. Builds cached lookup map for Digital Cameras from Barcode Dictionary
+ * 4. Filters input barcodes to only include Digital Cameras
+ * 5. Looks up user location from external UserLocationUtility sheets
+ * 6. Creates timestamped database entries with all required fields
+ * 7. Appends data to external Cameras sheet in external workbook
+ * 8. Provides detailed logging and error handling
+ * 
+ * Data Processing:
+ * - Barcode normalization: Removes pipes, trims whitespace
+ * - Category filtering: Only processes Digital Cameras
+ * - Location lookup: Maps user email to location via cached utility sheets
+ * - Status validation: Ensures only valid status values are processed
+ * 
+ * Caching Strategy:
+ * - Barcode lookup: 6-hour cache with sheet size as version key
+ * - User location: 6-hour cache with workbook ID as key
+ * - Handles cache size limits gracefully
+ * 
+ * External Integration:
+ * - Target workbook: 13PMB5l5PJr4HHQ0W9A7KvTu2derCVtLKRHtoJ-2LxW4
+ * - Target sheet: Cameras
+ * - Location sources: UserLocationUtilityUS, UserLocationUtilityCAN
+ * 
+ * Features:
+ * - Robust error handling and validation
+ * - Efficient caching for performance
+ * - Comprehensive logging
+ * - Location-aware data processing
+ * - Batch processing support
+ */
 // Helper function to normalize barcodes by removing pipes and trimming
 function normalizeBarcode(barcode) {
   if (!barcode) return '';

@@ -1,3 +1,47 @@
+/**
+ * Count Barcodes For Analytics - Barcode Counting and Analytics Script
+ * 
+ * This script counts barcodes across multiple bin sheets and updates the Analytics
+ * sheet with comprehensive barcode statistics for inventory tracking.
+ * 
+ * Step-by-step process:
+ * 1. Defines target sheets (ER Aisles 1-15, Service Department, Toolchests, etc.)
+ * 2. Reads Barcode Dictionary data from columns D3:G
+ * 3. Precomputes pipe counts for each item in the dictionary
+ * 4. Calculates total dictionary barcode count (pipes + 1 per row)
+ * 5. Processes each target sheet individually
+ * 6. Extracts unique item names from column B2:B of each sheet
+ * 7. Matches item names against dictionary pipe counts
+ * 8. Sums total barcodes per sheet based on dictionary matches
+ * 9. Writes results to Analytics sheet (columns V and W)
+ * 10. Updates total dictionary count in cell C2
+ * 
+ * Target Sheets:
+ * - RnD, ER Aisles 1-15
+ * - Service Department, Battery Room, Filter Room
+ * - S-Toolchest A-Z (65-90)
+ * - Purchasing Mezzanine, Projector Room
+ * - Consignment Rooms, Inventory Control
+ * 
+ * Data Processing:
+ * - Pipe counting: Counts | characters + 1 per row for barcode totals
+ * - Item matching: Matches sheet item names to dictionary entries
+ * - Batch processing: Handles large datasets efficiently
+ * - Progress logging: Tracks processing every 1000 rows
+ * 
+ * Analytics Output:
+ * - Column V: Sheet names
+ * - Column W: Barcode counts per sheet
+ * - Cell C2: Total dictionary barcode count
+ * - Row-by-row tracking for each processed sheet
+ * 
+ * Features:
+ * - Comprehensive sheet coverage (20+ sheets)
+ * - Efficient batch processing
+ * - Detailed progress logging
+ * - Accurate pipe-delimited barcode counting
+ * - Real-time analytics updates
+ */
 function countBarcodesForAnalytics() {
   Logger.log("Starting countBarcodesForAnalytics function");
   

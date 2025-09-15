@@ -1,3 +1,48 @@
+/**
+ * Scan Out Media - Media Tracking and Logging Script
+ * 
+ * This script processes media barcode data from the Dashboard sheet and logs it
+ * to the Log sheet with return tracking capabilities and duplicate prevention.
+ * 
+ * Step-by-step process:
+ * 1. Accesses Dashboard and Log sheets from the active spreadsheet
+ * 2. Reads data from Dashboard starting at row 3 (A3:G)
+ * 3. Extracts global values from row 3 (order number, prep tech, job name, return date)
+ * 4. Reads existing log data to check for duplicate barcodes
+ * 5. For each row in Dashboard data:
+ *    - Skips empty barcodes
+ *    - Checks for existing barcode entries in log
+ *    - Updates existing entries to "YES" if not already marked
+ *    - Formats scan date (uses today's date if empty)
+ *    - Creates new log entry with "NO" return status
+ * 6. Appends all new entries to the Log sheet starting at row 9
+ * 7. Clears processed data from Dashboard (B3:G, preserves column A)
+ * 
+ * Data Processing:
+ * - Source: Dashboard sheet (A=media type, B=scan date, C=barcode, D=order, E=prep tech, F=job, G=return date)
+ * - Target: Log sheet (A=media type, B=scan date, C=barcode, D=order, E=prep tech, F=job, G=return date, H=returned)
+ * - Global values: Applied to all entries from row 3 of Dashboard
+ * - Date formatting: Converts dates to MM/dd/yyyy format
+ * 
+ * Duplicate Handling:
+ * - Checks existing log entries for matching barcodes
+ * - Updates existing entries to "YES" if not already marked as returned
+ * - Continues processing to create new entries even if duplicates found
+ * - Prevents duplicate barcode processing
+ * 
+ * Return Tracking:
+ * - New entries: Marked with "NO" (not returned)
+ * - Existing entries: Updated to "YES" (returned)
+ * - Status column: Column H in Log sheet
+ * 
+ * Features:
+ * - Duplicate barcode detection and handling
+ * - Global value inheritance from row 3
+ * - Automatic date formatting and fallback
+ * - Return status tracking
+ * - Data cleanup after processing
+ * - Comprehensive logging and error handling
+ */
 function ScanOutMedia() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const dashboard = ss.getSheetByName("Dashboard");

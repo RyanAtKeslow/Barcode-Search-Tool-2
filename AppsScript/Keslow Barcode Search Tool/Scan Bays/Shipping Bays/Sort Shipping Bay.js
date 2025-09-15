@@ -1,3 +1,38 @@
+/**
+ * Sort Shipping Bay - Shipping Bay Barcode Sorting Script
+ * 
+ * This script sorts barcodes in a shipping bay by their assigned bin numbers,
+ * organizing them alphanumerically with "No Bin" items at the bottom.
+ * 
+ * Step-by-step process:
+ * 1. Validates that the script is run from the "Receiving Bays" sheet
+ * 2. Identifies the current user using email lookup with fallback logic
+ * 3. Searches for username matches in row 2 of the sheet
+ * 4. Handles multiple username matches with user selection dialog
+ * 5. Prompts for username if not found or empty
+ * 6. Capitalizes and formats the username properly
+ * 7. Determines column positions (barcode, item, bin) relative to username
+ * 8. Collects all data from the three columns starting from row 4
+ * 9. Filters out rows with empty barcodes or bin numbers
+ * 10. Separates "No Bin" items from items with valid bin numbers
+ * 11. Sorts valid bin entries alphanumerically using localeCompare
+ * 12. Combines sorted items with "No Bin" items at the bottom
+ * 13. Clears the barcode column and rewrites sorted barcodes without gaps
+ * 14. Applies changes immediately with SpreadsheetApp.flush()
+ * 
+ * Sorting Logic:
+ * - Valid bin numbers: Sorted alphanumerically (e.g., 1-A001, 1-A002, 2-A001)
+ * - "No Bin" items: Placed at the bottom of the list
+ * - Empty rows: Filtered out completely
+ * - Gap removal: Rewrites barcodes in continuous sequence
+ * 
+ * Features:
+ * - User identification with multiple fallback methods
+ * - Intelligent sorting with numeric awareness
+ * - Gap removal for clean data presentation
+ * - Multiple username match handling
+ * - Real-time data validation
+ */
 function sortShippingBay() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var activeSheet = ss.getActiveSheet();

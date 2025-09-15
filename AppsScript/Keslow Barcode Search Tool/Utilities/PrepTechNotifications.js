@@ -1,3 +1,40 @@
+/**
+ * Prep Tech Notifications - Automated Team Assignment Notifications
+ * 
+ * This script sends daily notifications to Google Chat about pickup team assignments
+ * with humorous, randomized message templates and weekend scheduling support.
+ * 
+ * Step-by-step process:
+ * 1. Checks for manual message override (bypasses automated logic if set)
+ * 2. Determines if today is a weekend day (exits if so)
+ * 3. Checks if today is Friday for special weekend message formatting
+ * 4. Generates appropriate sheet name based on target date
+ * 5. Opens pickup schedule spreadsheet and locates target sheet
+ * 6. For Friday: Checks Saturday assignments and Monday pickups
+ * 7. For regular days: Checks pickup assignments in target sheet
+ * 8. Selects random message template (avoiding repeats)
+ * 9. Generates personalized message with assignment details
+ * 10. Sends message to Google Chat webhook (or logs in debug mode)
+ * 
+ * Message Templates:
+ * - 12+ humorous templates (Tech Support, GPS, Food Delivery, etc.)
+ * - Special Friday templates for weekend scheduling
+ * - Random selection with no-repeat logic
+ * - Personalized with actual assignment details
+ * 
+ * Weekend Support:
+ * - Friday messages include Saturday assignments and Monday pickups
+ * - Separate template system for weekend scheduling
+ * - Handles both prep and shipping Saturday assignments
+ * 
+ * Features:
+ * - Debug mode for testing without sending messages
+ * - Manual message override capability
+ * - Robust error handling and logging
+ * - Google Chat integration via webhook
+ * - Humorous, engaging message templates
+ * - Weekend scheduling support
+ */
 // Prep Tech Notifications
 // Sends daily notifications about pickup team assignments
 

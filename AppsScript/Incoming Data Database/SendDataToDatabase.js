@@ -1,3 +1,48 @@
+/**
+ * Send Data To Database - Camera Status Processing and Database Update Script
+ * 
+ * This script processes unprocessed camera data from the Cameras sheet and updates
+ * corresponding camera database sheets with status and location information.
+ * 
+ * Step-by-step process:
+ * 1. Defines camera database mappings and target spreadsheet IDs
+ * 2. Accesses the Cameras sheet and reads all data
+ * 3. Identifies unprocessed rows (those without 'processed' flag in column Z)
+ * 4. Sorts unprocessed rows by timestamp for chronological processing
+ * 5. For each unprocessed row:
+ *    - Validates required data (barcode, equipment name, status)
+ *    - Fetches location from column G
+ *    - Maps equipment name to corresponding database sheet
+ *    - Updates status and location in external camera database
+ *    - Marks row as processed with green background
+ * 6. Provides comprehensive logging throughout the process
+ * 
+ * Camera Database Mapping:
+ * - ARRI ALEXA 35 Camera Body → ALEXA 35 Body Status
+ * - Sony VENICE 2 Digital Camera → VENICE 2 Body Status
+ * - ARRI ALEXA Mini LF Camera Body → Alexa Mini LF Body Status
+ * - ARRI ALEXA Mini Camera Body → Alexa Mini Body Status
+ * - Sony VENICE 1 HFR Digital Camera → Venice 1 Body Status
+ * 
+ * Data Processing:
+ * - Source: Cameras sheet (columns A=timestamp, B=barcode, C=equipment, D=status, G=location, Z=processed)
+ * - Target: External camera database sheets (columns D=barcode, E=status, G=location, H=owner)
+ * - Validation: Skips rows missing barcode, equipment name, or status
+ * - Chronological: Processes oldest unprocessed entries first
+ * 
+ * External Integration:
+ * - Cameras Sheet ID: 13PMB5l5PJr4HHQ0W9A7KvTu2derCVtLKRHtoJ-2LxW4
+ * - Camera Database ID: 1FYA76P4B7vFUCDmxDwc6Ly6-tm7F6f5c5v0eNYjgwKw
+ * - Multiple target sheets for different camera types
+ * 
+ * Features:
+ * - Time-driven trigger support
+ * - Comprehensive error handling and logging
+ * - Visual processing indicators (green background)
+ * - Chronological processing order
+ * - Multi-sheet database updates
+ * - Equipment name mapping and validation
+ */
 function SendDataToDatabase() {
   Logger.log('ProcessUnprocessedCamerasRows (time-driven) TRIGGERED');
 

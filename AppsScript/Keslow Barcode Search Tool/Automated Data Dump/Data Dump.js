@@ -1,3 +1,25 @@
+/**
+ * F2DataDumpDirectPrint - Main Data Processing Script
+ * 
+ * This script processes barcode data from email attachments and updates the Barcode Dictionary.
+ * 
+ * Step-by-step process:
+ * 1. Clears and stores existing bay data from multiple sheets (Barcode SEARCH, Receiving Bays, Prep Bays)
+ * 2. Searches for unread emails with "Assets Excel Export for Google" subject
+ * 3. Downloads and converts Excel attachments to Google Sheets format
+ * 4. Processes the data using sortFlawlessDataAutomationMode function
+ * 5. Writes processed data to the Barcode Dictionary sheet
+ * 6. Exports data to secondary database
+ * 7. Restores the previously cleared bay data
+ * 8. Sends completion email notification
+ * 
+ * Features:
+ * - Development mode support for testing with local files
+ * - Automatic email processing and thread marking
+ * - Data integrity checks and error handling
+ * - Bay data preservation during processing
+ * - Secondary database export functionality
+ */
 function F2DataDumpDirectPrint() {
   let clearedData = {};
   const sheetsToProcess = ['Barcode SEARCH', 'Receiving Bays', 'Prep Bays'];
@@ -100,7 +122,7 @@ function F2DataDumpDirectPrint() {
     const writeChunkSize = 10000;
     const maxRetries = 3;
     const retryDelay = 5000;
-    const recipient = "Owen@keslowcamera.com, ryan@keslowcamera.com";
+    const recipient = "Share@keslowcamera.com";
 
     Logger.log("🔍 Getting active spreadsheet...");
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -511,7 +533,7 @@ function F2DataDumpDirectPrint() {
             `Processed barcode count: ${summaryStats.barcodeCount}\n`;
           
           MailApp.sendEmail({
-            to: "Owen@keslowcamera.com, ryan@keslowcamera.com",
+            to: "Share@keslowcamera.com",
             subject,
             body
           });

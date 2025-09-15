@@ -1,3 +1,45 @@
+/**
+ * Export Barcodes Drops - Prep Bay Drop Export Script
+ * 
+ * This script exports drop barcode data from prep bays to CSV files
+ * with duplicate detection and status tracking for returned items.
+ * 
+ * Step-by-step process:
+ * 1. Identifies the current user using email lookup
+ * 2. Searches for username matches in row 2 of the prep bays sheet
+ * 3. Handles multiple username matches with user selection dialog
+ * 4. Determines column positions (add barcodes, drop barcodes) relative to username
+ * 5. Checks for duplicate barcodes between add and drop columns
+ * 6. Highlights duplicate cells in yellow if found and stops execution
+ * 7. Scans for export tags to identify new data since last export
+ * 8. Extracts barcodes from the drop column (right of username)
+ * 9. Filters out empty cells and export tag rows
+ * 10. Creates CSV content with barcode data
+ * 11. Generates timestamped filename with prep bay number
+ * 12. Saves CSV file to "Prep Bay Scans" folder in Google Drive
+ * 13. Displays download link and success message
+ * 14. Highlights exported barcodes in light green
+ * 15. Adds export tag with timestamp
+ * 16. Sends status update to database with "Returned" status
+ * 
+ * Duplicate Detection:
+ * - Compares barcodes between add and drop columns
+ * - Highlights conflicting cells in yellow
+ * - Stops execution until duplicates are resolved
+ * - Provides detailed information about conflicts
+ * 
+ * Export Tracking:
+ * - Uses export tags to track previously exported data
+ * - Only exports new data since last export
+ * - Prevents duplicate exports of the same data
+ * 
+ * Features:
+ * - Comprehensive duplicate detection and handling
+ * - Export tracking with timestamp tags
+ * - Visual feedback with cell highlighting
+ * - Database status updates for returned items
+ * - Google Drive integration
+ */
 function prepBayDropExport() {
   try {
     Logger.log('prepBayDropExport start');

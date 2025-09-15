@@ -1,3 +1,40 @@
+/**
+ * Refresh Analytics Weekly - Weekly Analytics Data Collection Script
+ * 
+ * This script collects weekly analytics data and performs barcode dictionary
+ * validation checks for the Lost & Found system.
+ * 
+ * Step-by-step process:
+ * 1. Opens the Analytics sheet and finds the first empty row in column P
+ * 2. Collects source values from B3:B6 (analytics metrics)
+ * 3. Writes values to columns P, Q, R, S in the empty row
+ * 4. Formats column R as text (ratio) and column S as percentage
+ * 5. Adds today's date in column O
+ * 6. Creates difference formulas in column T for trend analysis
+ * 7. Runs barcode counting function for additional analytics
+ * 8. Performs Lost & Found barcode validation against dictionary
+ * 
+ * Analytics Data:
+ * - Column P: Primary metric from B3
+ * - Column Q: Secondary metric from B4  
+ * - Column R: Ratio from B5 (formatted as text)
+ * - Column S: Percentage from B6 (formatted as percentage)
+ * - Column O: Date stamp
+ * - Column T: Difference calculations for trend analysis
+ * 
+ * Lost & Found Validation:
+ * - Compares Lost & Found barcodes against Barcode Dictionary
+ * - Updates column J to TRUE for barcodes with "active" status
+ * - Handles pipe-delimited barcode formats
+ * - Provides detailed logging of validation results
+ * 
+ * Features:
+ * - Automatic data collection and formatting
+ * - Trend analysis with difference calculations
+ * - Barcode validation and status updates
+ * - Comprehensive logging and error handling
+ * - Integration with barcode counting analytics
+ */
 function refreshAnalyticsWeekly() {
   // Get the active spreadsheet and the Analytics sheet
   const ss = SpreadsheetApp.getActiveSpreadsheet();

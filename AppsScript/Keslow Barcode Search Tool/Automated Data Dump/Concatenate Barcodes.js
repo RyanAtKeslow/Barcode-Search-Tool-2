@@ -1,3 +1,42 @@
+/**
+ * Concatenate Barcodes - Barcode Data Consolidation Script
+ * 
+ * This script consolidates barcode data by grouping rows with identical metadata
+ * and concatenating their barcodes into pipe-delimited strings.
+ * 
+ * Step-by-step process:
+ * 1. Reads data from 'Barcode Dictionary Import' sheet starting from row 2
+ * 2. Groups rows by unique combination of metadata (UUID, Equipment, Category, Status, Owner, Location)
+ * 3. Collects all barcodes for each unique combination
+ * 4. Concatenates barcodes using pipe (|) separator
+ * 5. Creates new column order: Category, Location, Status, Equipment Name, Owner, UUID, Barcodes
+ * 6. Writes processed data to 'Concatenated Barcodes' sheet
+ * 7. Cleans up excess columns (H through Z)
+ * 8. Provides detailed logging and error handling
+ * 
+ * Data Processing:
+ * - Grouping: Uses Map with composite keys for efficient grouping
+ * - Barcode collection: Uses Set to avoid duplicates within groups
+ * - Concatenation: Joins barcodes with pipe separator
+ * - Column reordering: Reorganizes data for better readability
+ * 
+ * Output Format:
+ * - Headers: Category, Location, Status, Equipment Name, Owner, UUID, Barcodes
+ * - Barcodes: Pipe-delimited string (e.g., "BC001|BC002|BC003")
+ * - Clean data: Removes empty barcodes and excess columns
+ * 
+ * Performance Features:
+ * - Chunked writing: Processes data in 5,000 row chunks
+ * - Memory efficient: Uses Map and Set for grouping
+ * - Batch operations: Minimizes spreadsheet API calls
+ * 
+ * Features:
+ * - Data consolidation and deduplication
+ * - Flexible column reordering
+ * - Efficient batch processing
+ * - Comprehensive error handling
+ * - Clean output formatting
+ */
 function manualConcatenateBarcodes() {
   try {
     Logger.log("🚀 Starting barcode concatenation process...");

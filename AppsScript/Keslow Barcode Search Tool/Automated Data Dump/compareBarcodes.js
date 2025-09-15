@@ -1,3 +1,52 @@
+/**
+ * Compare Barcodes - Barcode Dictionary Comparison Script
+ * 
+ * This script compares barcodes between the Barcode Dictionary Import sheet
+ * and the main Barcode Dictionary to identify new and missing barcodes.
+ * 
+ * Step-by-step process:
+ * 1. Opens both Import and Dictionary sheets
+ * 2. Extracts barcodes from Import sheet (Column C)
+ * 3. Extracts barcodes from Dictionary sheet (Column G)
+ * 4. Handles both single barcodes and pipe-delimited lists
+ * 5. Creates unique sets for both barcode collections
+ * 6. Identifies new barcodes (in Import but not in Dictionary)
+ * 7. Identifies missing barcodes (in Dictionary but not in Import)
+ * 8. Creates comprehensive results sheet with statistics
+ * 9. Formats results with headers and proper styling
+ * 10. Provides detailed logging and error handling
+ * 
+ * Data Processing:
+ * - Barcode extraction: Handles single and pipe-delimited formats
+ * - Set operations: Uses JavaScript Sets for efficient comparison
+ * - Batch processing: Processes data in 50,000 row chunks
+ * - Filtering: Removes empty values and "barcodes" headers
+ * 
+ * Results Output:
+ * - Summary statistics: Total counts for both sheets
+ * - New barcodes: List of barcodes found in Import but not Dictionary
+ * - Missing barcodes: List of barcodes found in Dictionary but not Import
+ * - Formatted presentation: Bold headers, auto-resized columns
+ * 
+ * Performance Features:
+ * - Chunked processing for large datasets
+ * - Efficient Set operations for comparison
+ * - Memory-conscious data handling
+ * - Progress logging for monitoring
+ * 
+ * Error Handling:
+ * - Comprehensive try-catch blocks
+ * - Detailed error logging with stack traces
+ * - Graceful handling of missing sheets
+ * - Validation of data integrity
+ * 
+ * Features:
+ * - High-performance barcode comparison
+ * - Detailed statistical reporting
+ * - User-friendly results presentation
+ * - Robust error handling and logging
+ * - Support for large datasets
+ */
 function compareBarcodes() {
   try {
     Logger.log("🚀 Starting barcode comparison...");

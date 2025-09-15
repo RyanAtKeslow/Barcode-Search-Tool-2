@@ -1,3 +1,23 @@
+/**
+ * Data Model - City Translation Utilities
+ * 
+ * This script provides utility functions for translating city names and locations
+ * into standardized abbreviations used throughout the Keslow system.
+ * 
+ * Functions:
+ * 1. translateCity() - Converts full city names to 3-letter codes
+ * 2. translateCityDropDowns() - Handles dropdown selections and converts to 2-letter codes
+ * 3. translateCityCode() - Returns standardized 2-letter city codes
+ * 
+ * Supported Cities:
+ * - Culver City → LA
+ * - Vancouver → VAN/VN
+ * - Atlanta → ATL/AT
+ * - Toronto → TOR/TO
+ * - New Orleans → NOL/NO
+ * - Albuquerque → ABQ
+ * - Chicago → CHI/CH
+ */
 function translateCity(val) {
   if (!val) return val;
   if (val.toString().toUpperCase().includes('CULVER CITY')) return 'LA';

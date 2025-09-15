@@ -1,3 +1,29 @@
+/**
+ * Remove Bin - Bin Deletion and Renumbering Script
+ * 
+ * This script removes a selected bin from the bin management system
+ * and automatically renumbers subsequent bins to maintain sequence.
+ * 
+ * Step-by-step process:
+ * 1. Gets the currently selected cell containing the bin number to remove
+ * 2. Validates that the bin number exists in the sheet
+ * 3. Deletes the entire row containing the bin
+ * 4. Re-reads all remaining bin data after deletion
+ * 5. Identifies the prefix and number of the removed bin
+ * 6. Adjusts subsequent bin numbers (-1) that match the same prefix
+ * 7. Updates the sheet with renumbered bin data
+ * 8. Logs the change in "Change Log" sheet with timestamp
+ * 9. Adds checkboxes in columns I-L for change tracking
+ * 
+ * Features:
+ * - Automatic bin renumbering to maintain sequence
+ * - Prefix-based grouping (e.g., "4-E" series)
+ * - Change logging and audit trail
+ * - Data validation with checkboxes
+ * - Intelligent number adjustment logic
+ * 
+ * Usage: Select a cell containing the bin number to remove, then run the script
+ */
 function removeBinAndUpdate() {
     var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = spreadsheet.getActiveSheet();
