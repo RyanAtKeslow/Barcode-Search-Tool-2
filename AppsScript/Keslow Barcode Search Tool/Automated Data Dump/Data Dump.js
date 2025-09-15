@@ -218,7 +218,6 @@ function F2DataDumpDirectPrint() {
       }
       Logger.log(`📊 Processed data statistics:\n- Total rows: ${processedData.length}\n- Header row: ${processedData[0].join(', ')}`);
       Logger.log("🔍 Verifying processed data...");
-      Logger.log(`Processed data: ${processedData.map(row => row[6]).join(', ')}`);
       summaryStats.totalRows = processedData.length;
       summaryStats.headerRow = processedData[0].join(', ');
       summaryStats.processedBarcodes = processedData.map(row => row[6]).join(', ');
@@ -229,10 +228,29 @@ function F2DataDumpDirectPrint() {
       Logger.log("📝 Writing processed data directly to Barcode Dictionary...");
       // Insert completion message in A1, headers to row 2, data starts from row 4
       const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd MMM');
-      barcodeSheet.clearContents();
-      barcodeSheet.clearFormats();
       barcodeSheet.getRange(1, 1).setValue(`Data Export Completed on ${today}`);
-      barcodeSheet.getRange(2, 1, processedData.length, processedData[0].length).setValues(processedData);
+      // Write data in chunks to prevent timeout
+      const chunkSize = 10000; // Process 10000 rows at a time
+      const totalRows = processedData.length;
+      const numCols = processedData[0].length;
+      
+      Logger.log(`📊 Writing ${totalRows} rows in chunks of ${chunkSize}...`);
+      
+      for (let i = 0; i < totalRows; i += chunkSize) {
+        const endRow = Math.min(i + chunkSize, totalRows);
+        const chunk = processedData.slice(i, endRow);
+        const startRow = i + 2; // Data starts from row 2
+        
+        barcodeSheet.getRange(startRow, 1, chunk.length, numCols).setValues(chunk);
+        
+        const progress = Math.round((endRow / totalRows) * 100);
+        Logger.log(`📝 Written rows ${i + 1}-${endRow} (${progress}% complete)`);
+        
+        // Small delay to prevent overwhelming the API
+        if (i + chunkSize < totalRows) {
+          Utilities.sleep(100);
+        }
+      }
       barcodeSheet.setFrozenRows(2);
       Logger.log("✅ Processed data written directly to Barcode Dictionary with completion message and frozen rows.");
       // Calculate processed barcode count (pipes + 1 in each cell in column G, skipping header)
@@ -437,10 +455,29 @@ function F2DataDumpDirectPrint() {
       Logger.log("📝 Writing processed data directly to Barcode Dictionary...");
       // Insert completion message in A1, headers to row 2, data starts from row 4
       const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd MMM');
-      barcodeSheet.clearContents();
-      barcodeSheet.clearFormats();
       barcodeSheet.getRange(1, 1).setValue(`Data Export Completed on ${today}`);
-      barcodeSheet.getRange(2, 1, processedData.length, processedData[0].length).setValues(processedData);
+      // Write data in chunks to prevent timeout
+      const chunkSize = 5000; // Process 5000 rows at a time
+      const totalRows = processedData.length;
+      const numCols = processedData[0].length;
+      
+      Logger.log(`📊 Writing ${totalRows} rows in chunks of ${chunkSize}...`);
+      
+      for (let i = 0; i < totalRows; i += chunkSize) {
+        const endRow = Math.min(i + chunkSize, totalRows);
+        const chunk = processedData.slice(i, endRow);
+        const startRow = i + 2; // Data starts from row 2
+        
+        barcodeSheet.getRange(startRow, 1, chunk.length, numCols).setValues(chunk);
+        
+        const progress = Math.round((endRow / totalRows) * 100);
+        Logger.log(`📝 Written rows ${i + 1}-${endRow} (${progress}% complete)`);
+        
+        // Small delay to prevent overwhelming the API
+        if (i + chunkSize < totalRows) {
+          Utilities.sleep(100);
+        }
+      }
       barcodeSheet.setFrozenRows(2);
       Logger.log("✅ Processed data written directly to Barcode Dictionary with completion message and frozen rows.");
       // Calculate processed barcode count (pipes + 1 in each cell in column G, skipping header)
