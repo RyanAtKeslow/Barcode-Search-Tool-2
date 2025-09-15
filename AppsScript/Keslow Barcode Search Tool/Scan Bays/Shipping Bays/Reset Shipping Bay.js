@@ -332,8 +332,8 @@ function saveBarcodesToCSV(csvData, jobInfo) {
  */
 function saveToSharedDrive(folderName, fileName, fileContent) {
   try {
-    // TODO: Replace with actual Shared Drive ID
-    const SHARED_DRIVE_ID = "YOUR_SHARED_DRIVE_ID_HERE";
+    // Shared Drive ID for Keslow Camera Barcode Archives
+    const SHARED_DRIVE_ID = "0AP-pLTczyY0eUk9PVA";
     
     // Find or create folder in Shared Drive
     const folders = Drive.Files.list({
