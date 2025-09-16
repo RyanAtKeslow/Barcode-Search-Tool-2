@@ -41,13 +41,19 @@ function exportGenericBay() {
   // Try to get user info with fallback logic
   let username;
   try {
+    Logger.log("🔄 Attempting to get user info from email...");
     const userInfo = fetchUserInfoFromEmail();
     username = userInfo.firstName;
+    Logger.log(`✅ Got username from fetchUserInfoFromEmail: ${username}`);
   } catch (error) {
+    Logger.log(`⚠️ fetchUserInfoFromEmail failed: ${error.toString()}`);
     try {
+      Logger.log("🔄 Attempting fallback user identification...");
       const { nickname } = fetchUserEmailandNickname();
       username = nickname;
+      Logger.log(`✅ Got username from fetchUserEmailandNickname: ${username}`);
     } catch (error) {
+      Logger.log(`❌ Both user identification methods failed: ${error.toString()}`);
       SpreadsheetApp.getUi().alert("Could not identify user. Please ensure you are logged in with your company email.");
       return;
     }
@@ -138,19 +144,37 @@ function continueExportGenericBay(selectedCellA1) {
   var csvContent = barcodes.join("\n");
 
   // Get current timestamp
-  var timeZone = "America/Los_Angeles";
-  var date = Utilities.formatDate(new Date(), timeZone, "MM-dd-yy_HH-mm");
+  var date = getConsistentTimestamp();
 
   // Define file name
   var fileName = date + "_" + userName + "_Barcodes.csv";
 
-  // Get or create the "CSV Exports" folder
-  var rootFolder = DriveApp.getRootFolder();
-  var folderIterator = rootFolder.getFoldersByName("CSV Exports");
-  var csvFolder = folderIterator.hasNext() ? folderIterator.next() : rootFolder.createFolder("CSV Exports");
+  // Save to Shared Drive
+  Logger.log("🔄 Starting Shared Drive save...");
+  saveToSharedDrive('CSV Exports', fileName, csvContent);
+  Logger.log("✅ Shared Drive save completed");
+  
+  // Also save to user's personal Drive as backup
+  Logger.log("🔄 Starting personal Drive save...");
+  try {
+    var rootFolder = DriveApp.getRootFolder();
+    Logger.log("✅ Got root folder");
+    
+    var folderIterator = rootFolder.getFoldersByName("CSV Exports");
+    Logger.log("✅ Got folder iterator");
+    
+    var csvFolder = folderIterator.hasNext() ? folderIterator.next() : rootFolder.createFolder("CSV Exports");
+    Logger.log(`✅ Got/created CSV folder: ${csvFolder.getName()}`);
 
-  // Create the CSV file in Drive
-  var csvFile = csvFolder.createFile(fileName, csvContent, MimeType.PLAIN_TEXT);
+    // Create the CSV file in Drive
+    Logger.log("🔄 Creating CSV file...");
+    var csvFile = csvFolder.createFile(fileName, csvContent, MimeType.PLAIN_TEXT);
+    Logger.log(`✅ CSV file created: ${csvFile.getName()} (ID: ${csvFile.getId()})`);
+  } catch (error) {
+    Logger.log(`❌ Error in personal Drive save: ${error.toString()}`);
+    Logger.log(`Error details: ${JSON.stringify(error)}`);
+    throw error; // Re-throw to see the full error
+  }
 
   // Generate the file link (standard Google Drive link)
   var fileUrl = csvFile.getUrl();
@@ -168,6 +192,8 @@ function continueExportGenericBay(selectedCellA1) {
 
   SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'CSV File Created');
 }
+
+// saveToSharedDrive function is now centralized in Data Model.js
 
 function setSelectedUsernameCell(cellA1) {
   PropertiesService.getScriptProperties().setProperty('selectedUsernameCell', cellA1);

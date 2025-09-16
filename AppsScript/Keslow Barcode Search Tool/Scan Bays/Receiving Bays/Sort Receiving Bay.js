@@ -1,7 +1,7 @@
 /**
- * Sort Shipping Bay - Shipping Bay Barcode Sorting Script
+ * Sort Receiving Bay - Receiving Bay Barcode Sorting Script
  * 
- * This script sorts barcodes in a shipping bay by their assigned bin numbers,
+ * This script sorts barcodes in a receiving bay by their assigned bin numbers,
  * organizing them alphanumerically with "No Bin" items at the bottom.
  * 
  * Step-by-step process:
@@ -33,7 +33,7 @@
  * - Multiple username match handling
  * - Real-time data validation
  */
-function sortShippingBay() {
+function sortReceivingBay() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var activeSheet = ss.getActiveSheet();
   

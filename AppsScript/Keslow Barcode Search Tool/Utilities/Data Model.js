@@ -420,4 +420,204 @@ function FetchUserEmailFromInfo(firstName) {
     email: null,
     city: null
   };
+}
+
+/**
+ * Determines the bay type based on the calling function's name
+ * @returns {string} The bay type: "Generic Bay", "Prep Bay", or "Receiving Bay"
+ */
+function determineBayType() {
+  // Get the stack trace to find the calling function
+  const stack = new Error().stack;
+  
+  // Check for specific function patterns in the stack trace
+  if (stack.includes('exportGenericBay') || stack.includes('resetGenericBay') || stack.includes('sortGenericBay') || stack.includes('printGenericBay')) {
+    return 'Generic Bay';
+  } else if (stack.includes('exportBarcodes') || stack.includes('exportBarcodesDrops') || stack.includes('shipPrepBay') || stack.includes('prepBayDropExport') || stack.includes('ShipPrepBay')) {
+    return 'Prep Bay';
+  } else if (stack.includes('exportReceivingBay') || stack.includes('resetReceivingBay') || stack.includes('sortReceivingBay') || stack.includes('printReceivingBay') || stack.includes('continueResetShippingBay')) {
+    return 'Receiving Bay';
+  } else {
+    // Default fallback - you can change this if needed
+    Logger.log(`⚠️ Could not determine bay type from stack trace, defaulting to Generic Bay`);
+    Logger.log(`Stack trace: ${stack}`);
+    return 'Generic Bay';
+  }
+}
+
+/**
+ * Generates a consistent timestamp format for all CSV files
+ * Uses ISO 8601 format with Los Angeles timezone
+ * @returns {string} Timestamp in ISO 8601 format with LA timezone (e.g., "2025-09-16T14:30-07:00")
+ */
+function getConsistentTimestamp() {
+  // Get current time in Los Angeles timezone
+  const laTimeZone = "America/Los_Angeles";
+  const now = new Date();
+  
+  // Create a date formatter for Los Angeles timezone
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: laTimeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  
+  // Format the date in LA timezone
+  const parts = formatter.formatToParts(now);
+  const year = parts.find(part => part.type === 'year').value;
+  const month = parts.find(part => part.type === 'month').value;
+  const day = parts.find(part => part.type === 'day').value;
+  const hour = parts.find(part => part.type === 'hour').value;
+  const minute = parts.find(part => part.type === 'minute').value;
+  
+  // Get timezone offset for Los Angeles
+  const laDate = new Date(now.toLocaleString("en-US", {timeZone: laTimeZone}));
+  const utcDate = new Date(now.toLocaleString("en-US", {timeZone: "UTC"}));
+  const offsetMs = laDate.getTime() - utcDate.getTime();
+  const offsetHours = Math.floor(offsetMs / (1000 * 60 * 60));
+  const offsetMinutes = Math.floor((offsetMs % (1000 * 60 * 60)) / (1000 * 60));
+  const offsetSign = offsetHours >= 0 ? '+' : '-';
+  const offsetString = `${offsetSign}${Math.abs(offsetHours).toString().padStart(2, '0')}:${offsetMinutes.toString().padStart(2, '0')}`;
+  
+  // Return ISO 8601 format with LA timezone
+  return `${year}-${month}-${day}T${hour}:${minute}${offsetString}`;
+}
+
+/**
+ * Determines the function type based on the calling function's name
+ * @returns {string} The function type: "Export", "Reset", "Sort", "Print", "Ship", "Adds", "Drops"
+ */
+function determineFunctionType() {
+  // Get the stack trace to find the calling function
+  const stack = new Error().stack;
+  
+  // Check for specific function patterns in the stack trace
+  if (stack.includes('prepBayAddExport')) {
+    return 'Adds';
+  } else if (stack.includes('prepBayDropExport')) {
+    return 'Drops';
+  } else if (stack.includes('exportGenericBay') || stack.includes('exportReceivingBay')) {
+    return 'Export';
+  } else if (stack.includes('resetGenericBay') || stack.includes('resetReceivingBay') || stack.includes('continueResetShippingBay')) {
+    return 'Reset';
+  } else if (stack.includes('sortGenericBay') || stack.includes('sortReceivingBay')) {
+    return 'Sort';
+  } else if (stack.includes('printGenericBay') || stack.includes('printReceivingBay')) {
+    return 'Print';
+  } else if (stack.includes('shipPrepBay') || stack.includes('ShipPrepBay')) {
+    return 'Ship';
+  } else {
+    // Default fallback
+    Logger.log(`⚠️ Could not determine function type from stack trace, defaulting to Export`);
+    return 'Export';
+  }
+}
+
+/**
+ * Centralized function to save files to Shared Drive
+ * This function is called by all scripts that need to save CSV files to the Shared Drive
+ * @param {string} folderName - Name of the folder in Shared Drive (deprecated - will be determined by calling function)
+ * @param {string} fileName - Name of the file to create
+ * @param {string} fileContent - Content of the file
+ */
+function saveToSharedDrive(folderName, fileName, fileContent) {
+  try {
+    // Shared Drive ID for Keslow Camera Barcode Archives
+    const SHARED_DRIVE_ID = "0AP-pLTczyY0eUk9PVA";
+    
+    // Determine bay type based on the calling function's name
+    const bayType = determineBayType();
+    const functionType = determineFunctionType();
+    const targetSubfolder = `LA CSV Archives/${bayType}`;
+    
+    // Add function type suffix to filename if not already present
+    let enhancedFileName = fileName;
+    if (!fileName.includes(`_${functionType}`)) {
+      const lastDotIndex = fileName.lastIndexOf('.');
+      if (lastDotIndex !== -1) {
+        const nameWithoutExt = fileName.substring(0, lastDotIndex);
+        const extension = fileName.substring(lastDotIndex);
+        enhancedFileName = `${nameWithoutExt}_${functionType}${extension}`;
+      } else {
+        enhancedFileName = `${fileName}_${functionType}`;
+      }
+    }
+    
+    // Ensure consistent timestamp format in filename (MM-dd-yy_HH-mm)
+    // This will standardize timestamps across all files
+    const timestampRegex = /\d{2}-\d{2}-\d{2}_\d{2}-\d{2}|\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}|\d{2}\/\d{2}\/\d{2} \d{2}:\d{2}/;
+    if (timestampRegex.test(enhancedFileName)) {
+      // Replace any existing timestamp with standardized format
+      const currentTimestamp = getConsistentTimestamp();
+      enhancedFileName = enhancedFileName.replace(timestampRegex, currentTimestamp);
+    }
+    
+    Logger.log(`🔄 Saving to Shared Drive: ${targetSubfolder}/${enhancedFileName}`);
+    Logger.log(`🔍 Using Shared Drive ID: ${SHARED_DRIVE_ID}`);
+    Logger.log(`📁 Detected bay type: ${bayType}`);
+    Logger.log(`🔧 Detected function type: ${functionType}`);
+    
+    // First, let's test if we can access the Shared Drive
+    try {
+      const driveInfo = Drive.Files.get(SHARED_DRIVE_ID, {
+        supportsAllDrives: true
+      });
+      Logger.log(`✅ Shared Drive accessible: ${driveInfo.name}`);
+    } catch (driveError) {
+      Logger.log(`❌ Cannot access Shared Drive: ${driveError.toString()}`);
+      Logger.log(`💡 Please verify the Shared Drive ID and permissions`);
+      return; // Exit early if we can't access the Shared Drive
+    }
+    
+    // Find the LA CSV Archives folder
+    const csvArchivesFolders = Drive.Files.list({
+      q: `'${SHARED_DRIVE_ID}' in parents and name='LA CSV Archives' and mimeType='application/vnd.google-apps.folder'`,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+      fields: 'files(id,name)'
+    });
+    
+    let csvArchivesFolderId;
+    if (csvArchivesFolders.files && csvArchivesFolders.files.length > 0) {
+      csvArchivesFolderId = csvArchivesFolders.files[0].id;
+      Logger.log(`✅ Found LA CSV Archives folder (ID: ${csvArchivesFolderId})`);
+    } else {
+      Logger.log(`❌ Please create a folder called "LA CSV Archives" manually in the Shared Drive first`);
+      return; // Exit if folder doesn't exist
+    }
+    
+    // Find or create the bay-specific subfolder
+    const bayFolders = Drive.Files.list({
+      q: `'${csvArchivesFolderId}' in parents and name='${bayType}' and mimeType='application/vnd.google-apps.folder'`,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+      fields: 'files(id,name)'
+    });
+    
+    let targetFolderId;
+    if (bayFolders.files && bayFolders.files.length > 0) {
+      targetFolderId = bayFolders.files[0].id;
+      Logger.log(`✅ Found existing bay folder: ${bayType} (ID: ${targetFolderId})`);
+    } else {
+      Logger.log(`❌ Please create a subfolder called "${bayType}" inside "LA CSV Archives" manually in the Shared Drive first`);
+      return; // Exit if bay folder doesn't exist
+    }
+    
+    // Create file in Shared Drive folder using DriveApp (more reliable for Shared Drives)
+    const blob = Utilities.newBlob(fileContent, 'text/csv', enhancedFileName);
+    const folder = DriveApp.getFolderById(targetFolderId);
+    const file = folder.createFile(blob);
+    
+    Logger.log(`✅ File saved to Shared Drive: ${enhancedFileName} (ID: ${file.getId()})`);
+    
+  } catch (error) {
+    Logger.log(`❌ Error saving to Shared Drive: ${error.toString()}`);
+    Logger.log(`Error details: ${JSON.stringify(error)}`);
+    // Continue execution even if Shared Drive save fails
+  }
 } 

@@ -1,7 +1,7 @@
 /**
- * Print Shipping Bay - Shipping Bay Document Generation Script
+ * Print Receiving Bay - Receiving Bay Document Generation Script
  * 
- * This script creates a formatted Google Doc with shipping bay data
+ * This script creates a formatted Google Doc with receiving bay data
  * for printing and physical record keeping.
  * 
  * Step-by-step process:
@@ -34,7 +34,7 @@
  * - Print-ready output
  * - Integration with HOMELESS GEAR tracking
  */
-function printShippingBay() {
+function printReceivingBay() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var activeSheet = ss.getActiveSheet();
   

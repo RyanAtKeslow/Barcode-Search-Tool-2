@@ -77,10 +77,10 @@ function onOpen() {
 
     // Create "Receiving" menu
     ui.createMenu('Receiving')
-    .addItem('Sort Receiving Bay', 'sortShippingBay')
-    .addItem('Print Receiving Bay', 'printShippingBay')
-    .addItem('Export Receiving Bay', 'exportShippingBay')
-    .addItem('Reset Receiving Bay', 'resetShippingBay')
+    .addItem('Sort Receiving Bay', 'sortReceivingBay')
+    .addItem('Print Receiving Bay', 'printReceivingBay')
+    .addItem('Export Receiving Bay', 'exportReceivingBay')
+    .addItem('Reset Receiving Bay', 'resetReceivingBay')
     .addToUi();
 
     // Create "Generic Bay" menu

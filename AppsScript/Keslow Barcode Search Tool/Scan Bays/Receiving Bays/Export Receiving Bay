@@ -1,7 +1,7 @@
 /**
- * Export Shipping Bay - Shipping Bay CSV Export Script
+ * Export Receiving Bay - Receiving Bay CSV Export Script
  * 
- * This script exports barcode data from shipping bays to CSV files
+ * This script exports barcode data from receiving bays to CSV files
  * for external use or backup purposes.
  * 
  * Step-by-step process:
@@ -28,7 +28,7 @@
  * 
  * Output: CSV file with format: "MM-dd-yy_HH-mm_Username_Barcodes.csv"
  */
-function exportShippingBay() {
+function exportReceivingBay() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var activeSheet = ss.getActiveSheet();
   
@@ -70,16 +70,16 @@ function exportShippingBay() {
   // Handle multiple matches
   if (usernameMatches.length > 1) {
     const selectedMatch = setSelectedMatch(usernameMatches);
-    continueExportShippingBay(selectedMatch.cellA1);
+    continueExportReceivingBay(selectedMatch.cellA1);
   } else if (usernameMatches.length === 1) {
-    continueExportShippingBay(usernameMatches[0].cellA1);
+    continueExportReceivingBay(usernameMatches[0].cellA1);
   } else {
     SpreadsheetApp.getUi().alert("Could not find your name in row 2");
     return;
   }
 }
 
-function continueExportShippingBay(selectedCellA1) {
+function continueExportReceivingBay(selectedCellA1) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var activeSheet = ss.getActiveSheet();
   var usernameCell = activeSheet.getRange(selectedCellA1);
@@ -138,13 +138,15 @@ function continueExportShippingBay(selectedCellA1) {
   var csvContent = barcodes.join("\n");
 
   // Get current timestamp
-  var timeZone = "America/Los_Angeles";
-  var date = Utilities.formatDate(new Date(), timeZone, "MM-dd-yy_HH-mm");
+  var date = getConsistentTimestamp();
 
   // Define file name
   var fileName = date + "_" + userName + "_Barcodes.csv";
 
-  // Get or create the "CSV Exports" folder
+  // Save to Shared Drive
+  saveToSharedDrive('CSV Exports', fileName, csvContent);
+  
+  // Also save to user's personal Drive as backup
   var rootFolder = DriveApp.getRootFolder();
   var folderIterator = rootFolder.getFoldersByName("CSV Exports");
   var csvFolder = folderIterator.hasNext() ? folderIterator.next() : rootFolder.createFolder("CSV Exports");
@@ -168,6 +170,8 @@ function continueExportShippingBay(selectedCellA1) {
 
   SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'CSV File Created');
 }
+
+// saveToSharedDrive function is now centralized in Data Model.js
 
 function setSelectedUsernameCell(cellA1) {
   PropertiesService.getScriptProperties().setProperty('selectedUsernameCell', cellA1);
