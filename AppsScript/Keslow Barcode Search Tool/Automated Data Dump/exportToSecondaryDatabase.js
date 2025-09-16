@@ -232,10 +232,6 @@ function runSecondaryDatabaseExport() {
     targetSheet.clearContents();
     targetSheet.clearFormats();
     
-    // Add completion timestamp
-    const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd MMM');
-    targetSheet.getRange(1, 1).setValue(`Secondary Database Export Completed on ${today}`);
-    
     // Add headers starting from row 2
     targetSheet.getRange(2, 1, 1, secondaryHeaders.length).setValues([secondaryHeaders]);
     
@@ -252,7 +248,9 @@ function runSecondaryDatabaseExport() {
       const chunk = formattedData.slice(i, endRow);
       const startRow = i + 3; // Data starts from row 3
       
+      Logger.log(`🔍 About to write chunk: rows ${i + 1}-${endRow} to sheet rows ${startRow}-${startRow + chunk.length - 1}`);
       targetSheet.getRange(startRow, 1, chunk.length, numCols).setValues(chunk);
+      Logger.log(`✅ Chunk written successfully`);
       
       const progress = Math.round((endRow / totalRows) * 100);
       Logger.log(`📝 Written rows ${i + 1}-${endRow} (${progress}% complete)`);
@@ -265,6 +263,10 @@ function runSecondaryDatabaseExport() {
     
     // Set frozen rows
     targetSheet.setFrozenRows(2);
+    
+    // Add completion timestamp as the final step
+    const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd MMM');
+    targetSheet.getRange(1, 1).setValue(`Secondary Database Export Completed on ${today}`);
     
     Logger.log(`✅ Secondary database export completed successfully. Exported ${formattedData.length} rows.`);
     
@@ -366,53 +368,6 @@ function exportToSecondaryDatabase(processedData, summaryStats) {
       };
     }
     
-    // Clear the target sheet
-    targetSheet.clearContents();
-    targetSheet.clearFormats();
-    
-    // Add completion timestamp
-    const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd MMM');
-    targetSheet.getRange(1, 1).setValue(`Secondary Database Export Completed on ${today}`);
-    
-    // Add headers starting from row 2
-    targetSheet.getRange(2, 1, 1, secondaryHeaders.length).setValues([secondaryHeaders]);
-    
-    // Write the formatted data starting from row 3
-    // Write the formatted data in chunks to prevent timeout
-    const chunkSize = 25000; // Process 25000 rows at a time
-    const totalRows = formattedData.length;
-    const numCols = formattedData[0].length;
-    
-    Logger.log(`📊 Writing ${totalRows} rows in chunks of ${chunkSize}...`);
-    
-    for (let i = 0; i < totalRows; i += chunkSize) {
-      const endRow = Math.min(i + chunkSize, totalRows);
-      const chunk = formattedData.slice(i, endRow);
-      const startRow = i + 3; // Data starts from row 3
-      
-      targetSheet.getRange(startRow, 1, chunk.length, numCols).setValues(chunk);
-      
-      const progress = Math.round((endRow / totalRows) * 100);
-      Logger.log(`📝 Written rows ${i + 1}-${endRow} (${progress}% complete)`);
-      
-      // Small delay to prevent overwhelming the API
-      if (i + chunkSize < totalRows) {
-        Utilities.sleep(200); // Slightly longer delay for larger chunks
-      }
-    }
-    
-    // Set frozen rows
-    targetSheet.setFrozenRows(2);
-    
-    Logger.log(`✅ Secondary database export completed successfully. Exported ${formattedData.length} rows.`);
-    
-    return {
-      success: true,
-      message: "Secondary database export completed",
-      rowsExported: formattedData.length,
-      targetSheet: targetSheetName,
-      targetSpreadsheet: targetSpreadsheet.getName()
-    };
     
   } catch (error) {
     Logger.log(`❌ Error in secondary database export: ${error.toString()}`);
