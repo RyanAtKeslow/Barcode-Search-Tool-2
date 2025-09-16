@@ -180,7 +180,10 @@ function prepBayDropExport() {
     // Create filename with timestamp and prep bay number
     const filename = `${cellValue}_${timestamp}_drops_Bay${prepBayNumberForExport}.csv`;
     
-    // Create CSV file in Drive
+    // Save to Shared Drive
+    saveToSharedDrive('Prep Bay Scans', filename, csvContent);
+    
+    // Also save to user's personal Drive as backup
     const file = DriveApp.createFile(filename, csvContent, MimeType.CSV);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
@@ -426,6 +429,49 @@ function afterExportComplete() {
     throw error;
   }
 } 
+
+/**
+ * Helper function to save files to Shared Drive
+ * @param {string} folderName - Name of the folder in Shared Drive
+ * @param {string} fileName - Name of the file to create
+ * @param {string} fileContent - Content of the file
+ */
+function saveToSharedDrive(folderName, fileName, fileContent) {
+  try {
+    // Shared Drive ID for Keslow Camera Barcode Archives
+    const SHARED_DRIVE_ID = "0AP-pLTczyY0eUk9PVA";
+    
+    // Find or create folder in Shared Drive
+    const folders = Drive.Files.list({
+      q: `'${SHARED_DRIVE_ID}' in parents and title='${folderName}' and mimeType='application/vnd.google-apps.folder'`
+    });
+    
+    let targetFolderId;
+    if (folders.items && folders.items.length > 0) {
+      targetFolderId = folders.items[0].id;
+    } else {
+      // Create folder in Shared Drive
+      const newFolder = Drive.Files.insert({
+        title: folderName,
+        parents: [{id: SHARED_DRIVE_ID}],
+        mimeType: 'application/vnd.google-apps.folder'
+      });
+      targetFolderId = newFolder.id;
+    }
+    
+    // Create file in Shared Drive folder
+    Drive.Files.insert({
+      title: fileName,
+      parents: [{id: targetFolderId}],
+      mimeType: 'text/csv'
+    }, Utilities.newBlob(fileContent, 'text/csv'));
+    
+    Logger.log(`✅ File saved to Shared Drive: ${fileName}`);
+  } catch (error) {
+    Logger.log(`❌ Error saving to Shared Drive: ${error.toString()}`);
+    // Continue execution even if Shared Drive save fails
+  }
+}
 
 function checkForDuplicates(sheet, addColumn, dropColumn) {
   try {
