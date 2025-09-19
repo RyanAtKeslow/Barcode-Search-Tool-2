@@ -273,7 +273,7 @@ function runSecondaryDatabaseExport() {
     // Send completion email
     try {
       MailApp.sendEmail({
-        to: "Owen@keslowcamera.com, ryan@keslowcamera.com",
+        to: "Tom@keslowcamera.com, ryan@keslowcamera.com",
         subject: "✅ Secondary Database Export Completed",
         body: `Secondary database export completed successfully.\n\n` +
           `Source: Barcode Dictionary sheet\n` +
@@ -300,7 +300,7 @@ function runSecondaryDatabaseExport() {
     // Send error email
     try {
       MailApp.sendEmail({
-        to: "Owen@keslowcamera.com, ryan@keslowcamera.com",
+        to: "Tom@keslowcamera.com, ryan@keslowcamera.com",
         subject: "❌ Secondary Database Export Failed",
         body: `Secondary database export failed with error:\n\n${error.toString()}\n\nPlease check the logs for more details.`
       });
