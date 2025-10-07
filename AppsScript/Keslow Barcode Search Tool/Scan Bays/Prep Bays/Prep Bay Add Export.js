@@ -20,7 +20,7 @@
  * 13. Displays download link and success message
  * 14. Highlights exported barcodes in light green
  * 15. Adds export tag with timestamp
- * 16. Sends status update to database with "Pulled" status
+ * 16. Sends status update to database with "Serviced" status
  * 
  * Duplicate Detection:
  * - Compares barcodes between add and drop columns
@@ -249,10 +249,10 @@ function prepBayAddExport() {
     // Get job name from username cell value
     const jobName = cellValue.toString().trim();
     
-    // Send digital cameras to database with Pulled status
+    // Send digital cameras to database with Serviced status
     // Pass the filtered barcodes array, username, and job name
     const barcodesArray = Array.from(new Set(filteredData.map(row => row[0])));
-    SendStatus("Pulled", barcodesArray, username, jobName, userEmail);
+    SendStatus("Serviced", barcodesArray, username, jobName, userEmail);
     
   } catch (error) {
     Logger.log(`❌ Error in prepBayAddExport: ${error.toString()}`);
@@ -262,7 +262,7 @@ function prepBayAddExport() {
 }
 
 /**
- * Callback after user clicks download link. Re-runs SendStatus to ensure Pulled status is recorded
+ * Callback after user clicks download link. Re-runs SendStatus to ensure Serviced status is recorded
  * even if the initial call failed (rare), and handles multi-prep-bay username selection.
  */
 function afterExportComplete() {
@@ -302,7 +302,7 @@ function afterExportComplete() {
       .map(r => r[0])
       .filter(b => b && !b.toString().includes('Above was exported @'));
     const uniqueBarcodes = Array.from(new Set(barcodes));
-    SendStatus('Pulled', uniqueBarcodes, username, jobName, userEmail);
+    SendStatus('Serviced', uniqueBarcodes, username, jobName, userEmail);
 
   } catch (error) {
     Logger.log(`❌ Error in afterExportComplete: ${error.toString()}`);

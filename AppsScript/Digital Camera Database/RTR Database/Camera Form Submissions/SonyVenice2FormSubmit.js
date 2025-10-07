@@ -125,12 +125,12 @@ function SonyVenice2FormSubmit(e) {
       if (normalizedStatus === "ready to rent") {
         newRow[Venice2DatabaseCOLS.STATUS - 1] = "RTR";
       } else if (normalizedStatus === "serviced for order") {
-        newRow[Venice2DatabaseCOLS.STATUS - 1] = "Pulled";
+        newRow[Venice2DatabaseCOLS.STATUS - 1] = "Serviced";
       } else if (normalizedStatus === "reserve body") {
         newRow[Venice2DatabaseCOLS.STATUS - 1] = "Reserve";
       } else if (normalizedStatus.includes("other")) {
         newRow[Venice2DatabaseCOLS.STATUS - 1] = "UNKNOWN";
-      } else if (status && ["RTR", "Shipped", "Returned", "Pulled", "UNKNOWN", "Repair", "Reserve"].includes(status)) {
+      } else if (status && ["RTR", "Shipped", "Returned", "Serviced", "UNKNOWN", "Repair", "Reserve"].includes(status)) {
         newRow[Venice2DatabaseCOLS.STATUS - 1] = status;
       }
       
@@ -338,8 +338,8 @@ function SonyVenice2FormSubmit(e) {
     dbSheet.getRange(targetRow, Venice2DatabaseCOLS.STATUS).setValue("RTR");  // RTR Status
     console.log(`✅ Set status to "RTR" for row ${targetRow}`);
   } else if (normalizedStatus === "serviced for order") {
-    dbSheet.getRange(targetRow, Venice2DatabaseCOLS.STATUS).setValue("Pulled");  // Status must be one of: RTR, Shipped, Returned, Pulled, UNKNOWN, Repair
-    console.log(`✅ Set status to "Pulled" for row ${targetRow} (converted from "Serviced For Order")`);
+    dbSheet.getRange(targetRow, Venice2DatabaseCOLS.STATUS).setValue("Serviced");  // Status must be one of: RTR, Shipped, Returned, Serviced, UNKNOWN, Repair
+    console.log(`✅ Set status to "Serviced" for row ${targetRow} (converted from "Serviced For Order")`);
   } else if (normalizedStatus === "reserve body") {
     dbSheet.getRange(targetRow, Venice2DatabaseCOLS.STATUS).setValue("Reserve");  // Status
     console.log(`✅ Set status to "Reserve" for row ${targetRow} (converted from "Reserve Body")`);
@@ -348,7 +348,7 @@ function SonyVenice2FormSubmit(e) {
     console.log(`✅ Set status to "UNKNOWN" for row ${targetRow} (converted from "${status}")`);
   } else if (status) {
     // Only set status if it matches one of the allowed values
-    const allowedStatuses = ["RTR", "Shipped", "Returned", "Pulled", "UNKNOWN", "Repair", "Reserve"];
+    const allowedStatuses = ["RTR", "Shipped", "Returned", "Serviced", "UNKNOWN", "Repair", "Reserve"];
     if (allowedStatuses.includes(status)) {
       dbSheet.getRange(targetRow, Venice2DatabaseCOLS.STATUS).setValue(status);
       console.log(`✅ Set status to "${status}" for row ${targetRow}`);

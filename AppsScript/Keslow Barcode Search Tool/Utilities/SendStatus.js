@@ -5,7 +5,7 @@
  * to an external database with location tracking and validation.
  * 
  * Step-by-step process:
- * 1. Validates input status against allowed values (Shipped, Returned, Pulled)
+ * 1. Validates input status against allowed values (Shipped, Returned, Serviced)
  * 2. Normalizes barcodes by removing pipes and trimming whitespace
  * 3. Builds cached lookup map for Digital Cameras from Barcode Dictionary
  * 4. Filters input barcodes to only include Digital Cameras
@@ -76,7 +76,7 @@ const IncomingCOLS = {
 const VALID_STATUSES = {
   SHIPPED: "Shipped",
   RETURNED: "Returned",
-  PULLED: "Pulled"
+  SERVICED: "Serviced"
 };
 
 /**
@@ -246,8 +246,8 @@ function ReturnedStatusSending() {
 }
 
 /**
- * Sends digital cameras with "Pulled" status
+ * Sends digital cameras with "Serviced" status
  */
-function PulledStatusSending() {
-  SendStatus(VALID_STATUSES.PULLED);
+function ServicedStatusSending() {
+  SendStatus(VALID_STATUSES.SERVICED);
 } 

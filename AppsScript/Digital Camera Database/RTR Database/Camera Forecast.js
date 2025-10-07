@@ -1023,8 +1023,8 @@ function getCameraForecast() {
                   statusResult = '';
                 } else {
                   statusResult = status || 'No Service Status Found';
-                  // Set green background for RTR or Pulled status
-                  if (status === 'RTR' || status === 'Pulled') {
+                  // Set green background for RTR or Serviced status
+                  if (status === 'RTR' || status === 'Serviced') {
                     statusBackground = '#66ff75'; // Green background
                   }
                 }
