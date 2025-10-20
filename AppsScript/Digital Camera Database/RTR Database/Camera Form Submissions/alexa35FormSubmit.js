@@ -135,7 +135,7 @@ function alexa35FormSubmit(e) {
                        `The camera has been added to the database at row ${targetRow}.`;
       
       MailApp.sendEmail({
-        to: "owen@keslowcamera.com, ryan@keslowcamera.com, chad@keslowcamera.com",
+        to: "ryan@keslowcamera.com, chad@keslowcamera.com",
         subject: emailSubject,
         body: emailBody
       });
