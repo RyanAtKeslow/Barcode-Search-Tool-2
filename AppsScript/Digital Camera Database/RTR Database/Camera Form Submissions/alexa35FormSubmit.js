@@ -24,6 +24,8 @@ const Alexa35ResponseCOLS = {
   MOUNT: 4,          // Column E - Mount Type
   VISUAL: 8,         // Column I - Visual
   FIRMWARE: 9,       // Column J - Firmware Version
+  HOURS: 10,         // Column K - Camera Operating Hours
+  BATTERY: 13,       // Column N - On-Board Battery Plate Type
   STATUS: 17,        // Column R - Status
   NOTES: 18,         // Column S - Notes
   PL_BARCODE: 19,    // Column T - PL Barcode
