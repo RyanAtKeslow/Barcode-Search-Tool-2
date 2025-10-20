@@ -97,6 +97,10 @@ function alexa35FormSubmit(e) {
       newRow[Alexa35DatabaseCOLS.Camera_Mount - 1] = formData[Alexa35ResponseCOLS.LPL_BARCODE] || ' ';
       newRow[Alexa35DatabaseCOLS.Mount_Adaptor - 1] = formData[Alexa35ResponseCOLS.PL_BARCODE] || ' ';
       
+      // Add HOURS and BATTERY data from form
+      newRow[Alexa35DatabaseCOLS.HOURS - 1] = formData[Alexa35ResponseCOLS.HOURS] || '';
+      newRow[Alexa35DatabaseCOLS.BATTERY - 1] = formData[Alexa35ResponseCOLS.BATTERY] || '';
+      
       // Set status based on form data
       const status = formData[Alexa35ResponseCOLS.STATUS];
       const normalizedStatus = status ? status.trim().toLowerCase() : "";
@@ -255,4 +259,16 @@ function alexa35FormSubmit(e) {
   const mountAdaptor = formData[Alexa35ResponseCOLS.PL_BARCODE] || ' ';
   dbSheet.getRange(targetRow, Alexa35DatabaseCOLS.Mount_Adaptor).setValue(mountAdaptor);
   console.log(`✅ Updated Mount Adaptor to '${mountAdaptor}' for row ${targetRow}`);
+
+  // Update HOURS - Camera Operating Hours
+  if (formData[Alexa35ResponseCOLS.HOURS]) {
+    dbSheet.getRange(targetRow, Alexa35DatabaseCOLS.HOURS).setValue(formData[Alexa35ResponseCOLS.HOURS]);
+    console.log(`✅ Updated HOURS to '${formData[Alexa35ResponseCOLS.HOURS]}' for row ${targetRow}`);
+  }
+
+  // Update BATTERY - On-Board Battery Plate Type
+  if (formData[Alexa35ResponseCOLS.BATTERY]) {
+    dbSheet.getRange(targetRow, Alexa35DatabaseCOLS.BATTERY).setValue(formData[Alexa35ResponseCOLS.BATTERY]);
+    console.log(`✅ Updated BATTERY to '${formData[Alexa35ResponseCOLS.BATTERY]}' for row ${targetRow}`);
+  }
 } 
