@@ -57,6 +57,13 @@ function getCameraForecast() {
   Logger.log('Today\'s date: ' + formattedDate);
   Logger.log('Current year: ' + today.getFullYear());
 
+  // Refresh AI:AM section (Prep Bay Block - today, tomorrow, day after tomorrow) before continuing
+  try {
+    prepBayBlock();
+  } catch (err) {
+    Logger.log('Error executing prepBayBlock: ' + err);
+  }
+  
   // Refresh AJ:AM section (tomorrow-prep) before continuing
   try {
     tomorrowDoubleCheck();
@@ -1184,4 +1191,198 @@ function getCameraForecast() {
   // Duplicate removal now handled before column swap above
 
 
+}
+
+/**
+ * prepBayBlock
+ * Scans Prep Bay Assignment sheets for today, tomorrow, and day after tomorrow
+ * and writes them (with date header) to columns AI:AM of the 'LA Camera Forecast' sheet.
+ * Column AI1 contains today's date in "Thurs 11/6" format.
+ */
+function prepBayBlock() {
+  // --- Date helpers ---
+  const today = new Date();
+  const dayPrefixes = ['Sun', 'Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat'];
+  const expectedSheetName = (dateObj) => `${dayPrefixes[dateObj.getDay()]} ${dateObj.getMonth()+1}/${dateObj.getDate()}`;
+  
+  // Calculate next business day (skip weekends)
+  function getNextBusinessDay(date) {
+    const nextDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    
+    if (dayOfWeek === 5) { // Friday
+      nextDay.setDate(date.getDate() + 3); // Skip to Monday
+    } else if (dayOfWeek === 6) { // Saturday
+      nextDay.setDate(date.getDate() + 2); // Skip to Monday
+    } else if (dayOfWeek === 0) { // Sunday
+      nextDay.setDate(date.getDate() + 1); // Skip to Monday
+    } else { // Monday-Thursday
+      nextDay.setDate(date.getDate() + 1); // Next day
+    }
+    
+    return nextDay;
+  }
+  
+  // Calculate day after tomorrow (2 business days from today)
+  function getDayAfterTomorrow(date) {
+    const tomorrow = getNextBusinessDay(date);
+    return getNextBusinessDay(tomorrow);
+  }
+  
+  const tomorrow = getNextBusinessDay(today);
+  const dayAfterTomorrow = getDayAfterTomorrow(today);
+
+  // --- Small helpers ---
+  const normalizeString = (str) => String(str || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const normalizeOrder = (val) => String(val || '').replace(/[^0-9]/g, '');
+
+  // --- Open Prep Bay workbook ---
+  const prepBaySS = SpreadsheetApp.openById('1erp3GVvekFXUVzC4OJsTrLBgqL4d0s-HillOwyJZOTQ');
+  const visibleSheets = prepBaySS.getSheets().filter(sh => !sh.isSheetHidden());
+
+  // Locate today, tomorrow, and day after tomorrow sheets
+  const todaySheetName = expectedSheetName(today);
+  const tomorrowSheetName = expectedSheetName(tomorrow);
+  const dayAfterTomorrowSheetName = expectedSheetName(dayAfterTomorrow);
+  
+  const todaySheet = visibleSheets.find(sh => sh.getName() === todaySheetName);
+  const tomorrowSheet = visibleSheets.find(sh => sh.getName() === tomorrowSheetName);
+  const dayAfterTomorrowSheet = visibleSheets.find(sh => sh.getName() === dayAfterTomorrowSheetName);
+
+  // Collect jobs for each day
+  const todayJobs = [];
+  const tomorrowJobs = [];
+  const dayAfterTomorrowJobs = [];
+  const addedEntries = new Set(); // Track complete entries to prevent duplicates
+
+  // Process today's sheet
+  if (todaySheet) {
+    const rows = todaySheet.getRange('B:J').getValues();
+    rows.forEach(r => {
+      const jobName = r[0];
+      const orderNum = normalizeOrder(r[1]);
+      const cameraInfo = r[3]; // Column E (was F before column D deletion)
+      const note = r[7]; // Column I (was J before column D deletion)
+      
+      if (!jobName && !orderNum) return; // blank row
+      
+      const lowerName = normalizeString(jobName);
+      const entryKey = `${lowerName}-${orderNum}-${normalizeString(cameraInfo)}`;
+      
+      // Skip wrap out jobs and duplicates
+      if (!lowerName.includes('wrap out') && !addedEntries.has(entryKey)) {
+        todayJobs.push([jobName, orderNum, cameraInfo, note]);
+        addedEntries.add(entryKey);
+      }
+    });
+    Logger.log(`Prep Bay Block: collected ${todayJobs.length} jobs from today (${todaySheetName}).`);
+  } else {
+    Logger.log(`Prep Bay Block: today's sheet "${todaySheetName}" not found.`);
+  }
+
+  // Process tomorrow's sheet
+  if (tomorrowSheet) {
+    const rows = tomorrowSheet.getRange('B:J').getValues();
+    rows.forEach(r => {
+      const jobName = r[0];
+      const orderNum = normalizeOrder(r[1]);
+      const cameraInfo = r[3]; // Column E (was F before column D deletion)
+      const note = r[7]; // Column I (was J before column D deletion)
+      
+      if (!jobName && !orderNum) return; // blank row
+      
+      const lowerName = normalizeString(jobName);
+      const entryKey = `${lowerName}-${orderNum}-${normalizeString(cameraInfo)}`;
+      
+      // Skip wrap out jobs and duplicates
+      if (!lowerName.includes('wrap out') && !addedEntries.has(entryKey)) {
+        tomorrowJobs.push([jobName, orderNum, cameraInfo, note]);
+        addedEntries.add(entryKey);
+      }
+    });
+    Logger.log(`Prep Bay Block: collected ${tomorrowJobs.length} jobs from tomorrow (${tomorrowSheetName}).`);
+  } else {
+    Logger.log(`Prep Bay Block: tomorrow's sheet "${tomorrowSheetName}" not found.`);
+  }
+
+  // Process day after tomorrow's sheet
+  if (dayAfterTomorrowSheet) {
+    const rows = dayAfterTomorrowSheet.getRange('B:J').getValues();
+    rows.forEach(r => {
+      const jobName = r[0];
+      const orderNum = normalizeOrder(r[1]);
+      const cameraInfo = r[3]; // Column E (was F before column D deletion)
+      const note = r[7]; // Column I (was J before column D deletion)
+      
+      if (!jobName && !orderNum) return; // blank row
+      
+      const lowerName = normalizeString(jobName);
+      const entryKey = `${lowerName}-${orderNum}-${normalizeString(cameraInfo)}`;
+      
+      // Skip wrap out jobs and duplicates
+      if (!lowerName.includes('wrap out') && !addedEntries.has(entryKey)) {
+        dayAfterTomorrowJobs.push([jobName, orderNum, cameraInfo, note]);
+        addedEntries.add(entryKey);
+      }
+    });
+    Logger.log(`Prep Bay Block: collected ${dayAfterTomorrowJobs.length} jobs from day after tomorrow (${dayAfterTomorrowSheetName}).`);
+  } else {
+    Logger.log(`Prep Bay Block: day after tomorrow's sheet "${dayAfterTomorrowSheetName}" not found.`);
+  }
+
+  // --- Write to LA Camera Forecast sheet (AI:AM) ---
+  const forecastSpreadsheetId = '1FYA76P4B7vFUCDmxDwc6Ly6-tm7F6f5c5v0eNYjgwKw';
+  const forecastSpreadsheet = SpreadsheetApp.openById(forecastSpreadsheetId);
+  const forecastSheet = forecastSpreadsheet.getSheetByName('LA Camera Forecast');
+  
+  if (!forecastSheet) {
+    Logger.log('Prep Bay Block: LA Camera Forecast sheet not found.');
+    return;
+  }
+
+  // Write date header to AI1 (row 1, column 35)
+  const dateHeader = `${dayPrefixes[today.getDay()]} ${today.getMonth() + 1}/${today.getDate()}`;
+  forecastSheet.getRange(1, 35, 1, 1).setValue(dateHeader).setFontWeight('bold');
+  Logger.log(`Prep Bay Block: wrote date header "${dateHeader}" to AI1.`);
+
+  // Clear block (AI:AM, columns 35-39)
+  const maxRows = forecastSheet.getMaxRows();
+  forecastSheet.getRange(2, 35, maxRows - 1, 5).clearContent().clearFormat();
+
+  // Write headers to row 1 (AJ-AM, columns 36-39)
+  forecastSheet.getRange(1, 36, 1, 4).setValues([['Job Name', 'Order #', 'Camera Info', 'Notes']]).setFontWeight('bold');
+
+  // Combine all jobs: today, then tomorrow, then day after tomorrow
+  const allJobs = [];
+
+  // Write today's jobs with date label in column AI
+  if (todayJobs.length > 0) {
+    todayJobs.forEach(job => {
+      allJobs.push([dateHeader, ...job]); // Date in AI, then job data in AJ-AM
+    });
+  }
+
+  // Write tomorrow's jobs with date label in column AI
+  const tomorrowDateHeader = `${dayPrefixes[tomorrow.getDay()]} ${tomorrow.getMonth() + 1}/${tomorrow.getDate()}`;
+  if (tomorrowJobs.length > 0) {
+    tomorrowJobs.forEach(job => {
+      allJobs.push([tomorrowDateHeader, ...job]); // Date in AI, then job data in AJ-AM
+    });
+  }
+
+  // Write day after tomorrow's jobs with date label in column AI
+  const dayAfterTomorrowDateHeader = `${dayPrefixes[dayAfterTomorrow.getDay()]} ${dayAfterTomorrow.getMonth() + 1}/${dayAfterTomorrow.getDate()}`;
+  if (dayAfterTomorrowJobs.length > 0) {
+    dayAfterTomorrowJobs.forEach(job => {
+      allJobs.push([dayAfterTomorrowDateHeader, ...job]); // Date in AI, then job data in AJ-AM
+    });
+  }
+
+  // Write all jobs to sheet
+  if (allJobs.length > 0) {
+    forecastSheet.getRange(2, 35, allJobs.length, 5).setValues(allJobs);
+  }
+
+  // Log summary
+  Logger.log(`Prep Bay Block: wrote ${todayJobs.length} today jobs, ${tomorrowJobs.length} tomorrow jobs, ${dayAfterTomorrowJobs.length} day after tomorrow jobs to AI:AM.`);
 } 
