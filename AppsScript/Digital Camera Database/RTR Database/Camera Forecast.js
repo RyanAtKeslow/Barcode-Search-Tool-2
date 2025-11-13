@@ -182,8 +182,49 @@ function getCameraForecast() {
       }
 
       if (jobName && orderNumber) {
-        jobDateMap[jobName] = { date: jobDate, orderNumber };
-        prepBayCount++;
+        // Keep the earliest date if job appears on multiple sheets
+        const existingEntry = jobDateMap[jobName];
+        if (!existingEntry) {
+          // First time seeing this job - add it
+          jobDateMap[jobName] = { date: jobDate, orderNumber };
+          prepBayCount++;
+        } else {
+          // Job already exists - keep the earlier date
+          const existingDate = existingEntry.date;
+          if (existingDate && jobDate) {
+            // Parse both dates and compare
+            const parseDate = (dateStr) => {
+              if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+                const [m, d, y] = dateStr.split('/').map(Number);
+                return new Date(y, m - 1, d);
+              } else if (dateStr.match(/^\d{1,2}\/\d{1,2}$/)) {
+                const [m, d] = dateStr.split('/').map(Number);
+                const dt = new Date(today.getFullYear(), m - 1, d);
+                if (dt < today) dt.setFullYear(today.getFullYear() + 1);
+                return dt;
+              }
+              return null;
+            };
+            const existingDateObj = parseDate(existingDate);
+            const newDateObj = parseDate(jobDate);
+            if (existingDateObj && newDateObj) {
+              // Keep the earlier date
+              if (newDateObj < existingDateObj) {
+                jobDateMap[jobName] = { date: jobDate, orderNumber };
+                Logger.log(`Updated jobDateMap for "${jobName}": kept earlier date ${jobDate} (was ${existingDate})`);
+              } else {
+                Logger.log(`Skipped jobDateMap update for "${jobName}": existing date ${existingDate} is earlier than ${jobDate}`);
+              }
+            } else {
+              // If parsing fails, keep existing
+              Logger.log(`Date parsing failed for "${jobName}": existing="${existingDate}", new="${jobDate}"`);
+            }
+          } else if (jobDate && !existingDate) {
+            // New entry has date but existing doesn't - update
+            jobDateMap[jobName] = { date: jobDate, orderNumber };
+          }
+          // If existing has date but new doesn't, keep existing (no change needed)
+        }
       }
     }
   }
