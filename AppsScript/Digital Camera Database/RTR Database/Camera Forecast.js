@@ -1340,45 +1340,70 @@ function prepBayBlock() {
     return;
   }
 
-  // Write date header to AI1 (row 1, column 35)
-  const dateHeader = `${dayPrefixes[today.getDay()]} ${today.getMonth() + 1}/${today.getDate()}`;
-  forecastSheet.getRange(1, 35, 1, 1).setValue(dateHeader).setFontWeight('bold');
-  Logger.log(`Prep Bay Block: wrote date header "${dateHeader}" to AI1.`);
-
-  // Clear block (AI:AM, columns 35-39)
+  // Clear block (AI:AM, columns 35-39) starting from row 1
   const maxRows = forecastSheet.getMaxRows();
-  forecastSheet.getRange(2, 35, maxRows - 1, 5).clearContent().clearFormat();
+  forecastSheet.getRange(1, 35, maxRows, 5).clearContent().clearFormat();
 
-  // Write headers to row 1 (AJ-AM, columns 36-39)
+  // Write headers to row 1 (AI1 blank, AJ-AM have headers)
   forecastSheet.getRange(1, 36, 1, 4).setValues([['Job Name', 'Order #', 'Camera Info', 'Notes']]).setFontWeight('bold');
+  // AI1 should remain blank (header row)
 
-  // Combine all jobs: today, then tomorrow, then day after tomorrow
+  // Build output rows with proper date grouping and spacing
   const allJobs = [];
 
-  // Write today's jobs with date label in column AI
-  if (todayJobs.length > 0) {
-    todayJobs.forEach(job => {
-      allJobs.push([dateHeader, ...job]); // Date in AI, then job data in AJ-AM
-    });
-  }
-
-  // Write tomorrow's jobs with date label in column AI
+  // Date headers
+  const dateHeader = `${dayPrefixes[today.getDay()]} ${today.getMonth() + 1}/${today.getDate()}`;
   const tomorrowDateHeader = `${dayPrefixes[tomorrow.getDay()]} ${tomorrow.getMonth() + 1}/${tomorrow.getDate()}`;
-  if (tomorrowJobs.length > 0) {
-    tomorrowJobs.forEach(job => {
-      allJobs.push([tomorrowDateHeader, ...job]); // Date in AI, then job data in AJ-AM
-    });
-  }
-
-  // Write day after tomorrow's jobs with date label in column AI
   const dayAfterTomorrowDateHeader = `${dayPrefixes[dayAfterTomorrow.getDay()]} ${dayAfterTomorrow.getMonth() + 1}/${dayAfterTomorrow.getDate()}`;
+
+  // Write today's jobs - date only in first row, then blank dates for rest
+  if (todayJobs.length > 0) {
+    todayJobs.forEach((job, index) => {
+      if (index === 0) {
+        // First job for today - include date
+        allJobs.push([dateHeader, ...job]);
+      } else {
+        // Subsequent jobs for today - blank date
+        allJobs.push(['', ...job]);
+      }
+    });
+    // Add blank row after today's jobs (if there are more date groups)
+    if (tomorrowJobs.length > 0 || dayAfterTomorrowJobs.length > 0) {
+      allJobs.push(['', '', '', '', '']); // Blank row
+    }
+  }
+
+  // Write tomorrow's jobs - date only in first row, then blank dates for rest
+  if (tomorrowJobs.length > 0) {
+    tomorrowJobs.forEach((job, index) => {
+      if (index === 0) {
+        // First job for tomorrow - include date
+        allJobs.push([tomorrowDateHeader, ...job]);
+      } else {
+        // Subsequent jobs for tomorrow - blank date
+        allJobs.push(['', ...job]);
+      }
+    });
+    // Add blank row after tomorrow's jobs (if there are more date groups)
+    if (dayAfterTomorrowJobs.length > 0) {
+      allJobs.push(['', '', '', '', '']); // Blank row
+    }
+  }
+
+  // Write day after tomorrow's jobs - date only in first row, then blank dates for rest
   if (dayAfterTomorrowJobs.length > 0) {
-    dayAfterTomorrowJobs.forEach(job => {
-      allJobs.push([dayAfterTomorrowDateHeader, ...job]); // Date in AI, then job data in AJ-AM
+    dayAfterTomorrowJobs.forEach((job, index) => {
+      if (index === 0) {
+        // First job for day after tomorrow - include date
+        allJobs.push([dayAfterTomorrowDateHeader, ...job]);
+      } else {
+        // Subsequent jobs for day after tomorrow - blank date
+        allJobs.push(['', ...job]);
+      }
     });
   }
 
-  // Write all jobs to sheet
+  // Write all jobs to sheet starting at row 2
   if (allJobs.length > 0) {
     forecastSheet.getRange(2, 35, allJobs.length, 5).setValues(allJobs);
   }
