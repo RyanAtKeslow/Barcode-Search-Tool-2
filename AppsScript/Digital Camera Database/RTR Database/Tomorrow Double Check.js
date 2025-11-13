@@ -126,20 +126,14 @@ function tomorrowDoubleCheck() {
   }
 
   // --- Write to LA Camera Forecast sheet (AJ:AM) ---
-  const forecastSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LA Camera Forecast');
-  if (!forecastSheet) {
-    Logger.log('tomorrowDoubleCheck: LA Camera Forecast sheet not found.');
-    return;
-  }
-
-  // Clear block
-  const maxRows = forecastSheet.getMaxRows();
-  forecastSheet.getRange(1, 36, maxRows, 4).clearContent().clearFormat();
-  // Header
-  forecastSheet.getRange(1, 36, 1, 4).setValues([['Job Name', 'Order #', 'Camera Info', 'Notes']]).setFontWeight('bold');
-  // Data
-  if (outputRows.length > 0) {
-    forecastSheet.getRange(2, 36, outputRows.length, 4).setValues(outputRows);
-  }
-  Logger.log(`tomorrowDoubleCheck: wrote ${outputRows.length} rows to AJ:AM.`);
+  // Note: prepBayBlock() already writes to AI:AM (columns 35-39), so we only need to ensure
+  // headers are set in row 1, but we should NOT overwrite the data that prepBayBlock() wrote.
+  // Since prepBayBlock() handles the full AI:AM block, tomorrowDoubleCheck() is now redundant
+  // for the main output, but we keep it for backward compatibility and any other uses.
+  // For now, we'll skip writing to avoid conflicts with prepBayBlock() output.
+  
+  Logger.log(`tomorrowDoubleCheck: ${outputRows.length} tomorrow jobs found, but output handled by prepBayBlock() to avoid conflicts.`);
+  
+  // Note: prepBayBlock() already writes tomorrow's jobs as part of its output to AI:AM
+  // so we don't need to write separately here to avoid overwriting data.
 } 
