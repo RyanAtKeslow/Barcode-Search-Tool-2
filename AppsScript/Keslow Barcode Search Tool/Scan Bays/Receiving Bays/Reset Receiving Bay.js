@@ -1,47 +1,18 @@
 /**
  * Reset Receiving Bay - Receiving Bay Reset and Data Processing Script
- * 
- * This script resets a receiving bay by processing items based on their bin status,
- * organizing them into appropriate tracking sheets, and updating analytics.
- * 
- * Step-by-step process:
- * 1. Validates that the script is run from the "Receiving Bays" sheet
- * 2. Identifies the current user using email lookup with fallback logic
- * 3. Searches for username matches in row 2 of the sheet
- * 4. Handles multiple username matches with user selection dialog
- * 5. Prompts for username if not found or empty
- * 6. Determines column positions (barcode, item, bin) relative to username
- * 7. Processes items based on bin status:
- *    - "No Bin" items → HOMELESS GEAR sheet (with quantity tracking)
- *    - "LOST/DISPOSED/INACTIVE" items → Lost & Found sheet
- * 8. Cleans item names by removing status keywords
- * 9. Extracts consigner information from item names
- * 10. Updates analytics counters for barcodes and Lost & Found items
- * 11. Sends status update to database with "Returned" status
- * 12. Saves barcode data to CSV archive
- * 13. Clears the bay data and username cell
- * 
- * Data Processing:
- * - Homeless gear: Items without assigned bins, tracked by quantity
- * - Lost & Found: Items with status keywords, includes consigner info
- * - Analytics: Updates total barcode count and Lost & Found count
- * - Archive: Saves all processed barcodes to timestamped CSV files
- * 
- * Features:
- * - Duplicate prevention in Lost & Found
- * - Quantity tracking for homeless gear
- * - Consigner extraction and default assignment
- * - Comprehensive analytics updates
- * - Data archiving and cleanup
- * - Database status updates
+ * [With Added Logging]
  */
 
 function resetReceivingBay() {
+  console.time("ResetReceivingBay_Total_Time"); // Start Timer
+  console.log("--- Starting Reset Receiving Bay Script ---");
+
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var activeSheet = ss.getActiveSheet();
   
   // Check if we're in the correct sheet
   if (activeSheet.getName() !== "Receiving Bays") {
+    console.warn("Script attempted on wrong sheet: " + activeSheet.getName());
     SpreadsheetApp.getUi().alert("Please run this script from the 'Receiving Bays' sheet");
     return;
   }
@@ -55,11 +26,15 @@ function resetReceivingBay() {
   try {
     const userInfo = fetchUserInfoFromEmail();
     userFirstName = userInfo.firstName;
+    console.log("User identified via fetchUserInfoFromEmail: " + userFirstName);
   } catch (error) {
+    console.warn("Primary user fetch failed, trying fallback...", error);
     try {
       const { nickname } = fetchUserEmailandNickname();
       userFirstName = nickname;
+      console.log("User identified via fallback (nickname): " + userFirstName);
     } catch (error) {
+      console.error("Critical Error: Could not identify user.");
       SpreadsheetApp.getUi().alert("Could not identify user. Please ensure you are logged in with your company email.");
       return;
     }
@@ -79,19 +54,26 @@ function resetReceivingBay() {
     }
   }
   
+  console.log(`Found ${usernameMatches.length} matching bays for user: ${userFirstName}`);
+
   // Handle multiple matches
   if (usernameMatches.length > 1) {
+    console.log("Multiple matches found, prompting user for selection.");
     const selectedMatch = setSelectedMatch(usernameMatches);
     continueResetShippingBay(selectedMatch.cellA1);
   } else if (usernameMatches.length === 1) {
+    console.log("Single match found. Proceeding with bay: " + usernameMatches[0].cellA1);
     continueResetShippingBay(usernameMatches[0].cellA1);
   } else {
+    console.warn("No matches found in Row 2 for user: " + userFirstName);
     SpreadsheetApp.getUi().alert("Could not find your name in row 2");
     return;
   }
 }
 
 function continueResetShippingBay(selectedCellA1) {
+  console.log(`--- Processing Bay at ${selectedCellA1} ---`);
+  
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var activeSheet = ss.getActiveSheet();
   var usernameCell = activeSheet.getRange(selectedCellA1);
@@ -100,7 +82,8 @@ function continueResetShippingBay(selectedCellA1) {
   var lostAndFoundSheet = ss.getSheetByName("Lost & Found");
   var analyticsSheet = ss.getSheetByName("Analytics");
   
-  // Get existing data from Lost & Found to check for duplicates and update quantities
+  // Get existing data from Lost & Found
+  console.log("Loading existing Lost & Found data...");
   const existingData = lostAndFoundSheet.getRange("A:D").getValues();
   const existingBarcodeMap = new Map(); // Map barcode to row index
   
@@ -113,7 +96,6 @@ function continueResetShippingBay(selectedCellA1) {
   }
   
   var jobInfo = usernameCell.getValue().toString().trim();
-
   var userColumn = usernameCell.getColumn();
   var barcodeColumn = userColumn - 1;
   var binsColumn = userColumn + 1;
@@ -124,7 +106,9 @@ function continueResetShippingBay(selectedCellA1) {
     });
   }
 
+  // Job Info / Signature Logic
   if (jobInfo === "") {
+    console.log("Job Info is empty. Prompting user for signature.");
     var ui = SpreadsheetApp.getUi();
     var response = ui.prompt(
       "Please Enter Your Name",
@@ -133,6 +117,7 @@ function continueResetShippingBay(selectedCellA1) {
     );
 
     if (response.getSelectedButton() == ui.Button.CANCEL) {
+      console.log("User cancelled signature prompt.");
       ui.alert("Please sign your work to continue");
       return;
     }
@@ -140,6 +125,7 @@ function continueResetShippingBay(selectedCellA1) {
     if (response.getResponseText().trim() !== "") {
       jobInfo = capitalizeWords(response.getResponseText().trim());
       usernameCell.setValue(jobInfo);
+      console.log("User signed as: " + jobInfo);
     } else {
       ui.alert("You must sign your work to continue");
       return;
@@ -147,32 +133,38 @@ function continueResetShippingBay(selectedCellA1) {
   } else {
     jobInfo = capitalizeWords(jobInfo);
     usernameCell.setValue(jobInfo);
+    console.log("Job Info present: " + jobInfo);
   }
 
+  // Reading Bay Data
   var range = activeSheet.getRange(4, binsColumn, activeSheet.getLastRow() - 3, 1);
   var values = range.getValues();
+  console.log(`Scanning ${values.length} rows in the bay.`);
 
   var columnBValues = homelessGearSheet.getRange("B:B").getValues();
-  var existingItems = new Set(columnBValues.flat().filter(String)); // Store existing items for quick lookup
+  var existingItems = new Set(columnBValues.flat().filter(String));
 
   var barcodes = activeSheet.getRange(4, barcodeColumn, values.length, 1).getValues();
   var itemNames = activeSheet.getRange(4, userColumn, values.length, 1).getValues();
 
   var itemCounts = {};
   var lostAndFoundItems = [];
-  var quantityUpdates = []; // Track quantity updates for existing items
+  var quantityUpdates = [];
   var csvData = [];
   const keywordsRegex = /\b(?:Disposed|Repair|Lost|Inactive|Sale|Pending QC)\b(?=\s*\||$)/i;
 
+  // --- Main Processing Loop ---
+  console.time("Processing_Loop");
   for (var i = 0; i < values.length; i++) {
     var binStatus = values[i][0];
     var itemName = itemNames[i][0];
     var barcode = barcodes[i][0];
 
+    // Homeless Gear Logic
     if (
       binStatus === "No Bin" &&
       itemName !== "Item Not Found" &&
-      !/case|pelican/i.test(itemName) // Skip items with "case" or "pelican"
+      !/case|pelican/i.test(itemName)
     ) {
       if (!existingItems.has(itemName)) {
         if (!itemCounts[itemName]) {
@@ -180,39 +172,34 @@ function continueResetShippingBay(selectedCellA1) {
         }
         itemCounts[itemName].count += 1;
       }
-    } else if (["LOST", "DISPOSED", "INACTIVE"].includes(binStatus)) {
+    } 
+    // Lost/Disposed Logic
+    else if (["LOST", "DISPOSED", "INACTIVE"].includes(binStatus)) {
       var statusText = binStatus.charAt(0) + binStatus.slice(1).toLowerCase();
 
-      // Remove unwanted keywords in one pass (loop eliminated)
       itemName = itemName.replace(keywordsRegex, "").replace(/\s+\|/, "|").trim();
 
       var consigner = "";
       if (itemName.includes("|")) {
         var parts = itemName.split("|");
-        itemName = parts[0].trim(); // Keep the item name before the pipe
-        consigner = parts[1].trim(); // Store the consigner
+        itemName = parts[0].trim();
+        consigner = parts[1].trim();
       } else {
         itemName = itemName.trim();
-        consigner = ""; // still empty initially
+        consigner = "";
       }
 
-      // Clean up dangling pipes or extra spaces
       itemName = itemName.replace(/\|\s*$/, "").trim();
 
-      // Set default consigner if none specified
       if (!itemName.includes("|") && consigner === "") {
         consigner = "Keslow";
       }
 
-      // Clean up dangling pipes or extra spaces again
       itemName = itemName.replace(/\|\s*$/, "").trim();
 
-      // Check if barcode already exists in Lost & Found
       if (existingBarcodeMap.has(barcode.toString())) {
         const rowIndex = existingBarcodeMap.get(barcode.toString());
-        // Only process if it's a valid row number (not "pending")
         if (typeof rowIndex === 'number') {
-          // Increment quantity for existing item
           const currentQuantity = lostAndFoundSheet.getRange(rowIndex, 4).getValue() || 0;
           quantityUpdates.push({
             row: rowIndex,
@@ -220,16 +207,14 @@ function continueResetShippingBay(selectedCellA1) {
             jobInfo: jobInfo
           });
         } else {
-          // This is a "pending" item from this batch, increment its quantity in the pending items
+          // Pending item logic
           const pendingIndex = lostAndFoundItems.findIndex(item => item[0] === barcode.toString());
           if (pendingIndex !== -1) {
-            lostAndFoundItems[pendingIndex][3] += 1; // Increment quantity (column D)
+            lostAndFoundItems[pendingIndex][3] += 1;
           }
         }
       } else {
-        // Add new item to Lost & Found
         lostAndFoundItems.push([barcode, itemName, statusText, 1, jobInfo, "", consigner]);
-        // Add to map to track for subsequent duplicates in this batch
         existingBarcodeMap.set(barcode.toString(), "pending");
       }
     }
@@ -238,8 +223,11 @@ function continueResetShippingBay(selectedCellA1) {
       csvData.push([barcode]);
     }
   }
+  console.timeEnd("Processing_Loop");
 
-  // Append homeless gear items
+  // --- Appending Data ---
+
+  // Homeless Gear
   var dataToAppend = [];
   for (var item in itemCounts) {
     var quantity = Math.max(itemCounts[item].count, 1);
@@ -247,73 +235,86 @@ function continueResetShippingBay(selectedCellA1) {
   }
 
   if (dataToAppend.length > 0) {
+    console.log(`Appending ${dataToAppend.length} items to Homeless Gear.`);
     var lastDataRow = columnBValues.filter(row => row[0].toString().trim() !== "").length;
     var targetRange = homelessGearSheet.getRange(lastDataRow + 1, 1, dataToAppend.length, 5);
     targetRange.setValues(dataToAppend);
+  } else {
+    console.log("No new Homeless Gear items found.");
   }
 
-  // Update quantities for existing items
-  quantityUpdates.forEach(update => {
-    lostAndFoundSheet.getRange(update.row, 4).setValue(update.newQuantity);
-    lostAndFoundSheet.getRange(update.row, 5).setValue(update.jobInfo); // Overwrite column E
-  });
+  // Update quantities for existing L&F items
+  if (quantityUpdates.length > 0) {
+    console.log(`Updating quantities for ${quantityUpdates.length} existing Lost & Found items.`);
+    quantityUpdates.forEach(update => {
+      lostAndFoundSheet.getRange(update.row, 4).setValue(update.newQuantity);
+      lostAndFoundSheet.getRange(update.row, 5).setValue(update.jobInfo);
+    });
+  }
 
-  // Append lost and found items
+  // Append new Lost & Found items
   if (lostAndFoundItems.length > 0) {
+    console.log(`Appending ${lostAndFoundItems.length} NEW items to Lost & Found.`);
     var lastDataRowLF = lostAndFoundSheet.getRange("B:B").getValues().filter(row => row[0].toString().trim() !== "").length;
     var targetRangeLF = lostAndFoundSheet.getRange(lastDataRowLF + 1, 1, lostAndFoundItems.length, 7);
     targetRangeLF.setValues(lostAndFoundItems);
 
     var checkboxRange = lostAndFoundSheet.getRange(lastDataRowLF + 1, 6, lostAndFoundItems.length, 1);
     checkboxRange.insertCheckboxes();
+  } else {
+    console.log("No new Lost & Found items to append.");
   }
 
-  // Update analytics
+  // --- Update Analytics ---
   var statusCount = lostAndFoundItems.length;
-  var currentTotal = analyticsSheet.getRange("AA2").getValue() || 0;
-  var newTotal = currentTotal + statusCount;
-  analyticsSheet.getRange("AA2").setValue(newTotal);
-  // Suppress verbose logs in analytics section
-  // Logger.log(`Updated analytics: Added ${statusCount} Lost & Found items, new total is ${newTotal}`);
+  var currentTotalAA = analyticsSheet.getRange("AA2").getValue() || 0;
+  var newTotalAA = currentTotalAA + statusCount;
+  analyticsSheet.getRange("AA2").setValue(newTotalAA);
+  console.log(`Analytics updated (AA2): Added ${statusCount} L&F items. New Total: ${newTotalAA}`);
 
-  // Count unique barcodes and update Z2
   var uniqueBarcodes = new Set(barcodes.flat().filter(String)).size;
-  var currentTotal = analyticsSheet.getRange("Z2").getValue() || 0;
-  var newTotal = currentTotal + uniqueBarcodes;
-  analyticsSheet.getRange("Z2").setValue(newTotal);
-  Logger.log(`Reset Shipping Bay complete. Lost & Found added: ${statusCount}, Barcodes processed: ${uniqueBarcodes}.`);
+  var currentTotalZ = analyticsSheet.getRange("Z2").getValue() || 0;
+  var newTotalZ = currentTotalZ + uniqueBarcodes;
+  analyticsSheet.getRange("Z2").setValue(newTotalZ);
+  console.log(`Analytics updated (Z2): Added ${uniqueBarcodes} unique barcodes. New Total: ${newTotalZ}`);
 
-  // Save barcodes to CSV and clear content
+  // --- CSV & DB Updates ---
+  console.log("Initiating CSV Archive...");
   saveBarcodesToCSV(csvData, jobInfo);
+  console.log("CSV Archive complete.");
 
-  // Get username from email (for the SendStatus function)
   const { email: userEmail, nickname: username } = fetchUserEmailandNickname();
-
-  // Send status "Returned" to incoming data sheet
-  // Pass all barcodes, username, and job info
+  
   const allBarcodes = Array.from(new Set(barcodes.map(row => row[0]).filter(barcode => barcode && !barcode.toString().includes("Above was exported @"))));
-  // Comment out detailed SendStatus debug logs
-  // Logger.log('=== About to call SendStatus ===');
-  // Logger.log('Current Script ID: ' + ScriptApp.getScriptId());
-  // Logger.log('Number of barcodes to process: ' + allBarcodes.length);
-  // Logger.log('Username: ' + username);
-  // Logger.log('Job Info: ' + jobInfo);
+  
+  // Re-enabled logging for SendStatus preparation
+  console.log('=== Preparing SendStatus ===');
+  console.log('Barcodes to process: ' + allBarcodes.length);
+  console.log('Username: ' + username);
+  console.log('Job Info: ' + jobInfo);
+  
   SendStatus("Returned", allBarcodes, username, jobInfo, userEmail);
+  console.log("SendStatus function called.");
 
+  // --- Cleanup ---
+  console.log("Clearing Bay content...");
   activeSheet.getRange(4, barcodeColumn, activeSheet.getLastRow() - 3, 1).clearContent();
   usernameCell.clearContent();
+  
+  console.log("--- Reset Receiving Bay Complete ---");
+  console.timeEnd("ResetReceivingBay_Total_Time"); // End Timer
 }
 
 /**
  * Saves the barcodes to a CSV file in the Shared Drive "Barcode Bay Archives" folder
- * @param {Array} csvData - Array of barcode data to save
- * @param {string} jobInfo - Job info from cell B2 for the filename
  */
 function saveBarcodesToCSV(csvData, jobInfo) {
   var folderName = "Barcode Bay Archives";
-  var timestamp = getConsistentTimestamp();
-  var fileName = timestamp + "_" + jobInfo + ".csv";
+  var timestamp = new Date().toISOString().replace("T", " ").split(".")[0];
+  var fileName = timestamp + " " + jobInfo + ".csv";
   var csvContent = csvData.map(row => row.join(",")).join("\n");
+
+  console.log(`Saving CSV: ${fileName}`);
 
   // Save to Shared Drive
   saveToSharedDrive(folderName, fileName, csvContent);
@@ -328,4 +329,5 @@ function saveBarcodesToCSV(csvData, jobInfo) {
 
 function setSelectedUsernameCell(cellA1) {
   PropertiesService.getScriptProperties().setProperty('selectedUsernameCell', cellA1);
-} 
+  console.log("Selected username cell stored: " + cellA1);
+}
