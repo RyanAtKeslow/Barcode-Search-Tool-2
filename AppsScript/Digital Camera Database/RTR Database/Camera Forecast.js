@@ -242,16 +242,17 @@ function getCameraForecast() {
     return cameraType;
   }
 
-  // Function to detect if a job starts with a two-letter city abbreviation 
+  // Function to detect if a job starts with a city abbreviation 
   // (excluding "LA" which is the local market)
+  // Handles 2-4 letter city codes like "AT", "VN", "NOLA", "ABQ", etc.
   function hasOutOfTownPrefix(jobString) {
     if (!jobString || typeof jobString !== 'string') return false;
     
     const jobUpper = jobString.toString().toUpperCase();
-    // Match jobs that start with a two-letter abbreviation followed by a space
-    // Examples: "AT xxxxx job name", "NY xxxxx job name", "VN xxxxx job name"
+    // Match jobs that start with 2-4 capital letters followed by a space
+    // Examples: "AT xxxxx", "VN xxxxx", "NOLA xxxxx", "ABQ xxxxx"
     // BUT exclude "LA " since that's the local market, not out-of-town
-    const outOfTownPattern = /^[A-Z]{2}\s/;
+    const outOfTownPattern = /^[A-Z]{2,4}\s/;
     if (!outOfTownPattern.test(jobUpper)) return false;
     
     // Exclude "LA" - it's the local market, not out-of-town
