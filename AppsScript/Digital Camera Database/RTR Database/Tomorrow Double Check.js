@@ -9,7 +9,76 @@ function tomorrowDoubleCheck() {
   const dayPrefixes = [ 'Sun', 'Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat' ];
   const expectedSheetName = (dateObj) => `${dayPrefixes[dateObj.getDay()]} ${dateObj.getMonth()+1}/${dateObj.getDate()}`;
   
-  // Calculate next business day (skip weekends)
+  // ============================================================================
+  // Company Holidays Checker (same as in Camera Forecast.js)
+  // Company observes: New Year's Day, Memorial Day, Independence Day, Labor Day,
+  // Thanksgiving Day, Day after Thanksgiving, Christmas Day, and all days between
+  // Christmas and New Year's Day (Christmas week closure)
+  // ============================================================================
+  function isUSFederalHoliday(date) {
+    const year = date.getFullYear();
+    const month = date.getMonth(); // 0-based (0 = January)
+    const day = date.getDate();
+    const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
+    
+    // Helper to get nth occurrence of a weekday in a month
+    function getNthWeekday(year, month, weekday, n) {
+      const firstDay = new Date(year, month, 1);
+      const firstWeekday = firstDay.getDay();
+      let date = 1 + (weekday - firstWeekday + 7) % 7;
+      date += (n - 1) * 7;
+      return new Date(year, month, date);
+    }
+    
+    // Helper to get last occurrence of a weekday in a month
+    function getLastWeekday(year, month, weekday) {
+      const lastDay = new Date(year, month + 1, 0); // Last day of month
+      const lastWeekday = lastDay.getDay();
+      let date = lastDay.getDate() - ((lastWeekday - weekday + 7) % 7);
+      return new Date(year, month, date);
+    }
+    
+    // New Year's Day (Jan 1, observed on Friday if Saturday, Monday if Sunday)
+    if (month === 0 && day === 1) return true;
+    if (month === 0 && day === 2 && dayOfWeek === 1) return true; // Observed Monday if Jan 1 is Sunday
+    if (month === 11 && day === 31 && dayOfWeek === 5) return true; // Observed Friday if Jan 1 is Saturday
+    
+    // Memorial Day (last Monday in May)
+    const memorialDay = getLastWeekday(year, 4, 1); // May = month 4
+    if (month === memorialDay.getMonth() && day === memorialDay.getDate()) return true;
+    
+    // Independence Day (July 4, observed on Friday if Saturday, Monday if Sunday)
+    if (month === 6 && day === 4) return true;
+    if (month === 6 && day === 3 && dayOfWeek === 5) return true; // Observed Friday if July 4 is Saturday
+    if (month === 6 && day === 5 && dayOfWeek === 1) return true; // Observed Monday if July 4 is Sunday
+    
+    // Labor Day (1st Monday in September)
+    const laborDay = getNthWeekday(year, 8, 1, 1); // September = month 8
+    if (month === laborDay.getMonth() && day === laborDay.getDate()) return true;
+    
+    // Thanksgiving (4th Thursday in November)
+    const thanksgiving = getNthWeekday(year, 10, 4, 4); // November = month 10, Thursday = 4
+    if (month === thanksgiving.getMonth() && day === thanksgiving.getDate()) return true;
+    
+    // Day after Thanksgiving (Friday after Thanksgiving) - Company holiday
+    const dayAfterThanksgiving = new Date(thanksgiving);
+    dayAfterThanksgiving.setDate(dayAfterThanksgiving.getDate() + 1);
+    if (month === dayAfterThanksgiving.getMonth() && day === dayAfterThanksgiving.getDate()) return true;
+    
+    // Christmas (December 25, observed on Friday if Saturday, Monday if Sunday)
+    if (month === 11 && day === 25) return true;
+    if (month === 11 && day === 24 && dayOfWeek === 5) return true; // Observed Friday if Dec 25 is Saturday
+    if (month === 11 && day === 26 && dayOfWeek === 1) return true; // Observed Monday if Dec 25 is Sunday
+    
+    // Christmas week closure: All days between Christmas and New Year's Day
+    // This includes Dec 26, 27, 28, 29, 30, 31 (and Jan 1 is already handled above)
+    if (month === 11 && day >= 26 && day <= 31) return true; // Dec 26-31
+    // Note: Jan 1 is already handled above, so we don't need to check it again here
+    
+    return false;
+  }
+  
+  // Calculate next business day (skip weekends and US Federal Holidays)
   function getNextBusinessDay(date) {
     const nextDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
@@ -22,6 +91,11 @@ function tomorrowDoubleCheck() {
       nextDay.setDate(date.getDate() + 1); // Skip to Monday
     } else { // Monday-Thursday
       nextDay.setDate(date.getDate() + 1); // Next day
+    }
+    
+    // Skip holidays (keep advancing until we find a non-holiday, non-weekend day)
+    while (isUSFederalHoliday(nextDay) || nextDay.getDay() === 0 || nextDay.getDay() === 6) {
+      nextDay.setDate(nextDay.getDate() + 1);
     }
     
     return nextDay;
