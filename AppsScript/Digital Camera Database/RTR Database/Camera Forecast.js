@@ -568,6 +568,46 @@ function getCameraForecast() {
     // Only scan next 7 days if today cell background is in the valid list
     if (validTodayCellBackgrounds.includes(backgrounds[0])) {
       let foundColor = null;
+      
+      // Check today's column (i=0) for gear transfers FROM LA
+      // This is important because GT jobs scheduled for today should be included
+      const todayVal = values[0];
+      if (todayVal && typeof todayVal === 'string' && todayVal !== '' &&
+          !todayVal.toLowerCase().includes('reserve') &&
+          !todayVal.toLowerCase().includes('repair') &&
+          !todayVal.toLowerCase().includes('in progress') &&
+          !todayVal.toLowerCase().includes('rtr')) {
+        const isGTFromLAToday = isGearTransferFromLA(todayVal);
+        if (isGTFromLAToday) {
+          // Gear transfer FROM LA scheduled for today - include it
+          Logger.log(`Camera "${cameraBarcode}" INCLUDED in forecast - gear transfer FROM LA scheduled for TODAY: "${todayVal}"`);
+          foundColor = backgrounds[0];
+          // Use today's date
+          const todayDate = new Date(dateHeaders[0]);
+          const offsetDate = new Date(todayDate);
+          let offsetApplied = false;
+          if (todayDate.getDay() === 0) { // Sunday
+            offsetDate.setDate(todayDate.getDate() - 1); // Move to Saturday
+            offsetApplied = true;
+          } else if (todayDate.getDay() === 1) { // Monday
+            offsetDate.setDate(todayDate.getDate() - 2); // Move to Saturday
+            offsetApplied = true;
+          }
+          const offsetDateStr = `${offsetDate.getMonth() + 1}/${offsetDate.getDate()}/${offsetDate.getFullYear()}`;
+          Logger.log(`Regular forecast: Adding camera Type="${camera.type}" Barcode="${cameraBarcode}" TodayPlus="Today" Job="${todayVal}" Date="${offsetApplied ? offsetDateStr : dateHeaders[0]}"`);
+          outputRows.push([
+            camera.type,
+            cameraBarcode,
+            'Today',
+            todayVal,
+            offsetApplied ? offsetDateStr : dateHeaders[0]
+          ]);
+          rowColorMap[cameraBarcode] = foundColor;
+          outputBackgrounds.push(['', '', '', foundColor, '']);
+          continue; // Skip to next camera since we found today's GT
+        }
+      }
+      
       for (let i = 1; i < numCols; i++) { // skip today (i=0), only look at Day +1 to Day +7
         const val = values[i];
         if (
