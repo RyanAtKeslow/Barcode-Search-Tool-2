@@ -283,18 +283,25 @@ function continueResetShippingBay(selectedCellA1) {
   saveBarcodesToCSV(csvData, jobInfo);
   console.log("CSV Archive complete.");
 
-  const { email: userEmail, nickname: username } = fetchUserEmailandNickname();
-  
-  const allBarcodes = Array.from(new Set(barcodes.map(row => row[0]).filter(barcode => barcode && !barcode.toString().includes("Above was exported @"))));
-  
-  // Re-enabled logging for SendStatus preparation
-  console.log('=== Preparing SendStatus ===');
-  console.log('Barcodes to process: ' + allBarcodes.length);
-  console.log('Username: ' + username);
-  console.log('Job Info: ' + jobInfo);
-  
-  SendStatus("Returned", allBarcodes, username, jobInfo, userEmail);
-  console.log("SendStatus function called.");
+  // ============================================================================
+  // COMMENTED OUT: Camera Status "Returned" Update Functionality
+  // This code previously updated camera status to "Returned" when barcodes were
+  // scanned in the receiving bay. Commented out for potential future reference.
+  // To re-enable: uncomment the lines below (remove the // from each line)
+  // ============================================================================
+  // const { email: userEmail, nickname: username } = fetchUserEmailandNickname();
+  // 
+  // const allBarcodes = Array.from(new Set(barcodes.map(row => row[0]).filter(barcode => barcode && !barcode.toString().includes("Above was exported @"))));
+  // 
+  // // Re-enabled logging for SendStatus preparation
+  // console.log('=== Preparing SendStatus ===');
+  // console.log('Barcodes to process: ' + allBarcodes.length);
+  // console.log('Username: ' + username);
+  // console.log('Job Info: ' + jobInfo);
+  // 
+  // SendStatus("Returned", allBarcodes, username, jobInfo, userEmail);
+  // console.log("SendStatus function called.");
+  // ============================================================================
 
   // --- Cleanup ---
   console.log("Clearing Bay content...");
