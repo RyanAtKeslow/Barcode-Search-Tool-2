@@ -252,6 +252,18 @@ function getCameraForecast() {
     return outOfTownPattern.test(jobString.toString().toUpperCase());
   }
 
+  // Function to check if a job text contains a gear transfer FROM LA
+  // Examples: "LA -> AT", "LA>VN", "GT LA -> NY", etc.
+  function isGearTransferFromLA(jobString) {
+    if (!jobString || typeof jobString !== 'string') return false;
+    
+    const jobUpper = jobString.toString().toUpperCase();
+    // Match patterns like "LA ->", "LA>", "GT LA ->", etc.
+    // This indicates equipment is being transferred FROM LA to another location
+    const gtFromLAPattern = /\bLA\s*-?>\s*\w+/;
+    return gtFromLAPattern.test(jobUpper);
+  }
+
   // Function to check if a colored segment ends with "returns to LA" or similar
   function checkForReturnToLA(rowValues, rowBackgrounds, startCol, maxCols) {
     if (!rowValues || !rowBackgrounds || startCol < 0) return false;
@@ -564,22 +576,21 @@ function getCameraForecast() {
           if (isOutOfTownJob) {
             Logger.log(`Out-of-town job detected for LA camera "${cameraBarcode}": "${val}"`);
             
-            // Get the full row data for this camera to check for return to LA
-            const fullRowValues = data[camera.row - 1];
-            const fullRowBackgrounds = cameraSheet.getRange(camera.row, 1, 1, fullRowValues.length).getBackgrounds()[0];
+            // Check if this is a gear transfer FROM LA (e.g., "LA -> AT", "LA>VN")
+            const isGTFromLA = isGearTransferFromLA(val);
             
-            // Check if the colored segment contains "returns to LA" or similar
-            const hasReturnToLA = checkForReturnToLA(fullRowValues, fullRowBackgrounds, startCol + i - 1, fullRowValues.length);
-            
-            if (hasReturnToLA) {
-              shouldSkipCamera = true;
-              Logger.log(`Camera "${cameraBarcode}" EXCLUDED from forecast - out-of-town job with return to LA (will leave LA): "${val}"`);
+            if (isGTFromLA) {
+              // Gear transfer FROM LA - include it (LA is handling the transfer)
+              Logger.log(`Camera "${cameraBarcode}" INCLUDED in forecast - gear transfer FROM LA: "${val}"`);
             } else {
-              Logger.log(`Camera "${cameraBarcode}" INCLUDED in forecast - out-of-town job without return to LA (stays in LA): "${val}"`);
+              // Out-of-town job that's NOT a gear transfer FROM LA - exclude it
+              // This job is for another market (VN, NOLA, AT, etc.), not LA
+              shouldSkipCamera = true;
+              Logger.log(`Camera "${cameraBarcode}" EXCLUDED from forecast - out-of-town job for another market (not LA): "${val}"`);
             }
           }
           
-          // Skip this camera if it's an out-of-town job with return to LA
+          // Skip this camera if it's an out-of-town job for another market
           if (shouldSkipCamera) {
             break;
           }
@@ -724,18 +735,21 @@ function getCameraForecast() {
               if (isOutOfTownJob) {
                 Logger.log(`    Out-of-town job detected for LA camera "${cameraBarcode}": "${cellValue}"`);
                 
-                // Check if the colored segment contains "returns to LA" or similar
-                const hasReturnToLA = checkForReturnToLA(rowVals, bgRow, colIdx, rowVals.length);
+                // Check if this is a gear transfer FROM LA (e.g., "LA -> AT", "LA>VN")
+                const isGTFromLA = isGearTransferFromLA(cellValue);
                 
-                if (hasReturnToLA) {
-                  shouldSkipCamera = true;
-                  Logger.log(`    Camera "${cameraBarcode}" EXCLUDED from forecast - out-of-town job with return to LA (will leave LA): "${cellValue}"`);
+                if (isGTFromLA) {
+                  // Gear transfer FROM LA - include it (LA is handling the transfer)
+                  Logger.log(`    Camera "${cameraBarcode}" INCLUDED in forecast - gear transfer FROM LA: "${cellValue}"`);
                 } else {
-                  Logger.log(`    Camera "${cameraBarcode}" INCLUDED in forecast - out-of-town job without return to LA (stays in LA): "${cellValue}"`);
+                  // Out-of-town job that's NOT a gear transfer FROM LA - exclude it
+                  // This job is for another market (VN, NOLA, AT, etc.), not LA
+                  shouldSkipCamera = true;
+                  Logger.log(`    Camera "${cameraBarcode}" EXCLUDED from forecast - out-of-town job for another market (not LA): "${cellValue}"`);
                 }
               }
               
-              // Skip this camera if it's an out-of-town job with return to LA
+              // Skip this camera if it's an out-of-town job for another market
               if (shouldSkipCamera) {
                 break;
               }
