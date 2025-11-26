@@ -243,13 +243,19 @@ function getCameraForecast() {
   }
 
   // Function to detect if a job starts with a two-letter city abbreviation 
+  // (excluding "LA" which is the local market)
   function hasOutOfTownPrefix(jobString) {
     if (!jobString || typeof jobString !== 'string') return false;
     
+    const jobUpper = jobString.toString().toUpperCase();
     // Match jobs that start with a two-letter abbreviation followed by a space
     // Examples: "AT xxxxx job name", "NY xxxxx job name", "VN xxxxx job name"
+    // BUT exclude "LA " since that's the local market, not out-of-town
     const outOfTownPattern = /^[A-Z]{2}\s/;
-    return outOfTownPattern.test(jobString.toString().toUpperCase());
+    if (!outOfTownPattern.test(jobUpper)) return false;
+    
+    // Exclude "LA" - it's the local market, not out-of-town
+    return !jobUpper.startsWith('LA ');
   }
 
   // Function to check if a job text contains a gear transfer FROM LA
