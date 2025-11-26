@@ -578,30 +578,25 @@ function getCameraForecast() {
           !val.toLowerCase().includes('in progress') &&
           !val.toLowerCase().includes('rtr')
         ) {
-          // Check if this is an out-of-town job for an LA camera
-          const isOutOfTownJob = hasOutOfTownPrefix(val);
-          let shouldSkipCamera = false;
+          // Check if this is a gear transfer FROM LA first (regardless of prefix)
+          // This must be checked before out-of-town prefix check because GT jobs
+          // may start with order numbers (e.g., "879331 GT LA -> VN")
+          const isGTFromLA = isGearTransferFromLA(val);
           
-          if (isOutOfTownJob) {
-            Logger.log(`Out-of-town job detected for LA camera "${cameraBarcode}": "${val}"`);
+          if (isGTFromLA) {
+            // Gear transfer FROM LA - include it (LA is handling the transfer)
+            Logger.log(`Camera "${cameraBarcode}" INCLUDED in forecast - gear transfer FROM LA: "${val}"`);
+          } else {
+            // Not a gear transfer FROM LA - check if it's an out-of-town job
+            const isOutOfTownJob = hasOutOfTownPrefix(val);
             
-            // Check if this is a gear transfer FROM LA (e.g., "LA -> AT", "LA>VN")
-            const isGTFromLA = isGearTransferFromLA(val);
-            
-            if (isGTFromLA) {
-              // Gear transfer FROM LA - include it (LA is handling the transfer)
-              Logger.log(`Camera "${cameraBarcode}" INCLUDED in forecast - gear transfer FROM LA: "${val}"`);
-            } else {
+            if (isOutOfTownJob) {
               // Out-of-town job that's NOT a gear transfer FROM LA - exclude it
               // This job is for another market (VN, NOLA, AT, etc.), not LA
-              shouldSkipCamera = true;
               Logger.log(`Camera "${cameraBarcode}" EXCLUDED from forecast - out-of-town job for another market (not LA): "${val}"`);
+              break; // Skip this camera
             }
-          }
-          
-          // Skip this camera if it's an out-of-town job for another market
-          if (shouldSkipCamera) {
-            break;
+            // If not out-of-town and not GT from LA, it's likely an LA job - include it
           }
           
           // Set foundColor to the background of the first valid non-empty cell
@@ -737,30 +732,25 @@ function getCameraForecast() {
               const headerCellVal = headerRow[colIdx];
               const dateStr = headerCellVal instanceof Date ? formatDate(headerCellVal) : headerCellVal;
               
-              // Check if this is an out-of-town job for an LA camera
-              const isOutOfTownJob = hasOutOfTownPrefix(cellValue);
-              let shouldSkipCamera = false;
+              // Check if this is a gear transfer FROM LA first (regardless of prefix)
+              // This must be checked before out-of-town prefix check because GT jobs
+              // may start with order numbers (e.g., "879331 GT LA -> VN")
+              const isGTFromLA = isGearTransferFromLA(cellValue);
               
-              if (isOutOfTownJob) {
-                Logger.log(`    Out-of-town job detected for LA camera "${cameraBarcode}": "${cellValue}"`);
+              if (isGTFromLA) {
+                // Gear transfer FROM LA - include it (LA is handling the transfer)
+                Logger.log(`    Camera "${cameraBarcode}" INCLUDED in forecast - gear transfer FROM LA: "${cellValue}"`);
+              } else {
+                // Not a gear transfer FROM LA - check if it's an out-of-town job
+                const isOutOfTownJob = hasOutOfTownPrefix(cellValue);
                 
-                // Check if this is a gear transfer FROM LA (e.g., "LA -> AT", "LA>VN")
-                const isGTFromLA = isGearTransferFromLA(cellValue);
-                
-                if (isGTFromLA) {
-                  // Gear transfer FROM LA - include it (LA is handling the transfer)
-                  Logger.log(`    Camera "${cameraBarcode}" INCLUDED in forecast - gear transfer FROM LA: "${cellValue}"`);
-                } else {
+                if (isOutOfTownJob) {
                   // Out-of-town job that's NOT a gear transfer FROM LA - exclude it
                   // This job is for another market (VN, NOLA, AT, etc.), not LA
-                  shouldSkipCamera = true;
                   Logger.log(`    Camera "${cameraBarcode}" EXCLUDED from forecast - out-of-town job for another market (not LA): "${cellValue}"`);
+                  break; // Skip this camera
                 }
-              }
-              
-              // Skip this camera if it's an out-of-town job for another market
-              if (shouldSkipCamera) {
-                break;
+                // If not out-of-town and not GT from LA, it's likely an LA job - include it
               }
               
               // Look for color change in next 7 days from this match
