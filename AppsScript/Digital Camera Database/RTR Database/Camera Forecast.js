@@ -465,6 +465,8 @@ function getCameraForecast() {
     'Arri Alexa EV High Speed',
     'ARRI ALEXA LF Camera Body',
     'ARRI ALEXA 35 Camera Body',
+    'ARRI ALEXA 35 Extreme Camera Body',
+    'ARRI ALEXA 35 Xtreme Camera Body',
     'ARRI ALEXA Mini Camera Body',
     'ARRI ALEXA Mini LF Camera Body',
     'RED DSMC2 5K Digital Camera w/ Gemini™ Sensor',
@@ -1038,6 +1040,8 @@ function getCameraForecast() {
       // Camera type to sheet mapping
       const cameraTypeToSheet = {
         'ARRI ALEXA 35 Camera Body': 'ALEXA 35 Body Status',
+        'ARRI ALEXA 35 Extreme Camera Body': 'ALEXA 35 Body Status',
+        'ARRI ALEXA 35 Xtreme Camera Body': 'ALEXA 35 Body Status',
         'ARRI ALEXA Mini LF Camera Body': 'Alexa Mini LF Body Status',
         'ARRI ALEXA Mini Camera Body': 'Alexa Mini Body Status',
         'SONY VENICE 2': 'VENICE 2 Body Status',
