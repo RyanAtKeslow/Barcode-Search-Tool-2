@@ -5,7 +5,7 @@
  * to the Barcode & Serial Database in Camera Service Forms spreadsheet.
  * 
  * Features:
- * - Copies data in chunks of 5,000 rows to avoid Google Sheets limitations
+ * - Copies data in chunks of 9,000 rows to avoid Google Sheets limitations
  * - Runs automatically at 6am PST, Monday through Saturday
  * - Manual refresh via custom menu "Serial Database" > "Refresh Serial Database"
  * - Writes timestamp message in A1 after successful copy
@@ -22,7 +22,7 @@ const DESTINATION_SPREADSHEET_ID = '1FYA76P4B7vFUCDmxDwc6Ly6-tm7F6f5c5v0eNYjgwKw
 const DESTINATION_SHEET_GID = '157146526';
 
 // Copy configuration
-const CHUNK_SIZE = 5000; // Copy in chunks of 5,000 rows
+const CHUNK_SIZE = 9000; // Copy in chunks of 9,000 rows
 const SOURCE_RANGE = 'A2:I500000'; // Source range (A2:I500,000)
 const DESTINATION_START_ROW = 2; // Start writing at row 2 (row 1 is for timestamp)
 
