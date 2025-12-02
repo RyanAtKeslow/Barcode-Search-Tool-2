@@ -136,31 +136,24 @@ function copySerialDatabase() {
   }
 }
 
-/**
- * Creates custom menu "Serial Database" with "Refresh Serial Database" option
- * This runs when the spreadsheet is opened
- */
+// NOTE: onOpen() has been moved to Custom Script Menu (RTR Database).js to consolidate all menus
+// and avoid conflicts. This function is commented out but kept for reference.
+/*
 function onOpen(e) {
   createSerialDatabaseMenu_();
 }
 
-/**
- * Creates custom menu when add-on is installed
- */
 function onInstall(e) {
   onOpen(e);
 }
 
-/**
- * Builds the custom menu and attaches it to the active spreadsheet UI
- * Uses '_' suffix to avoid accidental exposure as a menu item
- */
 function createSerialDatabaseMenu_() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('Serial Database')
     .addItem('Refresh Serial Database', 'copySerialDatabase')
     .addToUi();
 }
+*/
 
 /**
  * Sets up time-driven trigger to run copySerialDatabase at 6am PST, Monday through Saturday
