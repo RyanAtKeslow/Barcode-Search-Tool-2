@@ -949,4 +949,3 @@ function getProcessedFilesSummary() {
     Logger.log(`    - ${fileName}`);
   });
 }
-
