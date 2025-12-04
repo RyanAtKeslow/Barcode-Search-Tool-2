@@ -2,11 +2,9 @@
 
 ## Menu Integration
 
-The F2 Import menu needs to be added to the existing Custom Script Menu. 
+The F2 Import menu has been integrated directly into `Custom Script Menu (RTR Database).js`. 
 
-### Option 1: Add to Existing Menu Script (Recommended)
-
-In `Custom Script Menu (RTR Database).js`, add the F2 Import menu by calling `addF2ImportMenu(ui)`:
+The menu is now part of the main menu file:
 
 ```javascript
 function onOpen(e) {
@@ -22,27 +20,24 @@ function onOpen(e) {
     .addItem('Generate Forecast', 'getCameraForecast')
     .addToUi();
   
-  // Add F2 Import menu
-  addF2ImportMenu(ui);
+  // Create F2 Import menu
+  ui.createMenu('F2 Import')
+    .addItem('Process Imports', 'processF2Imports')
+    .addSeparator()
+    .addItem('View Processed Files', 'getProcessedFilesSummary')
+    .addItem('Reset Processed Files List', 'resetProcessedFilesList')
+    .addToUi();
 }
 ```
-
-### Option 2: Standalone Menu (If you prefer separate)
-
-If you want the F2 Import menu to be completely separate, you can use the `onOpen()` function directly in `Custom Menu.js`, but you'll need to rename it to avoid conflicts, or use a different approach.
 
 ## Files Required
 
 Make sure these files are in your Apps Script project:
 
 1. `Process F2 Import.js` - Main processing script
-2. `Custom Menu.js` - Menu function (call `addF2ImportMenu(ui)` from existing menu)
+2. `Custom Script Menu (RTR Database).js` - Updated with F2 Import menu (already integrated)
 
-## Setup Steps
-
-1. Copy `Process F2 Import.js` into your Apps Script project
-2. Copy the `addF2ImportMenu()` function from `Custom Menu.js` into your existing menu script, OR
-3. Add `addF2ImportMenu(ui);` call to your existing `onOpen()` function in `Custom Script Menu (RTR Database).js`
+**Note:** `Custom Menu.js` is no longer needed - the menu has been integrated directly into the main menu file.
 
 ## Testing
 

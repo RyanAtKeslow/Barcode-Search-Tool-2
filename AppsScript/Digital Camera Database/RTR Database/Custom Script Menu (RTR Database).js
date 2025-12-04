@@ -14,4 +14,12 @@ function onOpen(e) {
   ui.createMenu('Camera Forecast')
     .addItem('Generate Forecast', 'getCameraForecast')
     .addToUi();
+  
+  // Create F2 Import menu
+  ui.createMenu('F2 Import')
+    .addItem('Process Imports', 'processF2Imports')
+    .addSeparator()
+    .addItem('View Processed Files', 'getProcessedFilesSummary')
+    .addItem('Reset Processed Files List', 'resetProcessedFilesList')
+    .addToUi();
 } 
