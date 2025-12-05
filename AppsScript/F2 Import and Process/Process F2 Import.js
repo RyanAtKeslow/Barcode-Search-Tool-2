@@ -934,12 +934,3 @@ function markFileAsProcessed(fileName) {
   }
 }
 
-/**
- * Resets the processed files list (for testing/debugging)
- */
-function resetProcessedFilesList() {
-  const properties = PropertiesService.getScriptProperties();
-  properties.deleteProperty('F2_IMPORT_PROCESSED_FILES');
-  Logger.log("🔄 Processed files list has been reset");
-}
-

@@ -18,8 +18,6 @@ function onOpen(e) {
   // Create F2 Import menu
   ui.createMenu('F2 Import')
     .addItem('Process Imports', 'processF2Imports')
-    .addSeparator()
-    .addItem('Reset Processed Files List', 'resetProcessedFilesList')
     .addToUi();
   
   // Create Custom Menu ESC (commented out)
