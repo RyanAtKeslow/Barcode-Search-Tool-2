@@ -19,7 +19,7 @@
 
 // Configuration
 const F2_IMPORT_FOLDER_ID = '1nUy7lWNr1BVCAxyLsnFASCTszQpjgEnd';
-const FILE_NAME_PATTERN = /^Service \d{4}-\d{2}-\d{2} at \d{1,2}\.\d{2}\.\d{2} (AM|PM)\.xlsx$/i;
+const FILE_NAME_PATTERN = /^Service \d{4}-\d{2}-\d{2} at \d{1,2}\.\d{2}(\.\d{2})? (AM|PM)\.xlsx$/i;
 
 // Spreadsheet IDs
 const F2_DESTINATION_SPREADSHEET_ID = '1FYA76P4B7vFUCDmxDwc6Ly6-tm7F6f5c5v0eNYjgwKw';
@@ -45,6 +45,10 @@ function processF2Imports() {
     Logger.log("📁 Accessing F2 Import folder...");
     const folder = DriveApp.getFolderById(F2_IMPORT_FOLDER_ID);
     Logger.log(`✅ Folder accessed: ${folder.getName()}`);
+    
+    // Step 1.5: Clean up already-processed files
+    Logger.log("🧹 Cleaning up already-processed files...");
+    cleanupProcessedFiles(folder);
     
     // Step 2: Find unprocessed Excel files
     Logger.log("🔍 Searching for unprocessed Excel files...");
@@ -93,6 +97,80 @@ function processF2Imports() {
     Logger.log(`❌ Error in processF2Imports: ${error.toString()}`);
     Logger.log(`Stack trace: ${error.stack}`);
     throw error;
+  }
+}
+
+/**
+ * Cleans up already-processed files by moving them to Processed folder
+ * or deleting them if they're already in Processed
+ * @param {GoogleAppsScript.Drive.Folder} folder - The main F2 Import folder
+ */
+function cleanupProcessedFiles(folder) {
+  try {
+    const processedFiles = getProcessedFilesList();
+    
+    // Get or create Processed subfolder
+    let processedFolder = null;
+    const folders = folder.getFoldersByName('Processed');
+    if (folders.hasNext()) {
+      processedFolder = folders.next();
+    } else {
+      processedFolder = folder.createFolder('Processed');
+      Logger.log("📁 Created 'Processed' subfolder");
+    }
+    
+    // Get all Excel files in the main folder
+    const files = folder.getFilesByType(MimeType.MICROSOFT_EXCEL);
+    let movedCount = 0;
+    let deletedCount = 0;
+    
+    while (files.hasNext()) {
+      const file = files.next();
+      const fileName = file.getName();
+      
+      // Only process files that match the naming pattern
+      if (!FILE_NAME_PATTERN.test(fileName)) {
+        continue;
+      }
+      
+      // Check if file has already been processed
+      if (processedFiles.has(fileName)) {
+        // Check if a file with the same name already exists in Processed folder
+        const processedFilesWithSameName = processedFolder.getFilesByName(fileName);
+        let duplicateExists = false;
+        
+        while (processedFilesWithSameName.hasNext()) {
+          const existingFile = processedFilesWithSameName.next();
+          // Check if it's an Excel file (same type)
+          if (existingFile.getMimeType() === MimeType.MICROSOFT_EXCEL) {
+            duplicateExists = true;
+            break;
+          }
+        }
+        
+        if (duplicateExists) {
+          // File already exists in Processed folder, delete the duplicate from main folder
+          Logger.log(`🗑️ Duplicate file found in Processed folder, removing from main folder: ${fileName}`);
+          file.setTrashed(true);
+          deletedCount++;
+        } else {
+          // File is in main folder but already processed, move it to Processed
+          Logger.log(`📦 Moving already-processed file to Processed folder: ${fileName}`);
+          file.moveTo(processedFolder);
+          movedCount++;
+        }
+      }
+    }
+    
+    if (movedCount > 0 || deletedCount > 0) {
+      Logger.log(`✅ Cleanup complete: ${movedCount} file(s) moved, ${deletedCount} duplicate(s) removed`);
+    } else {
+      Logger.log(`✅ No cleanup needed`);
+    }
+    
+  } catch (error) {
+    Logger.log(`❌ Error during cleanup: ${error.toString()}`);
+    // Don't throw - continue with processing even if cleanup fails
   }
 }
 
