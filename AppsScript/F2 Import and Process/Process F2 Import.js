@@ -22,7 +22,7 @@ const F2_IMPORT_FOLDER_ID = '1nUy7lWNr1BVCAxyLsnFASCTszQpjgEnd';
 const FILE_NAME_PATTERN = /^Service \d{4}-\d{2}-\d{2} at \d{1,2}\.\d{2}\.\d{2} (AM|PM)\.xlsx$/i;
 
 // Spreadsheet IDs
-const F2_F2_DESTINATION_SPREADSHEET_ID = '1FYA76P4B7vFUCDmxDwc6Ly6-tm7F6f5c5v0eNYjgwKw';
+const F2_DESTINATION_SPREADSHEET_ID = '1FYA76P4B7vFUCDmxDwc6Ly6-tm7F6f5c5v0eNYjgwKw';
 const EQUIPMENT_SCHEDULING_CHART_ID = '1uECRfnLO1LoDaGZaHTHS3EaUdf8tte5kiR6JNWAeOiw';
 const PREP_BAY_SPREADSHEET_ID = '1erp3GVvekFXUVzC4OJsTrLBgqL4d0s-HillOwyJZOTQ';
 
@@ -250,6 +250,11 @@ function processF2File(file, folder, serialNumberMap, schedulingData, prepBayDat
  */
 function convertExcelToSheets(file) {
   try {
+    // Check if Drive API is available
+    if (typeof Drive === 'undefined') {
+      throw new Error('Drive API v2 is not enabled. Please enable it in Apps Script: Extensions > Apps Script > Services > + Add Service > Google Drive API v2');
+    }
+    
     // Initial wait before conversion for large files
     if (file.getSize() > 1000000) { // If file is larger than 1MB
       Logger.log("⏳ Large file detected, waiting 10 seconds before conversion...");
