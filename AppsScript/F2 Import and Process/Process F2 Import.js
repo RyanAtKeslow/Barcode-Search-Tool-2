@@ -943,14 +943,3 @@ function resetProcessedFilesList() {
   Logger.log("🔄 Processed files list has been reset");
 }
 
-/**
- * Gets a summary of processed files
- */
-function getProcessedFilesSummary() {
-  const processedFiles = getProcessedFilesList();
-  Logger.log(`\n📋 Processed Files Summary:`);
-  Logger.log(`  Total processed: ${processedFiles.size}`);
-  Array.from(processedFiles).sort().forEach(fileName => {
-    Logger.log(`    - ${fileName}`);
-  });
-}
