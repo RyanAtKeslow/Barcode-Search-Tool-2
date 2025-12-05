@@ -23,9 +23,9 @@ function onOpen(e) {
     .addItem('Reset Processed Files List', 'resetProcessedFilesList')
     .addToUi();
   
-  // Create Custom Menu ESC
-  ui.createMenu('Custom Menu ESC')
-    .addItem('Find Available Lens', 'findAvailableLens')
-    .addItem('Find Available Cameras', 'findAvailableCameras')
-    .addToUi();
+  // Create Custom Menu ESC (commented out)
+  // ui.createMenu('Custom Menu ESC')
+  //   .addItem('Find Available Lens', 'findAvailableLens')
+  //   .addItem('Find Available Cameras', 'findAvailableCameras')
+  //   .addToUi();
 } 

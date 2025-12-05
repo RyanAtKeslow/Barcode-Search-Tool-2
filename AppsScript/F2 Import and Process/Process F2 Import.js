@@ -22,7 +22,7 @@ const F2_IMPORT_FOLDER_ID = '1nUy7lWNr1BVCAxyLsnFASCTszQpjgEnd';
 const FILE_NAME_PATTERN = /^Service \d{4}-\d{2}-\d{2} at \d{1,2}\.\d{2}\.\d{2} (AM|PM)\.xlsx$/i;
 
 // Spreadsheet IDs
-const DESTINATION_SPREADSHEET_ID = '1FYA76P4B7vFUCDmxDwc6Ly6-tm7F6f5c5v0eNYjgwKw';
+const F2_F2_DESTINATION_SPREADSHEET_ID = '1FYA76P4B7vFUCDmxDwc6Ly6-tm7F6f5c5v0eNYjgwKw';
 const EQUIPMENT_SCHEDULING_CHART_ID = '1uECRfnLO1LoDaGZaHTHS3EaUdf8tte5kiR6JNWAeOiw';
 const PREP_BAY_SPREADSHEET_ID = '1erp3GVvekFXUVzC4OJsTrLBgqL4d0s-HillOwyJZOTQ';
 
@@ -369,7 +369,7 @@ function readF2Data(sheetId) {
  */
 function loadSerialNumberMap() {
   try {
-    const spreadsheet = SpreadsheetApp.openById(DESTINATION_SPREADSHEET_ID);
+    const spreadsheet = SpreadsheetApp.openById(F2_DESTINATION_SPREADSHEET_ID);
     const sheet = spreadsheet.getSheetByName(BARCODE_SERIAL_SHEET_NAME);
     
     if (!sheet) {
@@ -585,7 +585,7 @@ function verifyAgainstPrepBay(orderNumber, prepBayData) {
  */
 function writeToF2ImportsSheet(data) {
   try {
-    const spreadsheet = SpreadsheetApp.openById(DESTINATION_SPREADSHEET_ID);
+    const spreadsheet = SpreadsheetApp.openById(F2_DESTINATION_SPREADSHEET_ID);
     let sheet = spreadsheet.getSheetByName(F2_IMPORTS_SHEET_NAME);
     
     // Create sheet if it doesn't exist
@@ -665,7 +665,7 @@ function writeToF2ImportsSheet(data) {
  */
 function writeAlerts(alerts) {
   try {
-    const spreadsheet = SpreadsheetApp.openById(DESTINATION_SPREADSHEET_ID);
+    const spreadsheet = SpreadsheetApp.openById(F2_DESTINATION_SPREADSHEET_ID);
     let sheet = spreadsheet.getSheetByName(F2_IMPORTS_SHEET_NAME);
     
     if (!sheet) {
@@ -733,7 +733,7 @@ function writeAlerts(alerts) {
  */
 function updateRTRDatabase(data) {
   try {
-    const spreadsheet = SpreadsheetApp.openById(DESTINATION_SPREADSHEET_ID);
+    const spreadsheet = SpreadsheetApp.openById(F2_DESTINATION_SPREADSHEET_ID);
     const allSheets = spreadsheet.getSheets();
     
     // Find all Status sheets (sheets containing "Status" in name)
