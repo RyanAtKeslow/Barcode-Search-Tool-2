@@ -162,8 +162,26 @@ function cleanupProcessedFiles(folder) {
       }
     }
     
-    if (movedCount > 0 || deletedCount > 0) {
-      Logger.log(`✅ Cleanup complete: ${movedCount} file(s) moved, ${deletedCount} duplicate(s) removed`);
+    // Also clean up any leftover converted Google Sheet files in Temp subfolder
+    const tempFolders = folder.getFoldersByName('Temp');
+    let tempFilesDeleted = 0;
+    if (tempFolders.hasNext()) {
+      const tempFolder = tempFolders.next();
+      const tempFiles = tempFolder.getFiles();
+      while (tempFiles.hasNext()) {
+        const file = tempFiles.next();
+        const fileName = file.getName();
+        // Check if it's a converted Google Sheet file (starts with "F2_Import_")
+        if (fileName.startsWith('F2_Import_') && file.getMimeType() === MimeType.GOOGLE_SHEETS) {
+          Logger.log(`🗑️ Removing leftover converted sheet file: ${fileName}`);
+          file.setTrashed(true);
+          tempFilesDeleted++;
+        }
+      }
+    }
+    
+    if (movedCount > 0 || deletedCount > 0 || tempFilesDeleted > 0) {
+      Logger.log(`✅ Cleanup complete: ${movedCount} file(s) moved, ${deletedCount} duplicate(s) removed, ${tempFilesDeleted} temp file(s) deleted`);
     } else {
       Logger.log(`✅ No cleanup needed`);
     }
@@ -218,43 +236,45 @@ function findUnprocessedExcelFiles(folder) {
  */
 function processF2File(file, folder, serialNumberMap, schedulingData, prepBayData) {
   const alerts = [];
-  Logger.log(`📊 File size: ${file.getSize()} bytes`);
+  let convertedFile = null;
   
-  // Step 1: Convert Excel to Google Sheets
-  Logger.log("🔄 Converting Excel to Google Sheets...");
-  const convertedFile = convertExcelToSheets(file);
-  
-  if (!convertedFile) {
-    throw new Error("Failed to convert Excel file to Google Sheets");
-  }
-  
-  Logger.log(`✅ Converted to Google Sheet: ${convertedFile.id}`);
-  
-  // Step 2: Wait for conversion to complete
-  waitForSheetReady(convertedFile.id);
-  
-  // Step 3: Read and filter the data
-  Logger.log("📖 Reading converted sheet data...");
-  const serviceData = readF2Data(convertedFile.id);
-  
-  Logger.log(`📊 Found ${serviceData.length} total service records`);
-  
-  // Step 4: Filter by equipment category
-  const filteredData = serviceData.filter(record => {
-    const category = record.EquipmentCategory_lu || '';
-    return VALID_EQUIPMENT_CATEGORIES.includes(category);
-  });
-  
-  Logger.log(`📊 Filtered to ${filteredData.length} camera records`);
-  
-  if (filteredData.length === 0) {
-    Logger.log("⚠️ No camera records found in this file");
-    // Still mark as processed and move file
-    markFileAsProcessed(file.getName());
-    moveFileToProcessed(file, folder);
-    DriveApp.getFileById(convertedFile.id).setTrashed(true);
-    return alerts;
-  }
+  try {
+    Logger.log(`📊 File size: ${file.getSize()} bytes`);
+    
+    // Step 1: Convert Excel to Google Sheets
+    Logger.log("🔄 Converting Excel to Google Sheets...");
+    convertedFile = convertExcelToSheets(file, folder);
+    
+    if (!convertedFile) {
+      throw new Error("Failed to convert Excel file to Google Sheets");
+    }
+    
+    Logger.log(`✅ Converted to Google Sheet: ${convertedFile.id}`);
+    
+    // Step 2: Wait for conversion to complete
+    waitForSheetReady(convertedFile.id);
+    
+    // Step 3: Read and filter the data
+    Logger.log("📖 Reading converted sheet data...");
+    const serviceData = readF2Data(convertedFile.id);
+    
+    Logger.log(`📊 Found ${serviceData.length} total service records`);
+    
+    // Step 4: Filter by equipment category
+    const filteredData = serviceData.filter(record => {
+      const category = record.EquipmentCategory_lu || '';
+      return VALID_EQUIPMENT_CATEGORIES.includes(category);
+    });
+    
+    Logger.log(`📊 Filtered to ${filteredData.length} camera records`);
+    
+    if (filteredData.length === 0) {
+      Logger.log("⚠️ No camera records found in this file");
+      // Still mark as processed and move file
+      markFileAsProcessed(file.getName());
+      moveFileToProcessed(file, folder);
+      return alerts;
+    }
   
   // Step 5: Add Serial Numbers and verification
   Logger.log("🔍 Adding Serial Numbers and verifying data...");
@@ -309,28 +329,51 @@ function processF2File(file, folder, serialNumberMap, schedulingData, prepBayDat
   Logger.log("🔄 Updating RTR Database with Order #s...");
   updateRTRDatabase(enrichedData);
   
-  // Step 8: Mark file as processed and move to Processed folder
-  markFileAsProcessed(file.getName());
-  moveFileToProcessed(file, folder);
-  
-  // Step 9: Clean up converted sheet
-  Logger.log("🗑️ Cleaning up temporary converted sheet...");
-  DriveApp.getFileById(convertedFile.id).setTrashed(true);
-  
-  Logger.log(`✅ Processed ${enrichedData.length} records, ${alerts.length} alerts generated`);
-  return alerts;
+    // Step 8: Mark file as processed and move to Processed folder
+    markFileAsProcessed(file.getName());
+    moveFileToProcessed(file, folder);
+    
+    Logger.log(`✅ Processed ${enrichedData.length} records, ${alerts.length} alerts generated`);
+    return alerts;
+    
+  } finally {
+    // Always clean up converted sheet, even if there was an error
+    if (convertedFile && convertedFile.id) {
+      try {
+        Logger.log("🗑️ Cleaning up temporary converted sheet...");
+        const convertedFileObj = DriveApp.getFileById(convertedFile.id);
+        convertedFileObj.setTrashed(true);
+        Logger.log("✅ Converted sheet cleaned up");
+      } catch (cleanupError) {
+        Logger.log(`⚠️ Error cleaning up converted sheet: ${cleanupError.toString()}`);
+        // Don't throw - cleanup failure shouldn't break the process
+      }
+    }
+  }
 }
 
 /**
  * Converts an Excel file to Google Sheets format
+ * Creates the converted file in a "Temp" subfolder to keep root folder clean
  * @param {GoogleAppsScript.Drive.File} file - The Excel file
+ * @param {GoogleAppsScript.Drive.Folder} parentFolder - The parent folder (Service Board Imports)
  * @returns {Object|null} The converted file object with id property, or null if failed
  */
-function convertExcelToSheets(file) {
+function convertExcelToSheets(file, parentFolder) {
   try {
     // Check if Drive API is available
     if (typeof Drive === 'undefined') {
       throw new Error('Drive API v2 is not enabled. Please enable it in Apps Script: Extensions > Apps Script > Services > + Add Service > Google Drive API v2');
+    }
+    
+    // Get or create "Temp" subfolder
+    let tempFolder = null;
+    const folders = parentFolder.getFoldersByName('Temp');
+    if (folders.hasNext()) {
+      tempFolder = folders.next();
+    } else {
+      tempFolder = parentFolder.createFolder('Temp');
+      Logger.log("📁 Created 'Temp' subfolder");
     }
     
     // Initial wait before conversion for large files
@@ -339,11 +382,16 @@ function convertExcelToSheets(file) {
       Utilities.sleep(10000);
     }
     
-    // Convert uploaded file to Google Sheets
+    // Convert uploaded file to Google Sheets (initially created in same folder as source)
     const convertedFile = Drive.Files.copy({
       title: `F2_Import_${file.getName().replace('.xlsx', '')}_${new Date().getTime()}`,
       mimeType: MimeType.GOOGLE_SHEETS
     }, file.getId());
+    
+    // Move the converted file to Temp subfolder
+    const convertedFileObj = DriveApp.getFileById(convertedFile.id);
+    convertedFileObj.moveTo(tempFolder);
+    Logger.log("📦 Converted file moved to Temp subfolder");
     
     return convertedFile;
     
