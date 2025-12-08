@@ -44,7 +44,7 @@ if (-not (Test-Path $SYNC_FOLDER_PATH)) {
 # Load processed files list
 function Get-ProcessedFiles {
     if (Test-Path $PROCESSED_FILES_LOG) {
-        return Get-Content $PROCESSED_FILES_LOG | Where-Object { $_ -ne "" }
+        return @(Get-Content $PROCESSED_FILES_LOG | Where-Object { $_ -ne "" })
     }
     return @()
 }
