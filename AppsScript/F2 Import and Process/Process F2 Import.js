@@ -51,10 +51,11 @@ const HEADER_MAPPING = {
 
 /**
  * Main function to process F2 imports
+ * Simplified version: Imports all raw data directly without filtering or verification
  * Can be triggered manually or via time-driven trigger
  */
 function processF2Imports() {
-  Logger.log("🚀 Starting F2 Import and Process");
+  Logger.log("🚀 Starting F2 Import (Simplified - Raw Data Only)");
   
   try {
     // Step 1: Get the F2 Import folder
@@ -77,23 +78,11 @@ function processF2Imports() {
     
     Logger.log(`📊 Found ${unprocessedFiles.length} unprocessed file(s)`);
     
-    // Step 3: Load reference data once
-    Logger.log("📚 Loading reference data...");
-    const serialNumberMap = loadSerialNumberMap();
-    const schedulingData = loadEquipmentSchedulingData();
-    const prepBayData = loadPrepBayAssignments();
-    
-    Logger.log(`✅ Loaded ${serialNumberMap.size} serial number mappings`);
-    Logger.log(`✅ Loaded scheduling data from ${schedulingData.sheets.length} sheets`);
-    Logger.log(`✅ Loaded ${prepBayData.length} prep bay assignments`);
-    
-    // Step 4: Process each file
-    const allAlerts = [];
+    // Step 3: Process each file (raw import only)
     for (const file of unprocessedFiles) {
       try {
         Logger.log(`\n📄 Processing file: ${file.getName()}`);
-        const fileAlerts = processF2File(file, folder, serialNumberMap, schedulingData, prepBayData);
-        allAlerts.push(...fileAlerts);
+        processF2FileRaw(file, folder);
         Logger.log(`✅ Successfully processed: ${file.getName()}`);
       } catch (error) {
         Logger.log(`❌ Error processing ${file.getName()}: ${error.toString()}`);
@@ -102,12 +91,7 @@ function processF2Imports() {
       }
     }
     
-    // Step 5: Write alerts if any
-    if (allAlerts.length > 0) {
-      writeAlerts(allAlerts);
-    }
-    
-    Logger.log("\n✅ F2 Import and Process completed");
+    Logger.log("\n✅ F2 Import completed");
     
   } catch (error) {
     Logger.log(`❌ Error in processF2Imports: ${error.toString()}`);
@@ -242,16 +226,11 @@ function findUnprocessedExcelFiles(folder) {
 }
 
 /**
- * Processes a single F2 Excel file
+ * Processes a single F2 Excel file - RAW DATA ONLY (simplified for speed)
  * @param {GoogleAppsScript.Drive.File} file - The Excel file to process
  * @param {GoogleAppsScript.Drive.Folder} folder - The folder containing the file
- * @param {Map} serialNumberMap - Map of barcode to serial number
- * @param {Object} schedulingData - Equipment scheduling data
- * @param {Array} prepBayData - Prep bay assignment data
- * @returns {Array} Array of alert objects
  */
-function processF2File(file, folder, serialNumberMap, schedulingData, prepBayData) {
-  const alerts = [];
+function processF2FileRaw(file, folder) {
   let convertedFile = null;
   
   try {
@@ -270,87 +249,38 @@ function processF2File(file, folder, serialNumberMap, schedulingData, prepBayDat
     // Step 2: Wait for conversion to complete
     waitForSheetReady(convertedFile.id);
     
-    // Step 3: Read and filter the data
-    Logger.log("📖 Reading converted sheet data...");
-    const serviceData = readF2Data(convertedFile.id);
+    // Step 3: Read ALL raw data (no filtering)
+    Logger.log("📖 Reading raw data from converted sheet...");
+    const rawData = readF2Data(convertedFile.id);
     
-    Logger.log(`📊 Found ${serviceData.length} total service records`);
+    Logger.log(`📊 Found ${rawData.length} total records (importing all)`);
     
-    // Step 4: Filter by equipment category
-    const filteredData = serviceData.filter(record => {
-      const category = record.EquipmentCategory_lu || '';
-      return VALID_EQUIPMENT_CATEGORIES.includes(category);
-    });
-    
-    Logger.log(`📊 Filtered to ${filteredData.length} camera records`);
-    
-    if (filteredData.length === 0) {
-      Logger.log("⚠️ No camera records found in this file");
+    if (rawData.length === 0) {
+      Logger.log("⚠️ No data found in this file");
       // Still mark as processed and move file
       markFileAsProcessed(file.getName());
       moveFileToProcessed(file, folder);
-      return alerts;
+      return;
     }
   
-  // Step 5: Add Serial Numbers and verification
-  Logger.log("🔍 Adding Serial Numbers and verifying data...");
-  const enrichedData = [];
+    // Step 4: Add only basic import metadata (no verification, no lookups)
+    const dataWithMetadata = rawData.map(record => {
+      // Add minimal metadata
+      record.ImportDate = new Date();
+      record.ImportTimestamp = new Date().toISOString();
+      record.SourceFile = file.getName();
+      return record;
+    });
   
-  for (const record of filteredData) {
-    const barcode = record.AssetBarcode ? record.AssetBarcode.toString().trim() : '';
-    const orderNumber = record.OrderNumber_lu ? record.OrderNumber_lu.toString().trim() : '';
-    
-    // Lookup serial number
-    const serialNumber = serialNumberMap.get(barcode) || '';
-    record.SerialNumber = serialNumber;
-    
-    // Verify against Equipment Scheduling Chart
-    const verification = verifyAgainstScheduling(barcode, orderNumber, schedulingData);
-    record.VerificationStatus = verification.status;
-    record.VerificationNotes = verification.notes;
-    
-    // Secondary check against Prep Bay Assignments
-    const prepBayCheck = verifyAgainstPrepBay(orderNumber, prepBayData);
-    if (prepBayCheck.found && verification.status !== 'Verified') {
-      record.VerificationStatus = 'Verified (Prep Bay)';
-      record.VerificationNotes = verification.notes + ' | Prep Bay match found';
-    }
-    
-    // Add import metadata
-    record.ImportDate = new Date();
-    record.ImportTimestamp = new Date().toISOString();
-    record.SourceFile = file.getName();
-    
-    enrichedData.push(record);
-    
-    // Collect alerts for mismatches
-    if (verification.status !== 'Verified' && verification.status !== 'Verified (Prep Bay)') {
-      alerts.push({
-        barcode: barcode,
-        serialNumber: serialNumber,
-        orderNumber: orderNumber,
-        equipmentName: record.EquipmentName_lu || '',
-        issue: verification.status,
-        notes: verification.notes,
-        sourceFile: file.getName()
-      });
-    }
-  }
+    // Step 5: Write to F2 Imports sheet (raw data with dual headers)
+    Logger.log("💾 Writing raw data to F2 Imports sheet...");
+    writeToF2ImportsSheet(dataWithMetadata);
   
-  // Step 6: Write to F2 Imports sheet
-  Logger.log("💾 Writing data to F2 Imports sheet...");
-  writeToF2ImportsSheet(enrichedData);
-  
-  // Step 7: Update RTR Database with Order #s
-  Logger.log("🔄 Updating RTR Database with Order #s...");
-  updateRTRDatabase(enrichedData);
-  
-    // Step 8: Mark file as processed and move to Processed folder
+    // Step 6: Mark file as processed and move to Processed folder
     markFileAsProcessed(file.getName());
     moveFileToProcessed(file, folder);
     
-    Logger.log(`✅ Processed ${enrichedData.length} records, ${alerts.length} alerts generated`);
-    return alerts;
+    Logger.log(`✅ Processed ${dataWithMetadata.length} raw records`);
     
   } finally {
     // Always clean up converted sheet, even if there was an error
@@ -770,52 +700,23 @@ function writeToF2ImportsSheet(data) {
       Logger.log(`📋 Wrote mapped headers (Row 2): ${mappedHeaders.join(', ')}`);
     }
     
-    // Create a map of existing records by barcode (for updates)
-    // Data starts at row 3, so existing data starts at index 2 (row 3)
-    const existingByBarcode = new Map();
-    if (existingData.length > 2) {
-      const barcodeIndex = originalHeaders.indexOf('AssetBarcode');
-      if (barcodeIndex >= 0) {
-        for (let i = 2; i < existingData.length; i++) {
-          const barcode = existingData[i][barcodeIndex] ? existingData[i][barcodeIndex].toString().trim() : '';
-          if (barcode) {
-            existingByBarcode.set(barcode, i + 1); // Store row number (1-based)
-          }
-        }
-      }
-    }
-    
-    // Prepare data rows
+    // For raw data import, we just append all new records (no deduplication)
+    // This is faster and simpler - all data from each file is imported
     const rowsToWrite = [];
-    const rowsToUpdate = [];
     
     for (const record of data) {
-      const barcode = record.AssetBarcode ? record.AssetBarcode.toString().trim() : '';
       const rowData = originalHeaders.map(header => record[header] || '');
-      
-      if (barcode && existingByBarcode.has(barcode)) {
-        // Update existing row (row 3+)
-        const rowNum = existingByBarcode.get(barcode);
-        rowsToUpdate.push({ row: rowNum, data: rowData });
-      } else {
-        // New row to append
-        rowsToWrite.push(rowData);
-      }
+      rowsToWrite.push(rowData);
     }
     
-    // Update existing rows
-    for (const update of rowsToUpdate) {
-      sheet.getRange(update.row, 1, 1, originalHeaders.length).setValues([update.data]);
-    }
-    
-    // Append new rows (starting after row 2)
+    // Append all new rows (starting after row 2, or after last data row)
     if (rowsToWrite.length > 0) {
       const lastRow = sheet.getLastRow();
       const startRow = lastRow < 2 ? 3 : lastRow + 1; // Start at row 3 if sheet only has headers
       sheet.getRange(startRow, 1, rowsToWrite.length, originalHeaders.length).setValues(rowsToWrite);
     }
     
-    Logger.log(`💾 Updated ${rowsToUpdate.length} existing records, added ${rowsToWrite.length} new records`);
+    Logger.log(`💾 Added ${rowsToWrite.length} new records`);
     
   } catch (error) {
     Logger.log(`❌ Error writing to F2 Imports sheet: ${error.toString()}`);
@@ -875,10 +776,11 @@ function writeAlerts(alerts) {
       alertsStartRow += 1;
     } else {
       // Clear existing alerts (keep headers)
+      // alertsStartRow points to the "Alerts" label row, headers are in the next row
+      const headerRow = alertsStartRow + 1; // Headers are in the row after "Alerts" label
       const alertsEndRow = sheet.getLastRow();
-      if (alertsEndRow > alertsStartRow) {
+      if (alertsEndRow > headerRow) {
         // Find how many alert columns exist (check row with headers)
-        const headerRow = alertsStartRow;
         let alertColCount = 8; // Default to 8 columns
         // Try to detect actual column count by checking for empty cells
         for (let col = ALERTS_START_COL; col < ALERTS_START_COL + 20; col++) {
@@ -888,9 +790,10 @@ function writeAlerts(alerts) {
             break;
           }
         }
-        sheet.getRange(alertsStartRow + 1, ALERTS_START_COL, alertsEndRow - alertsStartRow, alertColCount).clearContent();
+        // Clear data rows (skip the header row)
+        sheet.getRange(headerRow + 1, ALERTS_START_COL, alertsEndRow - headerRow, alertColCount).clearContent();
       }
-      alertsStartRow += 1; // Move past header row
+      alertsStartRow = headerRow + 1; // Set to first data row after headers
     }
     
     // Write alerts
