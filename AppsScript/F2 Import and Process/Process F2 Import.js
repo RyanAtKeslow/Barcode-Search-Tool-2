@@ -33,6 +33,22 @@ const VALID_EQUIPMENT_CATEGORIES = ['Digital Cameras', '35mm Cameras', '16mm Cam
 const F2_IMPORTS_SHEET_NAME = 'F2 Imports';
 const BARCODE_SERIAL_SHEET_NAME = 'Barcode & Serial Database';
 
+// Header mapping: Original F2 Excel headers -> Common database names
+// Add mappings here as needed. If a header isn't mapped, it will use the original name.
+const HEADER_MAPPING = {
+  'AssetBarcode': 'Barcode',
+  'OrderNumber_lu': 'Order Number',
+  'EquipmentName_lu': 'Equipment Name',
+  'EquipmentCategory_lu': 'Camera Type',
+  'SerialNumber': 'Serial Number',
+  'VerificationStatus': 'Verification Status',
+  'VerificationNotes': 'Verification Notes',
+  'ImportDate': 'Import Date',
+  'ImportTimestamp': 'Import Timestamp',
+  'SourceFile': 'Source File'
+  // Add more mappings as needed
+};
+
 /**
  * Main function to process F2 imports
  * Can be triggered manually or via time-driven trigger
@@ -712,6 +728,9 @@ function verifyAgainstPrepBay(orderNumber, prepBayData) {
 
 /**
  * Writes data to F2 Imports sheet, updating existing records by barcode
+ * Row 1: Original Excel headers
+ * Row 2: Common database header names (mapped)
+ * Row 3+: Imported data
  * @param {Array<Object>} data - Array of enriched service records
  */
 function writeToF2ImportsSheet(data) {
@@ -725,26 +744,39 @@ function writeToF2ImportsSheet(data) {
       Logger.log(`✅ Created new sheet: ${F2_IMPORTS_SHEET_NAME}`);
     }
     
-    // Get existing data if any
-    const existingData = sheet.getDataRange().getValues();
-    const existingHeaders = existingData.length > 0 ? existingData[0] : [];
-    
-    // Build header row from first record (includes all original headers + new columns)
+    // Build header rows from first record (includes all original headers + new columns)
     const firstRecord = data[0];
-    const headers = Object.keys(firstRecord);
+    const originalHeaders = Object.keys(firstRecord);
     
-    // Write headers if sheet is empty
-    if (existingData.length === 0) {
-      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-      Logger.log(`📋 Wrote headers: ${headers.join(', ')}`);
+    // Create mapped headers (Row 2) - use mapping if available, otherwise use original
+    const mappedHeaders = originalHeaders.map(header => {
+      return HEADER_MAPPING[header] || header;
+    });
+    
+    // Check if headers need to be written (sheet is empty or headers changed)
+    const existingData = sheet.getDataRange().getValues();
+    const needsHeaderSetup = existingData.length === 0 || 
+                            existingData.length < 2 ||
+                            !arraysEqual(existingData[0], originalHeaders) ||
+                            !arraysEqual(existingData[1], mappedHeaders);
+    
+    if (needsHeaderSetup) {
+      // Write Row 1: Original headers
+      sheet.getRange(1, 1, 1, originalHeaders.length).setValues([originalHeaders]);
+      Logger.log(`📋 Wrote original headers (Row 1): ${originalHeaders.join(', ')}`);
+      
+      // Write Row 2: Mapped/common headers
+      sheet.getRange(2, 1, 1, mappedHeaders.length).setValues([mappedHeaders]);
+      Logger.log(`📋 Wrote mapped headers (Row 2): ${mappedHeaders.join(', ')}`);
     }
     
     // Create a map of existing records by barcode (for updates)
+    // Data starts at row 3, so existing data starts at index 2 (row 3)
     const existingByBarcode = new Map();
-    if (existingData.length > 1) {
-      const barcodeIndex = headers.indexOf('AssetBarcode');
+    if (existingData.length > 2) {
+      const barcodeIndex = originalHeaders.indexOf('AssetBarcode');
       if (barcodeIndex >= 0) {
-        for (let i = 1; i < existingData.length; i++) {
+        for (let i = 2; i < existingData.length; i++) {
           const barcode = existingData[i][barcodeIndex] ? existingData[i][barcodeIndex].toString().trim() : '';
           if (barcode) {
             existingByBarcode.set(barcode, i + 1); // Store row number (1-based)
@@ -759,10 +791,10 @@ function writeToF2ImportsSheet(data) {
     
     for (const record of data) {
       const barcode = record.AssetBarcode ? record.AssetBarcode.toString().trim() : '';
-      const rowData = headers.map(header => record[header] || '');
+      const rowData = originalHeaders.map(header => record[header] || '');
       
       if (barcode && existingByBarcode.has(barcode)) {
-        // Update existing row
+        // Update existing row (row 3+)
         const rowNum = existingByBarcode.get(barcode);
         rowsToUpdate.push({ row: rowNum, data: rowData });
       } else {
@@ -773,13 +805,14 @@ function writeToF2ImportsSheet(data) {
     
     // Update existing rows
     for (const update of rowsToUpdate) {
-      sheet.getRange(update.row, 1, 1, headers.length).setValues([update.data]);
+      sheet.getRange(update.row, 1, 1, originalHeaders.length).setValues([update.data]);
     }
     
-    // Append new rows
+    // Append new rows (starting after row 2)
     if (rowsToWrite.length > 0) {
       const lastRow = sheet.getLastRow();
-      sheet.getRange(lastRow + 1, 1, rowsToWrite.length, headers.length).setValues(rowsToWrite);
+      const startRow = lastRow < 2 ? 3 : lastRow + 1; // Start at row 3 if sheet only has headers
+      sheet.getRange(startRow, 1, rowsToWrite.length, originalHeaders.length).setValues(rowsToWrite);
     }
     
     Logger.log(`💾 Updated ${rowsToUpdate.length} existing records, added ${rowsToWrite.length} new records`);
@@ -791,7 +824,19 @@ function writeToF2ImportsSheet(data) {
 }
 
 /**
+ * Helper function to compare arrays
+ */
+function arraysEqual(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+/**
  * Writes alerts to an Alerts section in the F2 Imports sheet
+ * Alerts section starts in column AA (column 27)
  * @param {Array<Object>} alerts - Array of alert objects
  */
 function writeAlerts(alerts) {
@@ -804,33 +849,46 @@ function writeAlerts(alerts) {
       return;
     }
     
-    // Find or create Alerts section (look for "Alerts" header)
+    const ALERTS_START_COL = 27; // Column AA (1-based: A=1, B=2, ..., AA=27)
+    
+    // Find or create Alerts section (look for "Alerts" header in column AA)
     let alertsStartRow = null;
     const lastRow = sheet.getLastRow();
     
     for (let i = 1; i <= lastRow; i++) {
-      const cellValue = sheet.getRange(i, 1).getValue();
+      const cellValue = sheet.getRange(i, ALERTS_START_COL).getValue();
       if (cellValue && cellValue.toString().trim().toLowerCase() === 'alerts') {
         alertsStartRow = i;
         break;
       }
     }
     
-    // If no Alerts section found, create it after the data
+    // If no Alerts section found, create it starting at row 1 in column AA
     if (!alertsStartRow) {
-      alertsStartRow = sheet.getLastRow() + 3; // Add some spacing
-      sheet.getRange(alertsStartRow, 1).setValue('Alerts').setFontWeight('bold');
+      alertsStartRow = 1;
+      sheet.getRange(alertsStartRow, ALERTS_START_COL).setValue('Alerts').setFontWeight('bold');
       alertsStartRow += 1;
       
       // Write alert headers
       const alertHeaders = ['Timestamp', 'Barcode', 'Serial Number', 'Order Number', 'Equipment Name', 'Issue', 'Notes', 'Source File'];
-      sheet.getRange(alertsStartRow, 1, 1, alertHeaders.length).setValues([alertHeaders]).setFontWeight('bold');
+      sheet.getRange(alertsStartRow, ALERTS_START_COL, 1, alertHeaders.length).setValues([alertHeaders]).setFontWeight('bold');
       alertsStartRow += 1;
     } else {
       // Clear existing alerts (keep headers)
       const alertsEndRow = sheet.getLastRow();
       if (alertsEndRow > alertsStartRow) {
-        sheet.getRange(alertsStartRow + 1, 1, alertsEndRow - alertsStartRow, 8).clearContent();
+        // Find how many alert columns exist (check row with headers)
+        const headerRow = alertsStartRow;
+        let alertColCount = 8; // Default to 8 columns
+        // Try to detect actual column count by checking for empty cells
+        for (let col = ALERTS_START_COL; col < ALERTS_START_COL + 20; col++) {
+          const headerCell = sheet.getRange(headerRow, col).getValue();
+          if (!headerCell || headerCell.toString().trim() === '') {
+            alertColCount = col - ALERTS_START_COL;
+            break;
+          }
+        }
+        sheet.getRange(alertsStartRow + 1, ALERTS_START_COL, alertsEndRow - alertsStartRow, alertColCount).clearContent();
       }
       alertsStartRow += 1; // Move past header row
     }
@@ -848,8 +906,8 @@ function writeAlerts(alerts) {
         alert.sourceFile
       ]);
       
-      sheet.getRange(alertsStartRow, 1, alertRows.length, 8).setValues(alertRows);
-      Logger.log(`⚠️ Wrote ${alerts.length} alerts to F2 Imports sheet`);
+      sheet.getRange(alertsStartRow, ALERTS_START_COL, alertRows.length, 8).setValues(alertRows);
+      Logger.log(`⚠️ Wrote ${alerts.length} alerts to F2 Imports sheet starting at column AA (row ${alertsStartRow})`);
     }
     
   } catch (error) {
