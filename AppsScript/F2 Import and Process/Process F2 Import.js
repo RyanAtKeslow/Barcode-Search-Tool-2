@@ -34,19 +34,52 @@ const F2_IMPORTS_SHEET_NAME = 'F2 Imports';
 const BARCODE_SERIAL_SHEET_NAME = 'Barcode & Serial Database';
 
 // Header mapping: Original F2 Excel headers -> Common database names
-// Add mappings here as needed. If a header isn't mapped, it will use the original name.
+// Row 1: Original Excel headers (17 columns + Serial Number, same for Complete and Incomplete exports)
+// Row 2: Common database header names (mapped below)
+// Schema for Row 2 (common names) - Column layout in F2 Imports sheet:
+//   Column A (1): PrepDate -> Prep Date
+//   Column B (2): ServicePriority_aet -> Service Priority
+//   Column C (3): AssetBarcode -> Barcode
+//   Column D (4): SerialNumber -> Serial Number (populated from Barcode & Serial Database lookup)
+//   Column E (5): EquipmentName_lu -> Equipment Name
+//   Column F (6): EquipmentCategory_lu -> Camera Type
+//   Column G (7): OrderNumber_lu -> Order Number
+//   Column H (8): JobName_lu -> Job Name
+//   Column I (9): Puller_lu -> Puller
+//   Column J (10): PrepTech_lu -> Prep Tech
+//   Column K (11): ServiceTech -> Service Tech
+//   Column L (12): EstimatedCompletionTime_t -> Estimated Completion Time
+//   Column M (13): z_log_CreateHost_ts_ae -> Created Timestamp
+//   Column N (14): TimestampStart_ts -> Start Timestamp
+//   Column O (15): TimestampEnd_ts -> End Timestamp
+//   Column P (16): TimestampDuration_cti -> Duration
+//   Column Q (17): ServiceStatus_ct -> Service Status
+//   Column R (18): ServiceNotes -> Service Notes
 const HEADER_MAPPING = {
+  'PrepDate': 'Prep Date',
+  'ServicePriority_aet': 'Service Priority',
   'AssetBarcode': 'Barcode',
-  'OrderNumber_lu': 'Order Number',
   'EquipmentName_lu': 'Equipment Name',
   'EquipmentCategory_lu': 'Camera Type',
+  'OrderNumber_lu': 'Order Number',
+  'JobName_lu': 'Job Name',
+  'Puller_lu': 'Puller',
+  'PrepTech_lu': 'Prep Tech',
+  'ServiceTech': 'Service Tech',
+  'EstimatedCompletionTime_t': 'Estimated Completion Time',
+  'z_log_CreateHost_ts_ae': 'Created Timestamp',
+  'TimestampStart_ts': 'Start Timestamp',
+  'TimestampEnd_ts': 'End Timestamp',
+  'TimestampDuration_cti': 'Duration',
+  'ServiceStatus_ct': 'Service Status',
+  'ServiceNotes': 'Service Notes',
+  // Additional metadata columns (added during import)
   'SerialNumber': 'Serial Number',
   'VerificationStatus': 'Verification Status',
   'VerificationNotes': 'Verification Notes',
   'ImportDate': 'Import Date',
   'ImportTimestamp': 'Import Timestamp',
   'SourceFile': 'Source File'
-  // Add more mappings as needed
 };
 
 /**
@@ -263,16 +296,29 @@ function processF2FileRaw(file, folder) {
       return;
     }
   
-    // Step 4: Add only basic import metadata (no verification, no lookups)
+    // Step 4: Load Serial Number map for lookups
+    Logger.log("📚 Loading Serial Number map from Barcode & Serial Database...");
+    const serialNumberMap = loadSerialNumberMap();
+    
+    // Step 5: Add basic import metadata and Serial Number lookup
     const dataWithMetadata = rawData.map(record => {
       // Add minimal metadata
       record.ImportDate = new Date();
       record.ImportTimestamp = new Date().toISOString();
       record.SourceFile = file.getName();
+      
+      // Look up Serial Number from barcode and add to record for column D
+      const barcode = record.AssetBarcode ? record.AssetBarcode.toString().trim() : '';
+      if (barcode && serialNumberMap.has(barcode)) {
+        record.SerialNumber = serialNumberMap.get(barcode);
+      } else {
+        record.SerialNumber = ''; // Empty if not found in database
+      }
+      
       return record;
     });
   
-    // Step 5: Write to F2 Imports sheet (raw data with dual headers)
+    // Step 6: Write to F2 Imports sheet (raw data with dual headers, column D blank)
     Logger.log("💾 Writing raw data to F2 Imports sheet...");
     writeToF2ImportsSheet(dataWithMetadata);
   
@@ -658,9 +704,10 @@ function verifyAgainstPrepBay(orderNumber, prepBayData) {
 
 /**
  * Writes data to F2 Imports sheet, updating existing records by barcode
- * Row 1: Original Excel headers
+ * Row 1: Original Excel headers (with Serial Number inserted at column D)
  * Row 2: Common database header names (mapped)
- * Row 3+: Imported data
+ * Row 3+: Imported data (with Serial Number populated in column D from lookup)
+ * Column layout: A=PrepDate, B=ServicePriority, C=Barcode, D=Serial Number, E=Equipment Name, etc.
  * @param {Array<Object>} data - Array of enriched service records
  */
 function writeToF2ImportsSheet(data) {
@@ -674,12 +721,37 @@ function writeToF2ImportsSheet(data) {
       Logger.log(`✅ Created new sheet: ${F2_IMPORTS_SHEET_NAME}`);
     }
     
-    // Build header rows from first record (includes all original headers + new columns)
+    // Build header rows from first record
     const firstRecord = data[0];
     const originalHeaders = Object.keys(firstRecord);
     
+    // Remove SerialNumber from headers list (we'll insert it manually at position 4)
+    const headersWithoutSerial = originalHeaders.filter(h => h !== 'SerialNumber');
+    
+    // Insert SerialNumber at position 3 (column D, 0-indexed position 3)
+    // Order: PrepDate(0), ServicePriority(1), AssetBarcode(2), SerialNumber(3), EquipmentName(4), ...
+    const orderedHeaders = [];
+    let serialInserted = false;
+    
+    for (let i = 0; i < headersWithoutSerial.length; i++) {
+      const header = headersWithoutSerial[i];
+      // Insert SerialNumber after AssetBarcode (position 3, which is column D)
+      if (header === 'AssetBarcode' && !serialInserted) {
+        orderedHeaders.push(header);
+        orderedHeaders.push('SerialNumber');
+        serialInserted = true;
+      } else {
+        orderedHeaders.push(header);
+      }
+    }
+    
+    // If AssetBarcode wasn't found, insert SerialNumber at position 3 anyway
+    if (!serialInserted) {
+      orderedHeaders.splice(3, 0, 'SerialNumber');
+    }
+    
     // Create mapped headers (Row 2) - use mapping if available, otherwise use original
-    const mappedHeaders = originalHeaders.map(header => {
+    const mappedHeaders = orderedHeaders.map(header => {
       return HEADER_MAPPING[header] || header;
     });
     
@@ -687,13 +759,13 @@ function writeToF2ImportsSheet(data) {
     const existingData = sheet.getDataRange().getValues();
     const needsHeaderSetup = existingData.length === 0 || 
                             existingData.length < 2 ||
-                            !arraysEqual(existingData[0], originalHeaders) ||
+                            !arraysEqual(existingData[0], orderedHeaders) ||
                             !arraysEqual(existingData[1], mappedHeaders);
     
     if (needsHeaderSetup) {
-      // Write Row 1: Original headers
-      sheet.getRange(1, 1, 1, originalHeaders.length).setValues([originalHeaders]);
-      Logger.log(`📋 Wrote original headers (Row 1): ${originalHeaders.join(', ')}`);
+      // Write Row 1: Original headers (with SerialNumber inserted)
+      sheet.getRange(1, 1, 1, orderedHeaders.length).setValues([orderedHeaders]);
+      Logger.log(`📋 Wrote original headers (Row 1): ${orderedHeaders.join(', ')}`);
       
       // Write Row 2: Mapped/common headers
       sheet.getRange(2, 1, 1, mappedHeaders.length).setValues([mappedHeaders]);
@@ -701,11 +773,15 @@ function writeToF2ImportsSheet(data) {
     }
     
     // For raw data import, we just append all new records (no deduplication)
-    // This is faster and simpler - all data from each file is imported
+    // Column D (SerialNumber) will be populated with looked-up serial numbers
     const rowsToWrite = [];
     
     for (const record of data) {
-      const rowData = originalHeaders.map(header => record[header] || '');
+      const rowData = [];
+      for (const header of orderedHeaders) {
+        // Write Serial Number value (looked up from Barcode & Serial Database)
+        rowData.push(record[header] || '');
+      }
       rowsToWrite.push(rowData);
     }
     
@@ -713,10 +789,10 @@ function writeToF2ImportsSheet(data) {
     if (rowsToWrite.length > 0) {
       const lastRow = sheet.getLastRow();
       const startRow = lastRow < 2 ? 3 : lastRow + 1; // Start at row 3 if sheet only has headers
-      sheet.getRange(startRow, 1, rowsToWrite.length, originalHeaders.length).setValues(rowsToWrite);
+      sheet.getRange(startRow, 1, rowsToWrite.length, orderedHeaders.length).setValues(rowsToWrite);
     }
     
-    Logger.log(`💾 Added ${rowsToWrite.length} new records`);
+    Logger.log(`💾 Added ${rowsToWrite.length} new records (Column D populated with Serial Numbers)`);
     
   } catch (error) {
     Logger.log(`❌ Error writing to F2 Imports sheet: ${error.toString()}`);
