@@ -64,6 +64,103 @@ function Test-F2FilePattern {
     return $fileName -match $FILE_PATTERN
 }
 
+# Check if a file is locked/in use by another process
+function Test-FileLocked {
+    param([string]$filePath)
+    
+    try {
+        # Try to open the file for exclusive access
+        $fileStream = [System.IO.File]::Open($filePath, 'Open', 'ReadWrite', 'None')
+        $fileStream.Close()
+        $fileStream.Dispose()
+        return $false
+    }
+    catch {
+        # File is locked if we can't open it
+        return $true
+    }
+}
+
+# Check if Excel has the file open
+function Test-ExcelHasFileOpen {
+    param([string]$filePath)
+    
+    try {
+        $excelProcesses = Get-Process -Name "EXCEL" -ErrorAction SilentlyContinue
+        if ($excelProcesses) {
+            # Check if any Excel process has this file open
+            # This is a best-effort check - we can't directly query what files Excel has open
+            # But if Excel is running and file is locked, it's likely Excel has it
+            return $true
+        }
+        return $false
+    }
+    catch {
+        return $false
+    }
+}
+
+# Move file with retry logic for file locks
+function Move-FileWithRetry {
+    param(
+        [string]$filePath,
+        [string]$destPath,
+        [string]$fileName,
+        [int]$maxRetries = 6,
+        [int]$initialWaitSeconds = 5
+    )
+    
+    $attempt = 0
+    $waitSeconds = $initialWaitSeconds
+    
+    while ($attempt -lt $maxRetries) {
+        $attempt++
+        
+        # Check if file is locked
+        if (Test-FileLocked -filePath $filePath) {
+            $excelOpen = Test-ExcelHasFileOpen -filePath $filePath
+            if ($excelOpen) {
+                Write-Log "File $fileName is locked (likely by Excel). Waiting $waitSeconds seconds before retry $attempt/$maxRetries..." "WARN"
+            } else {
+                Write-Log "File $fileName is locked by another process. Waiting $waitSeconds seconds before retry $attempt/$maxRetries..." "WARN"
+            }
+            
+            if ($attempt -lt $maxRetries) {
+                Start-Sleep -Seconds $waitSeconds
+                # Exponential backoff: increase wait time with each retry
+                $waitSeconds = [Math]::Min($waitSeconds * 1.5, 30)
+            }
+            continue
+        }
+        
+        # Try to move the file
+        try {
+            Move-Item -Path $filePath -Destination $destPath -Force -ErrorAction Stop
+            Write-Log "Successfully moved $fileName" "SUCCESS"
+            return $true
+        }
+        catch {
+            $errorMsg = $_.Exception.Message
+            if ($errorMsg -like "*being used by another process*" -or $errorMsg -like "*cannot access*") {
+                Write-Log "File $fileName is in use. Waiting $waitSeconds seconds before retry $attempt/$maxRetries..." "WARN"
+                if ($attempt -lt $maxRetries) {
+                    Start-Sleep -Seconds $waitSeconds
+                    $waitSeconds = [Math]::Min($waitSeconds * 1.5, 30)
+                }
+                continue
+            } else {
+                # Different error - don't retry
+                Write-Log "Error moving file $fileName : $errorMsg" "ERROR"
+                return $false
+            }
+        }
+    }
+    
+    # All retries exhausted
+    Write-Log "Failed to move $fileName after $maxRetries attempts. File may still be open in Excel or another application." "ERROR"
+    return $false
+}
+
 # Main monitoring loop
 Write-Log "F2 Desktop Monitor started" "INFO"
 Write-Log "Monitoring: $DESKTOP_PATH" "INFO"
@@ -93,9 +190,10 @@ while ($true) {
             }
             
             # Check if file is still being written (recently modified)
+            # Increased wait time since Excel may auto-open the file after export
             $timeSinceModified = (Get-Date) - $file.LastWriteTime
-            if ($timeSinceModified.TotalSeconds -lt 5) {
-                Write-Log "File $fileName is still being written, waiting..." "WARN"
+            if ($timeSinceModified.TotalSeconds -lt 15) {
+                Write-Log "File $fileName was recently created/modified (${([int]$timeSinceModified.TotalSeconds)}s ago), waiting for Excel to finish opening..." "WARN"
                 continue
             }
             
@@ -107,18 +205,12 @@ while ($true) {
                 continue
             }
             
-            # Move file to sync folder
-            try {
-                Write-Log "Moving $fileName to sync folder..." "INFO"
-                Move-Item -Path $filePath -Destination $destPath -Force
-                Write-Log "Successfully moved $fileName" "SUCCESS"
-                
-                # Mark as processed
+            # Move file to sync folder with retry logic
+            Write-Log "Moving $fileName to sync folder..." "INFO"
+            if (Move-FileWithRetry -filePath $filePath -destPath $destPath -fileName $fileName) {
+                # Mark as processed only if move succeeded
                 Add-ProcessedFile $fileName
                 $processedFiles = Get-ProcessedFiles
-            }
-            catch {
-                Write-Log "Error moving file: $_" "ERROR"
             }
         }
     }
