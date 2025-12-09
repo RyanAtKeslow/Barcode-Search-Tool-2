@@ -1,5 +1,5 @@
 /**
- * Test Prep Bay Refresh
+ * Prep Bay Refresh
  * 
  * This script reads Prep Bay Assignment data for today and populates
  * the "Todays Prep Bays" sheet with job information and camera assignments.
@@ -12,11 +12,11 @@
  * - "Todays Prep Bays" sheet in: 1FYA76P4B7vFUCDmxDwc6Ly6-tm7F6f5c5v0eNYjgwKw
  */
 
-// Spreadsheet IDs (prefixed with TEST_PREP_BAY_ to avoid conflicts with other scripts)
-const TEST_PREP_BAY_ASSIGNMENT_SPREADSHEET_ID = '1erp3GVvekFXUVzC4OJsTrLBgqL4d0s-HillOwyJZOTQ';
-const TEST_PREP_BAY_EQUIPMENT_CHART_ID = '1uECRfnLO1LoDaGZaHTHS3EaUdf8tte5kiR6JNWAeOiw';
-const TEST_PREP_BAY_DESTINATION_SPREADSHEET_ID = '1FYA76P4B7vFUCDmxDwc6Ly6-tm7F6f5c5v0eNYjgwKw';
-const TEST_PREP_BAY_DESTINATION_SHEET_NAME = 'Todays Prep Bays';
+// Spreadsheet IDs
+const PREP_BAY_ASSIGNMENT_SPREADSHEET_ID = '1erp3GVvekFXUVzC4OJsTrLBgqL4d0s-HillOwyJZOTQ';
+const PREP_BAY_EQUIPMENT_CHART_ID = '1uECRfnLO1LoDaGZaHTHS3EaUdf8tte5kiR6JNWAeOiw';
+const PREP_BAY_DESTINATION_SPREADSHEET_ID = '1FYA76P4B7vFUCDmxDwc6Ly6-tm7F6f5c5v0eNYjgwKw';
+const PREP_BAY_DESTINATION_SHEET_NAME = 'Todays Prep Bays';
 
 // Day name abbreviations
 const DAY_PREFIXES = ['Sun', 'Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat'];
@@ -24,8 +24,8 @@ const DAY_PREFIXES = ['Sun', 'Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat'];
 /**
  * Main function to refresh prep bay data
  */
-function testPrepBayRefresh() {
-  Logger.log("🚀 Starting Test Prep Bay Refresh");
+function prepBayRefresh() {
+  Logger.log("🚀 Starting Prep Bay Refresh");
   
   try {
     // Get today's date and sheet name
@@ -44,10 +44,10 @@ function testPrepBayRefresh() {
     // Write data to destination sheet
     writePrepBayDataToSheet(prepBayData, equipmentData);
     
-    Logger.log("✅ Test Prep Bay Refresh completed");
+    Logger.log("✅ Prep Bay Refresh completed");
     
   } catch (error) {
-    Logger.log(`❌ Error in testPrepBayRefresh: ${error.toString()}`);
+    Logger.log(`❌ Error in prepBayRefresh: ${error.toString()}`);
     Logger.log(`Stack trace: ${error.stack}`);
     throw error;
   }
@@ -72,7 +72,7 @@ function getTodaySheetName(date) {
  */
 function readPrepBayDataForToday(sheetName) {
   try {
-    const spreadsheet = SpreadsheetApp.openById(TEST_PREP_BAY_ASSIGNMENT_SPREADSHEET_ID);
+    const spreadsheet = SpreadsheetApp.openById(PREP_BAY_ASSIGNMENT_SPREADSHEET_ID);
     const sheet = spreadsheet.getSheetByName(sheetName);
     
     if (!sheet) {
@@ -185,7 +185,7 @@ function getBayDisplayName(bayNumber) {
  */
 function readEquipmentSchedulingData() {
   try {
-    const spreadsheet = SpreadsheetApp.openById(TEST_PREP_BAY_EQUIPMENT_CHART_ID);
+    const spreadsheet = SpreadsheetApp.openById(PREP_BAY_EQUIPMENT_CHART_ID);
     const cameraSheet = spreadsheet.getSheetByName('Camera');
     
     if (!cameraSheet) {
@@ -275,33 +275,7 @@ function readEquipmentSchedulingData() {
         continue; // Skip if not a valid booking color
       }
       
-      // Get the cell value from today's column
-      const cellValue = row[todayColumnIndex];
-      if (!cellValue || typeof cellValue !== 'string' || cellValue.trim() === '') {
-        continue; // Skip empty cells
-      }
-      
-      // Extract order number from cell value (format: "LA 879444 Company - TBD "Genesis" 3 Day IN PROGRESS")
-      const orderMatch = cellValue.match(/\b(\d{6})\b/);
-      if (!orderMatch) {
-        continue; // No order number found
-      }
-      
-      const orderNumber = orderMatch[1];
-      const normalizedOrder = orderNumber.replace(/[^0-9]/g, '');
-      
-      // Find camera type by looking for the first empty cell above
-      let typeRow = rowIdx - 1;
-      while (typeRow >= 0 && data[typeRow][0] !== '') {
-        typeRow--;
-      }
-      const equipmentType = typeRow >= 0 ? (data[typeRow][4] || '') : ''; // Column E
-      
-      if (!equipmentType) {
-        continue; // Skip if no camera type found
-      }
-      
-      // Extract barcode from column E (index 4)
+      // Extract barcode from column E (index 4) first - we need this for all cameras
       const barcodeCell = row[4];
       let barcode = '';
       if (typeof barcodeCell === 'string') {
@@ -315,24 +289,78 @@ function readEquipmentSchedulingData() {
         continue; // Skip rows without barcodes
       }
       
-      // Add camera to the order's list
-      if (!camerasByOrder[normalizedOrder]) {
-        camerasByOrder[normalizedOrder] = [];
+      // Find camera type by looking for the first empty cell above
+      let typeRow = rowIdx - 1;
+      while (typeRow >= 0 && data[typeRow][0] !== '') {
+        typeRow--;
+      }
+      const equipmentType = typeRow >= 0 ? (data[typeRow][4] || '') : ''; // Column E
+      
+      if (!equipmentType) {
+        continue; // Skip if no camera type found
       }
       
-      // Add camera if not already in list (avoid duplicates)
-      const exists = camerasByOrder[normalizedOrder].some(cam => 
-        cam.barcode === barcode && cam.equipmentType === equipmentType.toString().trim()
-      );
-      if (!exists) {
-        camerasByOrder[normalizedOrder].push({
-          equipmentType: equipmentType.toString().trim(),
-          barcode: barcode
-        });
+      // Search for order numbers in today's column
+      // Special case: If today's cell has red background (#ff7171) and is blank, search left for order number
+      const orderNumbersFound = new Set();
+      const todayCellValue = row[todayColumnIndex];
+      const isRedBackground = cellBg === '#ff7171';
+      const isTodayCellBlank = !todayCellValue || (typeof todayCellValue === 'string' && todayCellValue.trim() === '');
+      
+      if (isRedBackground && isTodayCellBlank) {
+        // Red background with blank cell: search leftward for order number
+        Logger.log(`🔍 Red background with blank cell for barcode ${barcode}, searching left for order number...`);
+        for (let colIdx = todayColumnIndex - 1; colIdx >= 5; colIdx--) { // Start from column before today, go back to column F (index 5)
+          const leftCellValue = row[colIdx];
+          if (leftCellValue && typeof leftCellValue === 'string' && leftCellValue.trim() !== '') {
+            // Check if this cell has an order number
+            const orderMatches = leftCellValue.match(/\b(\d{6})\b/g);
+            if (orderMatches && orderMatches.length > 0) {
+              // Found order number(s) - use these
+              orderMatches.forEach(ord => orderNumbersFound.add(ord.replace(/[^0-9]/g, '')));
+              Logger.log(`  ✅ Found order number(s) ${Array.from(orderNumbersFound).join(', ')} in column ${colIdx + 1}`);
+              break; // Stop searching once we find an order number
+            }
+          }
+        }
+      } else if (todayCellValue && typeof todayCellValue === 'string' && todayCellValue.trim() !== '') {
+        // Today's cell has content - extract order numbers from it
+        const todayOrderMatches = todayCellValue.match(/\b(\d{6})\b/g);
+        if (todayOrderMatches) {
+          todayOrderMatches.forEach(ord => orderNumbersFound.add(ord.replace(/[^0-9]/g, '')));
+        }
+      }
+      
+      // Add this camera to ALL order numbers found
+      if (orderNumbersFound.size > 0) {
+        for (const normalizedOrder of orderNumbersFound) {
+          // Add camera to the order's list
+          if (!camerasByOrder[normalizedOrder]) {
+            camerasByOrder[normalizedOrder] = [];
+          }
+          
+          // Add camera if not already in list (avoid duplicates by barcode only)
+          const exists = camerasByOrder[normalizedOrder].some(cam => 
+            cam.barcode === barcode
+          );
+          if (!exists) {
+            camerasByOrder[normalizedOrder].push({
+              equipmentType: equipmentType.toString().trim(),
+              barcode: barcode
+            });
+            Logger.log(`📹 Added camera: Order ${normalizedOrder}, Type: ${equipmentType}, Barcode: ${barcode}`);
+          }
+        }
       }
     }
     
     Logger.log(`📚 Found cameras for ${Object.keys(camerasByOrder).length} order numbers`);
+    
+    // Log camera count for each order
+    for (const [orderNumber, cameras] of Object.entries(camerasByOrder)) {
+      Logger.log(`  Order ${orderNumber}: ${cameras.length} camera(s) - ${cameras.map(c => c.barcode).join(', ')}`);
+    }
+    
     return camerasByOrder;
     
   } catch (error) {
@@ -343,36 +371,19 @@ function readEquipmentSchedulingData() {
 
 /**
  * Writes prep bay data to the destination sheet
- * Distributes cameras across multiple prep bays when a job spans multiple bays
+ * Shows all cameras for an order in all prep bays with that order number
  * @param {Array<Object>} prepBayData - Array of prep bay assignments
  * @param {Object} equipmentData - Camera data indexed by order number
  */
 function writePrepBayDataToSheet(prepBayData, equipmentData) {
   try {
-    const spreadsheet = SpreadsheetApp.openById(TEST_PREP_BAY_DESTINATION_SPREADSHEET_ID);
-    let sheet = spreadsheet.getSheetByName(TEST_PREP_BAY_DESTINATION_SHEET_NAME);
+    const spreadsheet = SpreadsheetApp.openById(PREP_BAY_DESTINATION_SPREADSHEET_ID);
+    let sheet = spreadsheet.getSheetByName(PREP_BAY_DESTINATION_SHEET_NAME);
     
     // Create sheet if it doesn't exist
     if (!sheet) {
-      sheet = spreadsheet.insertSheet(TEST_PREP_BAY_DESTINATION_SHEET_NAME);
-      Logger.log(`✅ Created new sheet: ${TEST_PREP_BAY_DESTINATION_SHEET_NAME}`);
-    }
-    
-    // Group assignments by order number to identify jobs spanning multiple bays
-    const assignmentsByOrder = {};
-    for (const assignment of prepBayData) {
-      const normalizedOrder = assignment.orderNumber.replace(/[^0-9]/g, '');
-      if (!assignmentsByOrder[normalizedOrder]) {
-        assignmentsByOrder[normalizedOrder] = [];
-      }
-      assignmentsByOrder[normalizedOrder].push(assignment);
-    }
-    
-    // Log camera assignments for each order
-    for (const [orderNumber, assignments] of Object.entries(assignmentsByOrder)) {
-      const cameras = equipmentData[orderNumber] || [];
-      const numBays = assignments.length;
-      Logger.log(`📊 Order ${orderNumber}: ${cameras.length} cameras in ${numBays} bay(s) - ${assignments.map(a => getBayDisplayName(a.bayNumber)).join(', ')}`);
+      sheet = spreadsheet.insertSheet(PREP_BAY_DESTINATION_SHEET_NAME);
+      Logger.log(`✅ Created new sheet: ${PREP_BAY_DESTINATION_SHEET_NAME}`);
     }
     
     // Process each prep bay (1-22)
@@ -422,12 +433,13 @@ function writePrepBayDataToSheet(prepBayData, equipmentData) {
         // Write prep tech to B4
         sheet.getRange(startRow + 3, startCol + 1).setValue(assignment.prepTech);
         
-        // Get all cameras for this order (show all cameras in all prep bays with this order)
+        // Get all cameras scheduled for this order number TODAY
+        // All cameras for the order are shown in ALL prep bays with this order number
         const normalizedOrder = assignment.orderNumber.replace(/[^0-9]/g, '');
         const cameras = equipmentData[normalizedOrder] || [];
         
         // Write each camera body to its own row in B5:B12 (up to 8 cameras)
-        // Each unique camera body gets its own cell with its barcode in the corresponding C cell
+        // Each camera body gets its own row: equipment type in column B, barcode in column C
         for (let i = 0; i < Math.min(cameras.length, 8); i++) {
           const camera = cameras[i];
           // Write camera equipment type to B5, B6, B7, etc.
@@ -446,7 +458,7 @@ function writePrepBayDataToSheet(prepBayData, equipmentData) {
         }
         
         const headerName = getBayDisplayName(bayNum);
-        Logger.log(`✅ Wrote data for ${headerName}: ${assignment.jobName} (Order: ${assignment.orderNumber}, ${cameras.length} cameras)`);
+        Logger.log(`✅ Wrote data for ${headerName}: ${assignment.jobName} (Order: ${assignment.orderNumber}, ${cameras.length} camera(s) scheduled for today)`);
       } else {
         // No assignment for this bay - cells already cleared above
         const headerName = getBayDisplayName(bayNum);
@@ -454,7 +466,7 @@ function writePrepBayDataToSheet(prepBayData, equipmentData) {
       }
     }
     
-    Logger.log(`💾 Wrote prep bay data to ${TEST_PREP_BAY_DESTINATION_SHEET_NAME} sheet`);
+    Logger.log(`💾 Wrote prep bay data to ${PREP_BAY_DESTINATION_SHEET_NAME} sheet`);
     
   } catch (error) {
     Logger.log(`❌ Error writing to sheet: ${error.toString()}`);
@@ -470,11 +482,11 @@ function clearAllPrepBays() {
   try {
     Logger.log("🧹 Starting to clear all prep bays");
     
-    const spreadsheet = SpreadsheetApp.openById(TEST_PREP_BAY_DESTINATION_SPREADSHEET_ID);
-    const sheet = spreadsheet.getSheetByName(TEST_PREP_BAY_DESTINATION_SHEET_NAME);
+    const spreadsheet = SpreadsheetApp.openById(PREP_BAY_DESTINATION_SPREADSHEET_ID);
+    const sheet = spreadsheet.getSheetByName(PREP_BAY_DESTINATION_SHEET_NAME);
     
     if (!sheet) {
-      Logger.log(`⚠️ Sheet "${TEST_PREP_BAY_DESTINATION_SHEET_NAME}" not found`);
+      Logger.log(`⚠️ Sheet "${PREP_BAY_DESTINATION_SHEET_NAME}" not found`);
       return;
     }
     
