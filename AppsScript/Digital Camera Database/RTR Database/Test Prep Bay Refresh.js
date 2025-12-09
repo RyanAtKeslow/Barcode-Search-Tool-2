@@ -179,7 +179,8 @@ function getBayDisplayName(bayNumber) {
 }
 
 /**
- * Reads Equipment Scheduling Chart data
+ * Reads Equipment Scheduling Chart data using Camera Forecast logic
+ * Finds cameras assigned to orders by checking LOS ANGELES rows and today's date column
  * @returns {Object} Object containing camera data indexed by order number
  */
 function readEquipmentSchedulingData() {
@@ -210,6 +211,22 @@ function readEquipmentSchedulingData() {
           todayColumnIndex = i;
           break;
         }
+      } else if (typeof cell === 'string') {
+        // Also check string version in case some columns are text
+        const parts = cell.split('/');
+        if (parts.length === 3) {
+          const m = parseInt(parts[0], 10);
+          const d = parseInt(parts[1], 10);
+          const y = parseInt(parts[2], 10);
+          if (
+            y === today.getFullYear() &&
+            m === today.getMonth() + 1 &&
+            d === today.getDate()
+          ) {
+            todayColumnIndex = i;
+            break;
+          }
+        }
       }
     }
     
@@ -218,13 +235,71 @@ function readEquipmentSchedulingData() {
       return {};
     }
     
+    Logger.log(`📅 Found today's date in column ${todayColumnIndex + 1}`);
+    
+    // Get backgrounds for all rows to check for valid booking colors
+    const validTodayCellBackgrounds = [
+      '#ffffff', // white
+      '#f9ff71', // yellow
+      '#66ff75', // green
+      '#4a86e8', // blue
+      '#ff7171', // red
+      '#00ffff'  // cyan
+    ];
+    
+    // Find all rows containing "LOS ANGELES" in column A
+    const foundLACameras = [];
+    for (let i = 0; i < data.length; i++) {
+      if (data[i][0] === 'LOS ANGELES') {
+        foundLACameras.push(i + 1); // 1-based row number
+      }
+    }
+    
+    Logger.log(`📹 Found ${foundLACameras.length} LOS ANGELES camera rows`);
+    
+    // Get backgrounds for LA camera rows
+    const backgrounds = cameraSheet.getRange(1, todayColumnIndex + 1, data.length, 1).getBackgrounds();
+    
     // Map to store cameras by order number
     // Key: order number (normalized), Value: Array of {equipmentType, barcode}
     const camerasByOrder = {};
     
-    // Process each row to find cameras assigned to orders
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
+    // Process each LA camera row
+    for (const rowNum of foundLACameras) {
+      const rowIdx = rowNum - 1; // Convert to 0-based
+      const row = data[rowIdx];
+      
+      // Check if today's cell has a valid background color (indicating booking)
+      const cellBg = backgrounds[rowIdx][0];
+      if (!validTodayCellBackgrounds.includes(cellBg)) {
+        continue; // Skip if not a valid booking color
+      }
+      
+      // Get the cell value from today's column
+      const cellValue = row[todayColumnIndex];
+      if (!cellValue || typeof cellValue !== 'string' || cellValue.trim() === '') {
+        continue; // Skip empty cells
+      }
+      
+      // Extract order number from cell value (format: "LA 879444 Company - TBD "Genesis" 3 Day IN PROGRESS")
+      const orderMatch = cellValue.match(/\b(\d{6})\b/);
+      if (!orderMatch) {
+        continue; // No order number found
+      }
+      
+      const orderNumber = orderMatch[1];
+      const normalizedOrder = orderNumber.replace(/[^0-9]/g, '');
+      
+      // Find camera type by looking for the first empty cell above
+      let typeRow = rowIdx - 1;
+      while (typeRow >= 0 && data[typeRow][0] !== '') {
+        typeRow--;
+      }
+      const equipmentType = typeRow >= 0 ? (data[typeRow][4] || '') : ''; // Column E
+      
+      if (!equipmentType) {
+        continue; // Skip if no camera type found
+      }
       
       // Extract barcode from column E (index 4)
       const barcodeCell = row[4];
@@ -236,43 +311,24 @@ function readEquipmentSchedulingData() {
         }
       }
       
-      if (!barcode) continue; // Skip rows without barcodes
-      
-      // Find camera type by looking for the first empty cell above
-      let typeRow = i - 1;
-      while (typeRow >= 0 && data[typeRow][0] !== '') {
-        typeRow--;
+      if (!barcode) {
+        continue; // Skip rows without barcodes
       }
-      const equipmentType = typeRow >= 0 ? (data[typeRow][4] || '') : ''; // Column E
       
-      if (!equipmentType) continue;
+      // Add camera to the order's list
+      if (!camerasByOrder[normalizedOrder]) {
+        camerasByOrder[normalizedOrder] = [];
+      }
       
-      // Check columns F and beyond (index 5+) for order numbers
-      // Look in today's column and nearby columns (today + next 7 days)
-      for (let colIdx = Math.max(5, todayColumnIndex); colIdx < Math.min(row.length, todayColumnIndex + 8); colIdx++) {
-        const cellValue = row[colIdx];
-        if (cellValue && typeof cellValue === 'string') {
-          // Extract 6-digit order numbers
-          const orderMatches = cellValue.match(/\b\d{6}\b/g);
-          if (orderMatches) {
-            orderMatches.forEach(orderNum => {
-              const normalizedOrder = orderNum.replace(/[^0-9]/g, '');
-              if (!camerasByOrder[normalizedOrder]) {
-                camerasByOrder[normalizedOrder] = [];
-              }
-              // Add camera if not already in list (avoid duplicates)
-              const exists = camerasByOrder[normalizedOrder].some(cam => 
-                cam.barcode === barcode && cam.equipmentType === equipmentType
-              );
-              if (!exists) {
-                camerasByOrder[normalizedOrder].push({
-                  equipmentType: equipmentType.toString().trim(),
-                  barcode: barcode
-                });
-              }
-            });
-          }
-        }
+      // Add camera if not already in list (avoid duplicates)
+      const exists = camerasByOrder[normalizedOrder].some(cam => 
+        cam.barcode === barcode && cam.equipmentType === equipmentType.toString().trim()
+      );
+      if (!exists) {
+        camerasByOrder[normalizedOrder].push({
+          equipmentType: equipmentType.toString().trim(),
+          barcode: barcode
+        });
       }
     }
     
@@ -344,33 +400,33 @@ function writePrepBayDataToSheet(prepBayData, equipmentData) {
       sheet.getRange(startRow, startCol + 1).setValue(headerName); // B1 equivalent
       
       if (assignment) {
-        // Write job name
-        sheet.getRange(startRow + 1, startCol).setValue('Job name:');
+        // Write job name to B2 (row 2, column B = startCol + 1)
+        // Note: Column A labels are already populated, so we only write to column B
         sheet.getRange(startRow + 1, startCol + 1).setValue(assignment.jobName);
         
-        // Write order number
-        sheet.getRange(startRow + 2, startCol).setValue('Order #');
+        // Write order number to B3
         sheet.getRange(startRow + 2, startCol + 1).setValue(assignment.orderNumber);
         
-        // Write prep tech
-        sheet.getRange(startRow + 3, startCol).setValue('Prep Tech:');
+        // Write prep tech to B4
         sheet.getRange(startRow + 3, startCol + 1).setValue(assignment.prepTech);
-        
-        // Write cameras header
-        sheet.getRange(startRow + 4, startCol).setValue('Cameras');
         
         // Get cameras for this order number
         const normalizedOrder = assignment.orderNumber.replace(/[^0-9]/g, '');
         const cameras = equipmentData[normalizedOrder] || [];
         
-        // Write camera equipment types and barcodes (up to 8 cameras, rows 5-12)
+        // Write camera types to B5 (comma-separated list of all unique camera types)
+        const uniqueCameraTypes = [...new Set(cameras.map(cam => cam.equipmentType))];
+        const cameraTypesString = uniqueCameraTypes.join(', ');
+        sheet.getRange(startRow + 4, startCol + 1).setValue(cameraTypesString);
+        
+        // Write barcodes to C5:C12 (one per row, up to 8 cameras)
         for (let i = 0; i < Math.min(cameras.length, 8); i++) {
           const camera = cameras[i];
-          sheet.getRange(startRow + 4 + i, startCol + 1).setValue(camera.equipmentType); // Column B
           sheet.getRange(startRow + 4 + i, startCol + 2).setValue(camera.barcode); // Column C
+          // Column D (checkboxes) are already populated, no need to update
         }
         
-        Logger.log(`✅ Wrote data for ${headerName}: ${assignment.jobName} (Order: ${assignment.orderNumber}, ${cameras.length} cameras)`);
+        Logger.log(`✅ Wrote data for ${headerName}: ${assignment.jobName} (Order: ${assignment.orderNumber}, ${cameras.length} cameras, ${uniqueCameraTypes.length} unique types)`);
       } else {
         // No assignment for this bay - leave it blank but keep header
         Logger.log(`ℹ️ No assignment for ${headerName}`);
