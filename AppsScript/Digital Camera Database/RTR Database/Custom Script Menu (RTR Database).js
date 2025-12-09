@@ -23,6 +23,8 @@ function onOpen(e) {
   // Create Prep Bay menu
   ui.createMenu('Prep Bay')
     .addItem('Test Prep Bay Refresh', 'testPrepBayRefresh')
+    .addSeparator()
+    .addItem('Clear All Prep Bays', 'clearAllPrepBays')
     .addToUi();
   
   // Create Custom Menu ESC (commented out)

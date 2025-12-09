@@ -480,3 +480,62 @@ function writePrepBayDataToSheet(prepBayData, equipmentData) {
   }
 }
 
+/**
+ * Clears all prep bay data cells for all 22 prep bays
+ * For each prep bay, clears B2:B12 and C5:D12
+ */
+function clearAllPrepBays() {
+  try {
+    Logger.log("🧹 Starting to clear all prep bays");
+    
+    const spreadsheet = SpreadsheetApp.openById(TEST_PREP_BAY_DESTINATION_SPREADSHEET_ID);
+    const sheet = spreadsheet.getSheetByName(TEST_PREP_BAY_DESTINATION_SHEET_NAME);
+    
+    if (!sheet) {
+      Logger.log(`⚠️ Sheet "${TEST_PREP_BAY_DESTINATION_SHEET_NAME}" not found`);
+      return;
+    }
+    
+    // Process each prep bay (1-22)
+    for (let bayNum = 1; bayNum <= 22; bayNum++) {
+      // Calculate column position
+      // Within each group of 3, columns repeat: Bay 1/4/7/10/13/16/19 = col 1, Bay 2/5/8/11/14/17/20 = col 6, Bay 3/6/9/12/15/18/21 = col 11
+      // Bay 22 (Kitchen) = col 1
+      const positionInGroup = (bayNum - 1) % 3;
+      const startCol = positionInGroup * 5 + 1; // 0->1, 1->6, 2->11
+      
+      // Calculate row position
+      // Each group of 3 prep bays shares the same starting row
+      // Group 0 (Bays 1-3): rows 1-12
+      // Group 1 (Bays 4-6): rows 14-25 (row 13 is blank)
+      // Group 2 (Bays 7-9): rows 27-38 (row 26 is blank)
+      // Group 3 (Bays 10-12): rows 40-51 (row 39 is blank)
+      // Group 4 (Bays 13-15): rows 53-64 (row 52 is blank)
+      // Group 5 (Bays 16-18): rows 66-77 (row 65 is blank)
+      // Group 6 (Bays 19-21): rows 79-90 (row 78 is blank)
+      // Group 7 (Bay 22): rows 92-103 (row 91 is blank)
+      
+      // Calculate which group this bay belongs to (0-based)
+      const group = Math.floor((bayNum - 1) / 3);
+      // Each group starts 13 rows after the previous (12 rows + 1 blank row)
+      const startRow = 1 + group * 13;
+      
+      // Clear B2:B12 (rows 2-12, column B = startCol + 1)
+      sheet.getRange(startRow + 1, startCol + 1, 11, 1).clearContent();
+      
+      // Clear C5:D12 (rows 5-12, columns C and D = startCol + 2 and startCol + 3)
+      sheet.getRange(startRow + 4, startCol + 2, 8, 2).clearContent();
+      
+      const headerName = getBayDisplayName(bayNum);
+      Logger.log(`🧹 Cleared ${headerName}`);
+    }
+    
+    Logger.log("✅ Successfully cleared all prep bays");
+    
+  } catch (error) {
+    Logger.log(`❌ Error clearing prep bays: ${error.toString()}`);
+    Logger.log(`Stack trace: ${error.stack}`);
+    throw error;
+  }
+}
+
