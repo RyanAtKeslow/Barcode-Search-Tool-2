@@ -20,6 +20,11 @@ function onOpen(e) {
     .addItem('Process Imports', 'processF2Imports')
     .addToUi();
   
+  // Create Prep Bay menu
+  ui.createMenu('Prep Bay')
+    .addItem('Test Prep Bay Refresh', 'testPrepBayRefresh')
+    .addToUi();
+  
   // Create Custom Menu ESC (commented out)
   // ui.createMenu('Custom Menu ESC')
   //   .addItem('Find Available Lens', 'findAvailableLens')
