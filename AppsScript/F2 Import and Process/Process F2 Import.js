@@ -140,8 +140,6 @@ function processF2Imports() {
  */
 function cleanupProcessedFiles(folder) {
   try {
-    const processedFiles = getProcessedFilesList();
-    
     // Get or create Processed subfolder
     let processedFolder = null;
     const folders = folder.getFoldersByName('Processed');
@@ -150,6 +148,16 @@ function cleanupProcessedFiles(folder) {
     } else {
       processedFolder = folder.createFolder('Processed');
       Logger.log("📁 Created 'Processed' subfolder");
+    }
+    
+    // Get list of filenames in Processed folder
+    const processedNames = new Set();
+    const pFiles = processedFolder.getFiles();
+    while (pFiles.hasNext()) {
+      const processedFile = pFiles.next();
+      if (processedFile.getMimeType() === MimeType.MICROSOFT_EXCEL) {
+        processedNames.add(processedFile.getName());
+      }
     }
     
     // Get all Excel files in the main folder
@@ -166,32 +174,12 @@ function cleanupProcessedFiles(folder) {
         continue;
       }
       
-      // Check if file has already been processed
-      if (processedFiles.has(fileName)) {
-        // Check if a file with the same name already exists in Processed folder
-        const processedFilesWithSameName = processedFolder.getFilesByName(fileName);
-        let duplicateExists = false;
-        
-        while (processedFilesWithSameName.hasNext()) {
-          const existingFile = processedFilesWithSameName.next();
-          // Check if it's an Excel file (same type)
-          if (existingFile.getMimeType() === MimeType.MICROSOFT_EXCEL) {
-            duplicateExists = true;
-            break;
-          }
-        }
-        
-        if (duplicateExists) {
-          // File already exists in Processed folder, delete the duplicate from main folder
-          Logger.log(`🗑️ Duplicate file found in Processed folder, removing from main folder: ${fileName}`);
-          file.setTrashed(true);
-          deletedCount++;
-        } else {
-          // File is in main folder but already processed, move it to Processed
-          Logger.log(`📦 Moving already-processed file to Processed folder: ${fileName}`);
-          file.moveTo(processedFolder);
-          movedCount++;
-        }
+      // Check if file already exists in Processed folder
+      if (processedNames.has(fileName)) {
+        // File already exists in Processed folder, delete the duplicate from main folder
+        Logger.log(`🗑️ Duplicate file found in Processed folder, removing from main folder: ${fileName}`);
+        file.setTrashed(true);
+        deletedCount++;
       }
     }
     
@@ -227,12 +215,27 @@ function cleanupProcessedFiles(folder) {
 
 /**
  * Finds unprocessed Excel files in the folder
+ * Checks if files exist in the "Processed" subfolder instead of using ScriptProperties
  * @param {GoogleAppsScript.Drive.Folder} folder - The folder to search
  * @returns {Array<GoogleAppsScript.Drive.File>} Array of unprocessed Excel files
  */
 function findUnprocessedExcelFiles(folder) {
   const unprocessedFiles = [];
-  const processedFiles = getProcessedFilesList();
+  
+  // Get list of filenames currently inside the "Processed" subfolder
+  const processedNames = new Set();
+  const processedFolders = folder.getFoldersByName('Processed');
+  if (processedFolders.hasNext()) {
+    const pFolder = processedFolders.next();
+    const pFiles = pFolder.getFiles();
+    while (pFiles.hasNext()) {
+      const processedFile = pFiles.next();
+      // Only track Excel files (same type as source files)
+      if (processedFile.getMimeType() === MimeType.MICROSOFT_EXCEL) {
+        processedNames.add(processedFile.getName());
+      }
+    }
+  }
   
   const files = folder.getFilesByType(MimeType.MICROSOFT_EXCEL);
   
@@ -246,9 +249,9 @@ function findUnprocessedExcelFiles(folder) {
       continue;
     }
     
-    // Check if file has already been processed
-    if (processedFiles.has(fileName)) {
-      Logger.log(`✓ File already processed: ${fileName}`);
+    // Check if file exists in processed folder
+    if (processedNames.has(fileName)) {
+      Logger.log(`✓ File already exists in Processed folder: ${fileName}`);
       continue;
     }
     
@@ -290,8 +293,7 @@ function processF2FileRaw(file, folder) {
     
     if (rawData.length === 0) {
       Logger.log("⚠️ No data found in this file");
-      // Still mark as processed and move file
-      markFileAsProcessed(file.getName());
+      // Still move file to Processed folder
       moveFileToProcessed(file, folder);
       return;
     }
@@ -307,7 +309,7 @@ function processF2FileRaw(file, folder) {
       record.ImportTimestamp = new Date().toISOString();
       record.SourceFile = file.getName();
       
-      // Look up Serial Number from barcode and add to record for column D
+      // Look up Serial Number from barcode and add to record for column AD
       const barcode = record.AssetBarcode ? record.AssetBarcode.toString().trim() : '';
       if (barcode && serialNumberMap.has(barcode)) {
         record.SerialNumber = serialNumberMap.get(barcode);
@@ -322,8 +324,7 @@ function processF2FileRaw(file, folder) {
     Logger.log("💾 Writing raw data to F2 Imports sheet...");
     writeToF2ImportsSheet(dataWithMetadata);
   
-    // Step 6: Mark file as processed and move to Processed folder
-    markFileAsProcessed(file.getName());
+    // Step 7: Move file to Processed folder
     moveFileToProcessed(file, folder);
     
     Logger.log(`✅ Processed ${dataWithMetadata.length} raw records`);
@@ -704,10 +705,10 @@ function verifyAgainstPrepBay(orderNumber, prepBayData) {
 
 /**
  * Writes data to F2 Imports sheet with deduplication based on Barcode + Creation Timestamp
- * Row 1: Original Excel headers (with Serial Number inserted at column D)
+ * Row 1: Original Excel headers (with Serial Number inserted at column AD)
  * Row 2: Common database header names (mapped)
- * Row 3+: Imported data (with Serial Number populated in column D from lookup)
- * Column layout: A=PrepDate, B=ServicePriority, C=Barcode, D=Serial Number, E=Equipment Name, etc.
+ * Row 3+: Imported data (with Serial Number populated in column AD from lookup)
+ * Column layout: AA=PrepDate, AB=ServicePriority, AC=Barcode, AD=Serial Number, AE=Equipment Name, etc.
  * Deduplication: Records with same AssetBarcode AND z_log_CreateHost_ts_ae are considered duplicates
  * @param {Array<Object>} data - Array of enriched service records
  */
@@ -721,6 +722,9 @@ function writeToF2ImportsSheet(data) {
       sheet = spreadsheet.insertSheet(F2_IMPORTS_SHEET_NAME);
       Logger.log(`✅ Created new sheet: ${F2_IMPORTS_SHEET_NAME}`);
     }
+    
+    // Data starts at column AA (column 27, 1-indexed)
+    const START_COLUMN = 27; // Column AA
     
     // Build header rows from first record
     const firstRecord = data[0];
@@ -757,20 +761,25 @@ function writeToF2ImportsSheet(data) {
     });
     
     // Check if headers need to be written (sheet is empty or headers changed)
-    const existingData = sheet.getDataRange().getValues();
-    const needsHeaderSetup = existingData.length === 0 || 
-                            existingData.length < 2 ||
-                            !arraysEqual(existingData[0], orderedHeaders) ||
-                            !arraysEqual(existingData[1], mappedHeaders);
+    // Read existing headers from column AA
+    const existingHeaderRow1 = sheet.getRange(1, START_COLUMN, 1, orderedHeaders.length).getValues()[0];
+    const existingHeaderRow2 = sheet.getRange(2, START_COLUMN, 1, mappedHeaders.length).getValues()[0];
+    
+    // Check if first cell is empty - this indicates an empty sheet
+    const isSheetEmpty = !existingHeaderRow1[0] || existingHeaderRow1[0].toString().trim() === '';
+    
+    const needsHeaderSetup = isSheetEmpty || 
+                            !arraysEqual(existingHeaderRow1, orderedHeaders) ||
+                            !arraysEqual(existingHeaderRow2, mappedHeaders);
     
     if (needsHeaderSetup) {
-      // Write Row 1: Original headers (with SerialNumber inserted)
-      sheet.getRange(1, 1, 1, orderedHeaders.length).setValues([orderedHeaders]);
-      Logger.log(`📋 Wrote original headers (Row 1): ${orderedHeaders.join(', ')}`);
+      // Write Row 1: Original headers (with SerialNumber inserted) starting at column AA
+      sheet.getRange(1, START_COLUMN, 1, orderedHeaders.length).setValues([orderedHeaders]);
+      Logger.log(`📋 Wrote original headers (Row 1, starting at column AA): ${orderedHeaders.join(', ')}`);
       
-      // Write Row 2: Mapped/common headers
-      sheet.getRange(2, 1, 1, mappedHeaders.length).setValues([mappedHeaders]);
-      Logger.log(`📋 Wrote mapped headers (Row 2): ${mappedHeaders.join(', ')}`);
+      // Write Row 2: Mapped/common headers starting at column AA
+      sheet.getRange(2, START_COLUMN, 1, mappedHeaders.length).setValues([mappedHeaders]);
+      Logger.log(`📋 Wrote mapped headers (Row 2, starting at column AA): ${mappedHeaders.join(', ')}`);
     }
     
     // Step 1: Load existing records for deduplication
@@ -785,8 +794,8 @@ function writeToF2ImportsSheet(data) {
     const endTimestampColIndex = orderedHeaders.indexOf('TimestampEnd_ts');
     
     if (lastRow >= 3 && barcodeColIndex !== -1 && creationTimestampColIndex !== -1) {
-      // Get existing data (rows 3 onwards)
-      const existingRows = sheet.getRange(3, 1, lastRow - 2, orderedHeaders.length).getValues();
+      // Get existing data (rows 3 onwards) starting from column AA
+      const existingRows = sheet.getRange(3, START_COLUMN, lastRow - 2, orderedHeaders.length).getValues();
       
       for (let i = 0; i < existingRows.length; i++) {
         const row = existingRows[i];
@@ -905,12 +914,12 @@ function writeToF2ImportsSheet(data) {
       rowsToWrite.push(rowData);
     }
     
-    // Append all new unique rows (starting after row 2, or after last data row)
+    // Append all new unique rows (starting after row 2, or after last data row) at column AA
     if (rowsToWrite.length > 0) {
       const currentLastRow = sheet.getLastRow();
       const startRow = currentLastRow < 2 ? 3 : currentLastRow + 1; // Start at row 3 if sheet only has headers
-      sheet.getRange(startRow, 1, rowsToWrite.length, orderedHeaders.length).setValues(rowsToWrite);
-      Logger.log(`💾 Added ${rowsToWrite.length} new unique record(s) (Column D populated with Serial Numbers)`);
+      sheet.getRange(startRow, START_COLUMN, rowsToWrite.length, orderedHeaders.length).setValues(rowsToWrite);
+      Logger.log(`💾 Added ${rowsToWrite.length} new unique record(s) (Column AD populated with Serial Numbers, starting at column AA)`);
     } else {
       Logger.log(`ℹ️ No new unique records to add (all were duplicates)`);
     }
@@ -1104,50 +1113,43 @@ function updateRTRDatabase(data) {
         continue;
       }
       
-      // Process each row and update Order # if match found
-      const updates = [];
+      // Process each row to build updates - use batch column write for performance
+      // Extract current Order column data into a 1D array
+      const orderColumnValues = data.map(row => row[orderColumnIndex] || '');
+      let updatesMade = false;
       let sheetUpdated = 0;
       
       for (let i = 0; i < data.length; i++) {
         const row = data[i];
         const barcode = row[3] ? row[3].toString().trim() : ''; // Column D (index 3)
         const serial = row[2] ? row[2].toString().trim() : ''; // Column C (index 2)
-        const currentOrder = row[orderColumnIndex] ? row[orderColumnIndex].toString().trim() : '';
+        const currentOrder = orderColumnValues[i] ? orderColumnValues[i].toString().trim() : '';
         
         let newOrder = null;
-        let matchType = '';
         
         // Try barcode first, then serial
         if (barcode && barcodeToOrder.has(barcode)) {
           newOrder = barcodeToOrder.get(barcode);
-          matchType = 'barcode';
         } else if (serial && serialToOrder.has(serial)) {
           newOrder = serialToOrder.get(serial);
-          matchType = 'serial';
         }
         
-        // Update if we found a match and it's different from current
+        // Update the array in memory if we found a match and it's different
         if (newOrder && newOrder !== currentOrder) {
-          const rowNum = i + 3; // +3 because data starts at row 3
-          updates.push({
-            row: rowNum,
-            column: orderColumnIndex + 1, // Convert to 1-based
-            value: newOrder,
-            barcode: barcode,
-            serial: serial,
-            matchType: matchType
-          });
+          orderColumnValues[i] = newOrder; // Update the array in memory
+          updatesMade = true;
           sheetUpdated++;
         }
       }
       
-      // Apply updates in bulk
-      if (updates.length > 0) {
-        for (const update of updates) {
-          sheet.getRange(update.row, update.column).setValue(update.value);
-        }
-        Logger.log(`  ✅ Updated ${updates.length} records with Order #s`);
-        totalUpdated += updates.length;
+      // Write the ENTIRE column back in one go if changes were made
+      if (updatesMade) {
+        // Map the 1D array back to 2D array for setValues (each value becomes [value])
+        const columnData = orderColumnValues.map(val => [val]);
+        // Write from row 3 down (data starts at row 3)
+        sheet.getRange(3, orderColumnIndex + 1, columnData.length, 1).setValues(columnData);
+        Logger.log(`  ✅ Batch updated ${sheetUpdated} record(s) with Order #s`);
+        totalUpdated += sheetUpdated;
       } else {
         Logger.log(`  ℹ️ No updates needed for this sheet`);
       }
@@ -1187,33 +1189,5 @@ function moveFileToProcessed(file, parentFolder) {
   } catch (error) {
     Logger.log(`❌ Error moving file to Processed folder: ${error.toString()}`);
     // Don't throw - file processing should continue even if move fails
-  }
-}
-
-/**
- * Gets the list of already processed files
- * Uses PropertiesService to track processed files
- * @returns {Set<string>} Set of processed file names
- */
-function getProcessedFilesList() {
-  const properties = PropertiesService.getScriptProperties();
-  const processedFilesJson = properties.getProperty('F2_IMPORT_PROCESSED_FILES') || '[]';
-  const processedFiles = JSON.parse(processedFilesJson);
-  return new Set(processedFiles);
-}
-
-/**
- * Marks a file as processed
- * @param {string} fileName - Name of the file to mark as processed
- */
-function markFileAsProcessed(fileName) {
-  const properties = PropertiesService.getScriptProperties();
-  const processedFilesJson = properties.getProperty('F2_IMPORT_PROCESSED_FILES') || '[]';
-  const processedFiles = JSON.parse(processedFilesJson);
-  
-  if (!processedFiles.includes(fileName)) {
-    processedFiles.push(fileName);
-    properties.setProperty('F2_IMPORT_PROCESSED_FILES', JSON.stringify(processedFiles));
-    Logger.log(`✓ Marked as processed: ${fileName}`);
   }
 }
