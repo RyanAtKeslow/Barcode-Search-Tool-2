@@ -515,10 +515,20 @@ function clearAllPrepBays() {
       const startRow = 1 + group * 13;
       
       // Clear B2:B12 (rows 2-12, column B = startCol + 1)
-      sheet.getRange(startRow + 1, startCol + 1, 11, 1).clearContent();
+      // Skip if this is column D (4), I (9), or N (14)
+      const columnB = startCol + 1;
+      if (columnB !== 4 && columnB !== 9 && columnB !== 14) {
+        sheet.getRange(startRow + 1, startCol + 1, 11, 1).clearContent();
+      }
       
-      // Clear C5:D12 (rows 5-12, columns C and D = startCol + 2 and startCol + 3)
-      sheet.getRange(startRow + 4, startCol + 2, 8, 2).clearContent();
+      // Clear C5:C12 (rows 5-12, column C = startCol + 2)
+      // Skip if this would be column D (4), I (9), or N (14)
+      const columnC = startCol + 2;
+      if (columnC !== 4 && columnC !== 9 && columnC !== 14) {
+        sheet.getRange(startRow + 4, startCol + 2, 8, 1).clearContent();
+      }
+      
+      // Note: Column D (startCol + 3) is intentionally skipped (checkboxes)
       
       const headerName = getBayDisplayName(bayNum);
       Logger.log(`🧹 Cleared ${headerName}`);
