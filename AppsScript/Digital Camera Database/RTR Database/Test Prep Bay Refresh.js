@@ -343,6 +343,7 @@ function readEquipmentSchedulingData() {
 
 /**
  * Writes prep bay data to the destination sheet
+ * Distributes cameras across multiple prep bays when a job spans multiple bays
  * @param {Array<Object>} prepBayData - Array of prep bay assignments
  * @param {Object} equipmentData - Camera data indexed by order number
  */
@@ -357,13 +358,37 @@ function writePrepBayDataToSheet(prepBayData, equipmentData) {
       Logger.log(`✅ Created new sheet: ${TEST_PREP_BAY_DESTINATION_SHEET_NAME}`);
     }
     
-    // Calculate column and row positions for each prep bay
-    // Prep Bay layout:
-    // - Each prep bay is 4 columns wide
-    // - Prep Bay 1: A1:D12 (columns 1-4)
-    // - Prep Bay 2: F1:I12 (columns 6-9)
-    // - Prep Bay 3: K1:N12 (columns 11-14)
-    // - Pattern: Start column = (bayNumber - 1) * 5 + 1 (accounting for spacer columns)
+    // Group assignments by order number to identify jobs spanning multiple bays
+    const assignmentsByOrder = {};
+    for (const assignment of prepBayData) {
+      const normalizedOrder = assignment.orderNumber.replace(/[^0-9]/g, '');
+      if (!assignmentsByOrder[normalizedOrder]) {
+        assignmentsByOrder[normalizedOrder] = [];
+      }
+      assignmentsByOrder[normalizedOrder].push(assignment);
+    }
+    
+    // For each order, distribute cameras across its prep bays
+    const cameraDistribution = {};
+    for (const [orderNumber, assignments] of Object.entries(assignmentsByOrder)) {
+      const cameras = equipmentData[orderNumber] || [];
+      const numBays = assignments.length;
+      
+      if (numBays === 1) {
+        // Single bay: all cameras go to that bay
+        cameraDistribution[assignments[0].bayNumber] = cameras;
+      } else {
+        // Multiple bays: distribute cameras evenly
+        const camerasPerBay = Math.ceil(cameras.length / numBays);
+        for (let i = 0; i < assignments.length; i++) {
+          const startIdx = i * camerasPerBay;
+          const endIdx = Math.min(startIdx + camerasPerBay, cameras.length);
+          cameraDistribution[assignments[i].bayNumber] = cameras.slice(startIdx, endIdx);
+        }
+      }
+      
+      Logger.log(`📊 Order ${orderNumber}: ${cameras.length} cameras across ${numBays} bay(s) - ${assignments.map(a => getBayDisplayName(a.bayNumber)).join(', ')}`);
+    }
     
     // Process each prep bay (1-22)
     for (let bayNum = 1; bayNum <= 22; bayNum++) {
@@ -374,7 +399,6 @@ function writePrepBayDataToSheet(prepBayData, equipmentData) {
       // Bay 22 (Kitchen) = col 1
       const positionInGroup = (bayNum - 1) % 3;
       const startCol = positionInGroup * 5 + 1; // 0->1, 1->6, 2->11
-      const endCol = startCol + 3; // 4 columns wide
       
       // Calculate row position
       // Each group of 3 prep bays shares the same starting row
@@ -413,22 +437,25 @@ function writePrepBayDataToSheet(prepBayData, equipmentData) {
         // Write prep tech to B4
         sheet.getRange(startRow + 3, startCol + 1).setValue(assignment.prepTech);
         
-        // Get cameras for this order number
-        const normalizedOrder = assignment.orderNumber.replace(/[^0-9]/g, '');
-        const cameras = equipmentData[normalizedOrder] || [];
+        // Get cameras for this bay (from distribution)
+        const cameras = cameraDistribution[bayNum] || [];
         
-        // Write camera types to B5 (comma-separated list of all unique camera types)
-        const uniqueCameraTypes = [...new Set(cameras.map(cam => cam.equipmentType))];
+        // Get all cameras for this order to show all types in B5
+        const normalizedOrder = assignment.orderNumber.replace(/[^0-9]/g, '');
+        const allCamerasForOrder = equipmentData[normalizedOrder] || [];
+        const uniqueCameraTypes = [...new Set(allCamerasForOrder.map(cam => cam.equipmentType))];
         const cameraTypesString = uniqueCameraTypes.join(', ');
+        
+        // Write camera types to B5 (comma-separated list of all unique camera types for the order)
         sheet.getRange(startRow + 4, startCol + 1).setValue(cameraTypesString);
         
-        // Write barcodes to C5:C12 (one per row, up to 8 cameras)
+        // Write barcodes to C5:C12 (one per row, up to 8 cameras for this bay)
         for (let i = 0; i < Math.min(cameras.length, 8); i++) {
           const camera = cameras[i];
           sheet.getRange(startRow + 4 + i, startCol + 2).setValue(camera.barcode); // Column C
         }
         
-        // Clear remaining cells in B6:B12 and C5:C12 if there are fewer than 8 cameras
+        // Clear remaining cells in C5:C12 if there are fewer than 8 cameras for this bay
         if (cameras.length < 8) {
           // Clear unused barcode cells (C5:C12 beyond the number of cameras)
           for (let i = cameras.length; i < 8; i++) {
@@ -437,7 +464,7 @@ function writePrepBayDataToSheet(prepBayData, equipmentData) {
         }
         
         const headerName = getBayDisplayName(bayNum);
-        Logger.log(`✅ Wrote data for ${headerName}: ${assignment.jobName} (Order: ${assignment.orderNumber}, ${cameras.length} cameras, ${uniqueCameraTypes.length} unique types)`);
+        Logger.log(`✅ Wrote data for ${headerName}: ${assignment.jobName} (Order: ${assignment.orderNumber}, ${cameras.length}/${allCamerasForOrder.length} cameras in this bay, ${uniqueCameraTypes.length} unique types)`);
       } else {
         // No assignment for this bay - cells already cleared above
         const headerName = getBayDisplayName(bayNum);
