@@ -1217,4 +1217,3 @@ function markFileAsProcessed(fileName) {
     Logger.log(`✓ Marked as processed: ${fileName}`);
   }
 }
-
