@@ -8,7 +8,7 @@
  * 4. Looks up Serial Numbers from Barcode & Serial Database
  * 5. Cross-references with Equipment Scheduling Chart for verification
  * 6. Cross-references with Prep Bay Assignments (secondary check)
- * 7. Writes to "F2 Imports" sheet, updating existing records by barcode
+ * 7. Writes to "F2 Imports" sheet with deduplication (Barcode + Creation Timestamp)
  * 8. Creates alerts for mismatches
  * 9. Moves processed files to "Processed" subfolder
  * 10. Updates RTR Database with Order #s
@@ -318,7 +318,7 @@ function processF2FileRaw(file, folder) {
       return record;
     });
   
-    // Step 6: Write to F2 Imports sheet (raw data with dual headers, column D blank)
+    // Step 6: Write to F2 Imports sheet (raw data with dual headers, deduplication applied)
     Logger.log("💾 Writing raw data to F2 Imports sheet...");
     writeToF2ImportsSheet(dataWithMetadata);
   
@@ -703,11 +703,12 @@ function verifyAgainstPrepBay(orderNumber, prepBayData) {
 }
 
 /**
- * Writes data to F2 Imports sheet, updating existing records by barcode
+ * Writes data to F2 Imports sheet with deduplication based on Barcode + Creation Timestamp
  * Row 1: Original Excel headers (with Serial Number inserted at column D)
  * Row 2: Common database header names (mapped)
  * Row 3+: Imported data (with Serial Number populated in column D from lookup)
  * Column layout: A=PrepDate, B=ServicePriority, C=Barcode, D=Serial Number, E=Equipment Name, etc.
+ * Deduplication: Records with same AssetBarcode AND z_log_CreateHost_ts_ae are considered duplicates
  * @param {Array<Object>} data - Array of enriched service records
  */
 function writeToF2ImportsSheet(data) {
@@ -772,11 +773,130 @@ function writeToF2ImportsSheet(data) {
       Logger.log(`📋 Wrote mapped headers (Row 2): ${mappedHeaders.join(', ')}`);
     }
     
-    // For raw data import, we just append all new records (no deduplication)
-    // Column D (SerialNumber) will be populated with looked-up serial numbers
-    const rowsToWrite = [];
+    // Step 1: Load existing records for deduplication
+    // Create a Map of existing records: key = barcode|creationTimestamp, value = {startTimestamp, endTimestamp}
+    const existingRecords = new Map();
+    const lastRow = sheet.getLastRow();
+    
+    // Find column indices for key fields
+    const barcodeColIndex = orderedHeaders.indexOf('AssetBarcode');
+    const creationTimestampColIndex = orderedHeaders.indexOf('z_log_CreateHost_ts_ae');
+    const startTimestampColIndex = orderedHeaders.indexOf('TimestampStart_ts');
+    const endTimestampColIndex = orderedHeaders.indexOf('TimestampEnd_ts');
+    
+    if (lastRow >= 3 && barcodeColIndex !== -1 && creationTimestampColIndex !== -1) {
+      // Get existing data (rows 3 onwards)
+      const existingRows = sheet.getRange(3, 1, lastRow - 2, orderedHeaders.length).getValues();
+      
+      for (let i = 0; i < existingRows.length; i++) {
+        const row = existingRows[i];
+        const barcode = row[barcodeColIndex] ? row[barcodeColIndex].toString().trim() : '';
+        const creationTimestamp = row[creationTimestampColIndex] ? row[creationTimestampColIndex].toString().trim() : '';
+        
+        if (barcode && creationTimestamp) {
+          // Create unique key: barcode|creationTimestamp
+          const key = `${barcode}|${creationTimestamp}`;
+          
+          // Get timestamps from existing record
+          const startTimestamp = (startTimestampColIndex !== -1 && row[startTimestampColIndex]) 
+            ? row[startTimestampColIndex].toString().trim() : '';
+          const endTimestamp = (endTimestampColIndex !== -1 && row[endTimestampColIndex]) 
+            ? row[endTimestampColIndex].toString().trim() : '';
+          
+          // Store the record with its timestamps
+          existingRecords.set(key, {
+            startTimestamp: startTimestamp,
+            endTimestamp: endTimestamp
+          });
+        }
+      }
+      Logger.log(`📚 Loaded ${existingRecords.size} existing records for deduplication check`);
+    }
+    
+    // Step 2: Filter out duplicates from new data, with timestamp comparison
+    const uniqueRecords = [];
+    const duplicateCount = { count: 0 };
+    const updatedCount = { count: 0 };
     
     for (const record of data) {
+      const barcode = record.AssetBarcode ? record.AssetBarcode.toString().trim() : '';
+      const creationTimestamp = record.z_log_CreateHost_ts_ae ? record.z_log_CreateHost_ts_ae.toString().trim() : '';
+      
+      if (!barcode || !creationTimestamp) {
+        // If missing key fields, include the record (can't deduplicate without both)
+        uniqueRecords.push(record);
+        continue;
+      }
+      
+      // Create unique key: barcode|creationTimestamp
+      const key = `${barcode}|${creationTimestamp}`;
+      
+      if (existingRecords.has(key)) {
+        // Found a record with same barcode and creation timestamp
+        // Check if timestamps differ or are missing
+        const existingRecord = existingRecords.get(key);
+        const newStartTimestamp = record.TimestampStart_ts ? record.TimestampStart_ts.toString().trim() : '';
+        const newEndTimestamp = record.TimestampEnd_ts ? record.TimestampEnd_ts.toString().trim() : '';
+        
+        // Check if we should allow this record (update/add needed)
+        let shouldAllow = false;
+        
+        // Check Start Timestamp
+        if (!existingRecord.startTimestamp && newStartTimestamp) {
+          // Existing record has no start timestamp, new one does - allow it
+          shouldAllow = true;
+        } else if (existingRecord.startTimestamp && newStartTimestamp && 
+                   existingRecord.startTimestamp !== newStartTimestamp) {
+          // Both have start timestamps but they differ - allow it
+          shouldAllow = true;
+        }
+        
+        // Check End Timestamp
+        if (!existingRecord.endTimestamp && newEndTimestamp) {
+          // Existing record has no end timestamp, new one does - allow it
+          shouldAllow = true;
+        } else if (existingRecord.endTimestamp && newEndTimestamp && 
+                   existingRecord.endTimestamp !== newEndTimestamp) {
+          // Both have end timestamps but they differ - allow it
+          shouldAllow = true;
+        }
+        
+        if (shouldAllow) {
+          // Timestamps differ or missing - allow this record (it's an update)
+          uniqueRecords.push(record);
+          updatedCount.count++;
+          // Update the existing record in the map with new timestamps
+          existingRecords.set(key, {
+            startTimestamp: newStartTimestamp || existingRecord.startTimestamp,
+            endTimestamp: newEndTimestamp || existingRecord.endTimestamp
+          });
+        } else {
+          // Exact duplicate - skip it
+          duplicateCount.count++;
+        }
+      } else {
+        // Not a duplicate - add to unique records and mark as seen
+        const newStartTimestamp = record.TimestampStart_ts ? record.TimestampStart_ts.toString().trim() : '';
+        const newEndTimestamp = record.TimestampEnd_ts ? record.TimestampEnd_ts.toString().trim() : '';
+        uniqueRecords.push(record);
+        existingRecords.set(key, {
+          startTimestamp: newStartTimestamp,
+          endTimestamp: newEndTimestamp
+        });
+      }
+    }
+    
+    if (duplicateCount.count > 0) {
+      Logger.log(`🔄 Skipped ${duplicateCount.count} exact duplicate record(s) based on Barcode + Creation Timestamp`);
+    }
+    if (updatedCount.count > 0) {
+      Logger.log(`🔄 Allowed ${updatedCount.count} record(s) with updated timestamps (Start or End Timestamp differs or was missing)`);
+    }
+    
+    // Step 3: Write only unique records
+    const rowsToWrite = [];
+    
+    for (const record of uniqueRecords) {
       const rowData = [];
       for (const header of orderedHeaders) {
         // Write Serial Number value (looked up from Barcode & Serial Database)
@@ -785,14 +905,15 @@ function writeToF2ImportsSheet(data) {
       rowsToWrite.push(rowData);
     }
     
-    // Append all new rows (starting after row 2, or after last data row)
+    // Append all new unique rows (starting after row 2, or after last data row)
     if (rowsToWrite.length > 0) {
-      const lastRow = sheet.getLastRow();
-      const startRow = lastRow < 2 ? 3 : lastRow + 1; // Start at row 3 if sheet only has headers
+      const currentLastRow = sheet.getLastRow();
+      const startRow = currentLastRow < 2 ? 3 : currentLastRow + 1; // Start at row 3 if sheet only has headers
       sheet.getRange(startRow, 1, rowsToWrite.length, orderedHeaders.length).setValues(rowsToWrite);
+      Logger.log(`💾 Added ${rowsToWrite.length} new unique record(s) (Column D populated with Serial Numbers)`);
+    } else {
+      Logger.log(`ℹ️ No new unique records to add (all were duplicates)`);
     }
-    
-    Logger.log(`💾 Added ${rowsToWrite.length} new records (Column D populated with Serial Numbers)`);
     
   } catch (error) {
     Logger.log(`❌ Error writing to F2 Imports sheet: ${error.toString()}`);
