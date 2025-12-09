@@ -353,12 +353,9 @@ function writePrepBayDataToSheet(prepBayData, equipmentData) {
     
     // Create sheet if it doesn't exist
     if (!sheet) {
-      sheet = spreadsheet.insertSheet(DESTINATION_SHEET_NAME);
+      sheet = spreadsheet.insertSheet(TEST_PREP_BAY_DESTINATION_SHEET_NAME);
       Logger.log(`✅ Created new sheet: ${TEST_PREP_BAY_DESTINATION_SHEET_NAME}`);
     }
-    
-    // Clear the entire sheet first
-    sheet.clear();
     
     // Calculate column and row positions for each prep bay
     // Prep Bay layout:
@@ -395,13 +392,19 @@ function writePrepBayDataToSheet(prepBayData, equipmentData) {
       // Each group starts 13 rows after the previous (12 rows + 1 blank row)
       const startRow = 1 + group * 13;
       
-      // Write prep bay header
-      const headerName = getBayDisplayName(bayNum);
-      sheet.getRange(startRow, startCol + 1).setValue(headerName); // B1 equivalent
+      // Only update cells B2:B12 and C5:C12 for this prep bay
+      // Clear only the specific ranges we're updating
+      // Note: D5:D12 are checkboxes and should NOT be touched
+      
+      // Clear B2:B12 (rows 2-12, column B)
+      sheet.getRange(startRow + 1, startCol + 1, 11, 1).clearContent();
+      
+      // Clear C5:C12 (rows 5-12, column C) - barcodes only
+      // D5:D12 (checkboxes) are left untouched
+      sheet.getRange(startRow + 4, startCol + 2, 8, 1).clearContent();
       
       if (assignment) {
         // Write job name to B2 (row 2, column B = startCol + 1)
-        // Note: Column A labels are already populated, so we only write to column B
         sheet.getRange(startRow + 1, startCol + 1).setValue(assignment.jobName);
         
         // Write order number to B3
@@ -423,13 +426,22 @@ function writePrepBayDataToSheet(prepBayData, equipmentData) {
         for (let i = 0; i < Math.min(cameras.length, 8); i++) {
           const camera = cameras[i];
           sheet.getRange(startRow + 4 + i, startCol + 2).setValue(camera.barcode); // Column C
-          // Column D (checkboxes) are already populated, no need to update
         }
         
+        // Clear remaining cells in B6:B12 and C5:C12 if there are fewer than 8 cameras
+        if (cameras.length < 8) {
+          // Clear unused barcode cells (C5:C12 beyond the number of cameras)
+          for (let i = cameras.length; i < 8; i++) {
+            sheet.getRange(startRow + 4 + i, startCol + 2).setValue(''); // Clear unused C cells
+          }
+        }
+        
+        const headerName = getBayDisplayName(bayNum);
         Logger.log(`✅ Wrote data for ${headerName}: ${assignment.jobName} (Order: ${assignment.orderNumber}, ${cameras.length} cameras, ${uniqueCameraTypes.length} unique types)`);
       } else {
-        // No assignment for this bay - leave it blank but keep header
-        Logger.log(`ℹ️ No assignment for ${headerName}`);
+        // No assignment for this bay - cells already cleared above
+        const headerName = getBayDisplayName(bayNum);
+        Logger.log(`ℹ️ No assignment for ${headerName} - cleared data cells`);
       }
     }
     
