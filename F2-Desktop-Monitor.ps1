@@ -64,6 +64,57 @@ function Test-F2FilePattern {
     return $fileName -match $FILE_PATTERN
 }
 
+# Send Windows toast notification
+function Send-Notification {
+    param(
+        [string]$Title,
+        [string]$Message,
+        [string]$AppId = "F2DesktopMonitor"
+    )
+    
+    try {
+        # Try using BurntToast module if available
+        if (Get-Module -ListAvailable -Name BurntToast) {
+            Import-Module BurntToast -ErrorAction SilentlyContinue
+            New-BurntToastNotification -Text $Title, $Message -AppId $AppId -ErrorAction SilentlyContinue
+            return
+        }
+        
+        # Fallback: Use Windows.UI.Notifications API (Windows 10/11)
+        [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+        [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
+        
+        $template = @"
+<toast>
+    <visual>
+        <binding template="ToastGeneric">
+            <text>$Title</text>
+            <text>$Message</text>
+        </binding>
+    </visual>
+</toast>
+"@
+        
+        $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+        $xml.LoadXml($template)
+        
+        $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
+        $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($AppId)
+        $notifier.Show($toast)
+    }
+    catch {
+        # If all else fails, use a simple popup (requires user interaction to dismiss)
+        try {
+            Add-Type -AssemblyName System.Windows.Forms
+            [System.Windows.Forms.MessageBox]::Show($Message, $Title, [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+        }
+        catch {
+            # Last resort: just log it
+            Write-Log "Notification failed: $_" "WARN"
+        }
+    }
+}
+
 # Check if a file is locked/in use by another process
 function Test-FileLocked {
     param([string]$filePath)
@@ -211,6 +262,9 @@ while ($true) {
                 # Mark as processed only if move succeeded
                 Add-ProcessedFile $fileName
                 $processedFiles = Get-ProcessedFiles
+                
+                # Send system notification
+                Send-Notification -Title "F2 File Moved" -Message "Successfully moved $fileName to Google Drive sync folder"
             }
         }
     }
