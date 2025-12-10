@@ -76,41 +76,74 @@ function Send-Notification {
         # Try using BurntToast module if available
         if (Get-Module -ListAvailable -Name BurntToast) {
             Import-Module BurntToast -ErrorAction SilentlyContinue
-            New-BurntToastNotification -Text $Title, $Message -AppId $AppId -ErrorAction SilentlyContinue
+            New-BurntToastNotification -Text $Title, $Message -AppId $AppId -ErrorAction Stop
+            Write-Log "Notification sent via BurntToast" "INFO"
             return
         }
         
         # Fallback: Use Windows.UI.Notifications API (Windows 10/11)
-        [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
-        [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
-        
-        $template = @"
-<toast>
+        try {
+            [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+            [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
+            
+            # Use PowerShell's AppId for better compatibility, or use a proper AUMID format
+            # Try using PowerShell's actual AppId first
+            $powerShellAppId = "Microsoft.Windows.Shell.RunDialog"
+            $usePowerShellAppId = $false
+            
+            # Check if we can use PowerShell's AppId
+            try {
+                [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($powerShellAppId) | Out-Null
+                $usePowerShellAppId = $true
+            }
+            catch {
+                # Fall back to custom AppId
+                $usePowerShellAppId = $false
+            }
+            
+            $effectiveAppId = if ($usePowerShellAppId) { $powerShellAppId } else { $AppId }
+            
+            # Enhanced toast template with audio and longer duration
+            $template = @"
+<toast scenario="reminder" duration="long" useButtonStyle="true">
     <visual>
         <binding template="ToastGeneric">
             <text>$Title</text>
             <text>$Message</text>
         </binding>
     </visual>
+    <audio src="ms-winsoundevent:Notification.Default" />
 </toast>
 "@
-        
-        $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
-        $xml.LoadXml($template)
-        
-        $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
-        $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($AppId)
-        $notifier.Show($toast)
+            
+            $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+            $xml.LoadXml($template)
+            
+            $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
+            
+            # Set expiration time to 10 seconds (default is 7 seconds)
+            $toast.ExpirationTime = [DateTimeOffset]::Now.AddSeconds(10)
+            
+            $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($effectiveAppId)
+            $notifier.Show($toast)
+            Write-Log "Notification sent via Windows.UI.Notifications (AppId: $effectiveAppId)" "INFO"
+            return
+        }
+        catch {
+            Write-Log "Windows.UI.Notifications failed: $_" "WARN"
+            throw  # Re-throw to trigger MessageBox fallback
+        }
     }
     catch {
         # If all else fails, use a simple popup (requires user interaction to dismiss)
         try {
-            Add-Type -AssemblyName System.Windows.Forms
-            [System.Windows.Forms.MessageBox]::Show($Message, $Title, [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+            Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+            [System.Windows.Forms.MessageBox]::Show($Message, $Title, [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
+            Write-Log "Notification sent via MessageBox fallback" "INFO"
         }
         catch {
             # Last resort: just log it
-            Write-Log "Notification failed: $_" "WARN"
+            Write-Log "All notification methods failed: $_" "ERROR"
         }
     }
 }
@@ -264,6 +297,7 @@ while ($true) {
                 $processedFiles = Get-ProcessedFiles
                 
                 # Send system notification
+                Write-Log "Sending notification for $fileName..." "INFO"
                 Send-Notification -Title "F2 File Moved" -Message "Successfully moved $fileName to Google Drive sync folder"
             }
         }
