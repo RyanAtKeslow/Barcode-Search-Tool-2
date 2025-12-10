@@ -11,6 +11,15 @@ $CHECK_INTERVAL = 10
 $PROCESSED_FILES_LOG = "$env:APPDATA\F2DesktopMonitor\processed_files.txt"
 $LOG_FILE = "$env:APPDATA\F2DesktopMonitor\monitor.log"
 
+# Google Apps Script Web App URL for triggering F2 import processing
+# To get this URL:
+# 1. Open the Apps Script project in Google Apps Script editor
+# 2. Click "Deploy" > "New deployment" > "Web app"
+# 3. Execute as: "Me", Who has access: "Anyone" (or "Anyone with Google account")
+# 4. Click "Deploy" and copy the Web app URL here
+# 5. Leave empty to disable automatic processing trigger
+$F2_IMPORT_WEB_APP_URL = ""  # TODO: Add your web app URL here
+
 # Create log directory if it doesn't exist
 $logDir = Split-Path -Parent $PROCESSED_FILES_LOG
 if (-not (Test-Path $logDir)) {
@@ -62,6 +71,50 @@ function Add-ProcessedFile {
 function Test-F2FilePattern {
     param([string]$fileName)
     return $fileName -match $FILE_PATTERN
+}
+
+# Trigger F2 import processing via Google Apps Script web app
+function Invoke-F2Import {
+    param([string]$fileName, [string]$webAppUrl)
+    
+    # Check if web app URL is configured
+    if ([string]::IsNullOrWhiteSpace($webAppUrl)) {
+        Write-Log "F2 Import web app URL not configured, skipping automatic processing trigger" "WARN"
+        return $false
+    }
+    
+    try {
+        Write-Log "Waiting 30 seconds before triggering F2 import processing for $fileName..." "INFO"
+        Start-Sleep -Seconds 30
+        
+        Write-Log "Triggering F2 import processing via web app..." "INFO"
+        $response = Invoke-WebRequest -Uri $webAppUrl -Method Get -UseBasicParsing -TimeoutSec 60 -ErrorAction Stop
+        
+        if ($response.StatusCode -eq 200) {
+            try {
+                $result = $response.Content | ConvertFrom-Json
+                if ($result.success) {
+                    Write-Log "F2 import processing triggered successfully" "SUCCESS"
+                    return $true
+                } else {
+                    Write-Log "F2 import processing returned error: $($result.error)" "ERROR"
+                    return $false
+                }
+            }
+            catch {
+                # Response might not be JSON, but status 200 means it worked
+                Write-Log "F2 import processing triggered (response: $($response.Content))" "SUCCESS"
+                return $true
+            }
+        } else {
+            Write-Log "F2 import web app returned status code: $($response.StatusCode)" "ERROR"
+            return $false
+        }
+    }
+    catch {
+        Write-Log "Error triggering F2 import processing: $_" "ERROR"
+        return $false
+    }
 }
 
 # Send Windows toast notification
@@ -299,6 +352,56 @@ while ($true) {
                 # Send system notification
                 Write-Log "Sending notification for $fileName..." "INFO"
                 Send-Notification -Title "F2 File Moved" -Message "Successfully moved $fileName to Google Drive sync folder"
+                
+                # Trigger F2 import processing after 30 second delay (runs in background job)
+                Start-Job -ScriptBlock {
+                    param($webAppUrl, $fileName, $logFile)
+                    
+                    # Simple logging function for background job
+                    function Write-Log {
+                        param([string]$Message, [string]$Level = "INFO")
+                        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+                        $logMessage = "[$timestamp] [$Level] $Message"
+                        Add-Content -Path $logFile -Value $logMessage -ErrorAction SilentlyContinue
+                    }
+                    
+                    # Check if web app URL is configured
+                    if ([string]::IsNullOrWhiteSpace($webAppUrl)) {
+                        Write-Log "F2 Import web app URL not configured, skipping automatic processing trigger" "WARN"
+                        return
+                    }
+                    
+                    try {
+                        Write-Log "Waiting 5 seconds before triggering F2 import processing for $fileName..." "INFO"
+                        Start-Sleep -Seconds 5
+                        
+                        Write-Log "Triggering F2 import processing via web app..." "INFO"
+                        $response = Invoke-WebRequest -Uri $webAppUrl -Method Get -UseBasicParsing -TimeoutSec 60 -ErrorAction Stop
+                        
+                        if ($response.StatusCode -eq 200) {
+                            try {
+                                $result = $response.Content | ConvertFrom-Json
+                                if ($result.success) {
+                                    Write-Log "F2 import processing triggered successfully" "SUCCESS"
+                                } else {
+                                    Write-Log "F2 import processing returned error: $($result.error)" "ERROR"
+                                }
+                            }
+                            catch {
+                                # Response might not be JSON, but status 200 means it worked
+                                Write-Log "F2 import processing triggered (response: $($response.Content))" "SUCCESS"
+                            }
+                        } else {
+                            Write-Log "F2 import web app returned status code: $($response.StatusCode)" "ERROR"
+                        }
+                    }
+                    catch {
+                        Write-Log "Error triggering F2 import processing: $_" "ERROR"
+                    }
+                } -ArgumentList $F2_IMPORT_WEB_APP_URL, $fileName, $LOG_FILE
+                
+                # Clean up completed jobs periodically (don't wait for this one)
+                Get-Job | Where-Object { $_.State -eq 'Completed' -or $_.State -eq 'Failed' } | Remove-Job -ErrorAction SilentlyContinue
             }
         }
     }

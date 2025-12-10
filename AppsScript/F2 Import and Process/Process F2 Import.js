@@ -1191,3 +1191,41 @@ function moveFileToProcessed(file, parentFolder) {
     // Don't throw - file processing should continue even if move fails
   }
 }
+
+/**
+ * Web app entry point for triggering F2 import processing
+ * Can be called via HTTP GET request from external scripts (e.g., PowerShell)
+ * 
+ * To deploy:
+ * 1. In Apps Script editor, click "Deploy" > "New deployment"
+ * 2. Select type: "Web app"
+ * 3. Execute as: "Me"
+ * 4. Who has access: "Anyone" (or "Anyone with Google account" for better security)
+ * 5. Click "Deploy" and copy the Web app URL
+ * 6. Update F2-Desktop-Monitor.ps1 with the URL
+ * 
+ * @param {GoogleAppsScript.Events.DoGetEvent} e - The event object
+ * @returns {GoogleAppsScript.Content.TextOutput} Response text
+ */
+function doGet(e) {
+  try {
+    Logger.log("🌐 Web app triggered - starting F2 import processing");
+    
+    // Run the import process
+    processF2Imports();
+    
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      message: "F2 import processing started successfully",
+      timestamp: new Date().toISOString()
+    })).setMimeType(ContentService.MimeType.JSON);
+    
+  } catch (error) {
+    Logger.log(`❌ Error in web app: ${error.toString()}`);
+    return ContentService.createTextOutput(JSON.stringify({
+      success: false,
+      error: error.toString(),
+      timestamp: new Date().toISOString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
