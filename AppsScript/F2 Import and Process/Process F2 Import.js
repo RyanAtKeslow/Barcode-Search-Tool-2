@@ -1229,3 +1229,58 @@ function doGet(e) {
     })).setMimeType(ContentService.MimeType.JSON);
   }
 }
+
+/**
+ * Sets up time-driven trigger to automatically process F2 imports
+ * This function should be run once manually to set up the trigger
+ * 
+ * The trigger will run processF2Imports() every 10 minutes to check for new files
+ * This serves as a backup/fallback if the webhook from PowerShell doesn't work
+ * 
+ * To set up:
+ * 1. Run this function once manually in Apps Script editor
+ * 2. Authorize permissions if prompted
+ * 3. Check Triggers (clock icon) to verify it was created
+ * 
+ * To remove the trigger:
+ * 1. Go to Triggers (clock icon) in Apps Script editor
+ * 2. Find the trigger for processF2Imports
+ * 3. Click the three dots menu and select "Delete"
+ */
+function setupF2ImportTrigger() {
+  try {
+    // Delete existing triggers for this function to avoid duplicates
+    const triggers = ScriptApp.getProjectTriggers();
+    let deletedCount = 0;
+    
+    triggers.forEach(function(trigger) {
+      if (trigger.getHandlerFunction() === 'processF2Imports') {
+        ScriptApp.deleteTrigger(trigger);
+        deletedCount++;
+        Logger.log('Deleted existing trigger for processF2Imports');
+      }
+    });
+    
+    // Create a time-driven trigger that runs every 10 minutes
+    // This will automatically check for new files in the Google Drive folder
+    ScriptApp.newTrigger('processF2Imports')
+      .timeBased()
+      .everyMinutes(10)  // Check every 10 minutes
+      .create();
+    
+    Logger.log('✅ Time-driven trigger created successfully');
+    Logger.log('   Function: processF2Imports');
+    Logger.log('   Frequency: Every 10 minutes');
+    Logger.log(`   Deleted ${deletedCount} existing trigger(s) before creating new one`);
+    Logger.log('');
+    Logger.log('📋 Next steps:');
+    Logger.log('   1. Check Triggers (clock icon) in Apps Script editor to verify');
+    Logger.log('   2. The trigger will automatically run processF2Imports() every 10 minutes');
+    Logger.log('   3. This serves as a backup if the PowerShell webhook fails');
+    
+  } catch (error) {
+    Logger.log(`❌ Error setting up trigger: ${error.toString()}`);
+    Logger.log(`Stack trace: ${error.stack}`);
+    throw error;
+  }
+}

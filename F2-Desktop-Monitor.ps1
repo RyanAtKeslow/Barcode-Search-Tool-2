@@ -18,7 +18,7 @@ $LOG_FILE = "$env:APPDATA\F2DesktopMonitor\monitor.log"
 # 3. Execute as: "Me", Who has access: "Anyone" (or "Anyone with Google account")
 # 4. Click "Deploy" and copy the Web app URL here
 # 5. Leave empty to disable automatic processing trigger
-$F2_IMPORT_WEB_APP_URL = ""  # TODO: Add your web app URL here
+$F2_IMPORT_WEB_APP_URL = "https://script.google.com/a/macros/keslowcamera.com/s/AKfycbzJHTZn1qVexotPU2klRroIPWNKYxUn-VfZ34Xcf72fyblp8dGa4gvD-fgUmZy5q8or/exec"  # TODO: Add your web app URL here
 
 # Create log directory if it doesn't exist
 $logDir = Split-Path -Parent $PROCESSED_FILES_LOG
@@ -353,7 +353,7 @@ while ($true) {
                 Write-Log "Sending notification for $fileName..." "INFO"
                 Send-Notification -Title "F2 File Moved" -Message "Successfully moved $fileName to Google Drive sync folder"
                 
-                # Trigger F2 import processing after 30 second delay (runs in background job)
+                # Trigger F2 import processing after 5 second delay (runs in background job)
                 Start-Job -ScriptBlock {
                     param($webAppUrl, $fileName, $logFile)
                     
@@ -396,7 +396,13 @@ while ($true) {
                         }
                     }
                     catch {
-                        Write-Log "Error triggering F2 import processing: $_" "ERROR"
+                        $errorDetails = $_.Exception.Message
+                        if ($_.Exception.Response) {
+                            $statusCode = $_.Exception.Response.StatusCode.value__
+                            $errorDetails += " (HTTP $statusCode)"
+                        }
+                        Write-Log "Error triggering F2 import processing: $errorDetails" "ERROR"
+                        Write-Log "Web app URL used: $webAppUrl" "ERROR"
                     }
                 } -ArgumentList $F2_IMPORT_WEB_APP_URL, $fileName, $LOG_FILE
                 
