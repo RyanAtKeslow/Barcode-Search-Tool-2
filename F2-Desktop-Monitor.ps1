@@ -12,13 +12,18 @@ $PROCESSED_FILES_LOG = "$env:APPDATA\F2DesktopMonitor\processed_files.txt"
 $LOG_FILE = "$env:APPDATA\F2DesktopMonitor\monitor.log"
 
 # Google Apps Script Web App URL for triggering F2 import processing
-# To get this URL:
+# IMPORTANT: The URL must include the token parameter: ?token=YOUR_SECRET_TOKEN
+# 
+# To set up:
 # 1. Open the Apps Script project in Google Apps Script editor
-# 2. Click "Deploy" > "New deployment" > "Web app"
-# 3. Execute as: "Me", Who has access: "Anyone" (or "Anyone with Google account")
-# 4. Click "Deploy" and copy the Web app URL here
-# 5. Leave empty to disable automatic processing trigger
-$F2_IMPORT_WEB_APP_URL = "https://script.google.com/a/macros/keslowcamera.com/s/AKfycbzJHTZn1qVexotPU2klRroIPWNKYxUn-VfZ34Xcf72fyblp8dGa4gvD-fgUmZy5q8or/exec"  # TODO: Add your web app URL here
+# 2. In doGet() function, set WEB_APP_TOKEN to your secret token
+# 3. Click "Deploy" > "New deployment" > "Web app"
+# 4. Execute as: "Me", Who has access: "Anyone" (required for PowerShell)
+# 5. Click "Deploy" and copy the Web app URL
+# 6. Add ?token=YOUR_SECRET_TOKEN to the end of the URL
+# 7. Paste the full URL (with token) here
+# 8. Leave empty to disable automatic processing trigger
+$F2_IMPORT_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxA6aGtsqVq_CR8D5zkoQYF55VFKZmlRfknCUZqCmWyQ11Kajaj01CPy2U1D-Tog3s/exec?token=F2Import2025KeslowKey"  # Example: "https://script.google.com/.../exec?token=YourSecretToken123"
 
 # Create log directory if it doesn't exist
 $logDir = Split-Path -Parent $PROCESSED_FILES_LOG

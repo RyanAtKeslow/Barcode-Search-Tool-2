@@ -1196,27 +1196,72 @@ function moveFileToProcessed(file, parentFolder) {
  * Web app entry point for triggering F2 import processing
  * Can be called via HTTP GET request from external scripts (e.g., PowerShell)
  * 
+ * Security: Requires a token parameter in the URL to prevent unauthorized access
+ * Example URL: https://script.google.com/.../exec?token=YOUR_SECRET_TOKEN
+ * 
  * To deploy:
  * 1. In Apps Script editor, click "Deploy" > "New deployment"
  * 2. Select type: "Web app"
  * 3. Execute as: "Me"
- * 4. Who has access: "Anyone" (or "Anyone with Google account" for better security)
+ * 4. Who has access: "Anyone" (required for unauthenticated requests from PowerShell)
  * 5. Click "Deploy" and copy the Web app URL
- * 6. Update F2-Desktop-Monitor.ps1 with the URL
+ * 6. Add ?token=YOUR_SECRET_TOKEN to the URL
+ * 7. Update F2-Desktop-Monitor.ps1 with the full URL including token
+ * 
+ * To set your token:
+ * 1. Choose a random, hard-to-guess string (e.g., "F2Import2025KeslowKey")
+ * 2. Add it to the URL: https://script.google.com/.../exec?token=F2Import2024SecretKey123
+ * 3. Update the WEB_APP_TOKEN constant below to match
  * 
  * @param {GoogleAppsScript.Events.DoGetEvent} e - The event object
  * @returns {GoogleAppsScript.Content.TextOutput} Response text
  */
 function doGet(e) {
   try {
-    Logger.log("🌐 Web app triggered - starting F2 import processing");
+    // Security: Check for token parameter
+    const WEB_APP_TOKEN = "F2Import2025KeslowKey"; // CHANGE THIS to your own secret token
+    const providedToken = e.parameter.token;
     
-    // Run the import process
-    processF2Imports();
+    if (!providedToken || providedToken !== WEB_APP_TOKEN) {
+      Logger.log("❌ Web app access denied - invalid or missing token");
+      return ContentService.createTextOutput(JSON.stringify({
+        success: false,
+        error: "Unauthorized - invalid token",
+        timestamp: new Date().toISOString()
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    Logger.log("🌐 Web app triggered - scheduling F2 import processing");
+    
+    // Return immediately to avoid web app timeout
+    // Create a time-driven trigger to run processF2Imports() in the next minute
+    // This prevents the web app from timing out on long-running operations
+    try {
+      // Delete any existing triggers for processF2Imports to avoid duplicates
+      const existingTriggers = ScriptApp.getProjectTriggers();
+      existingTriggers.forEach(function(trigger) {
+        if (trigger.getHandlerFunction() === 'processF2Imports' && 
+            trigger.getEventType() === ScriptApp.EventType.CLOCK) {
+          ScriptApp.deleteTrigger(trigger);
+        }
+      });
+      
+      // Create a one-time trigger to run in 10 seconds
+      ScriptApp.newTrigger('processF2Imports')
+        .timeBased()
+        .after(10000) // Run in 10 seconds
+        .create();
+      
+      Logger.log("✅ Trigger created - processF2Imports will run in 10 seconds");
+    } catch (triggerError) {
+      Logger.log(`⚠️ Could not create trigger, running directly: ${triggerError.toString()}`);
+      // Fallback: try to run directly (may timeout on long operations)
+      processF2Imports();
+    }
     
     return ContentService.createTextOutput(JSON.stringify({
       success: true,
-      message: "F2 import processing started successfully",
+      message: "F2 import processing scheduled successfully",
       timestamp: new Date().toISOString()
     })).setMimeType(ContentService.MimeType.JSON);
     
