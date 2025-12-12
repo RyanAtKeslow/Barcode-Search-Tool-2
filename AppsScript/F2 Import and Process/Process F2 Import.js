@@ -34,7 +34,7 @@ const F2_IMPORTS_SHEET_NAME = 'F2 Imports';
 const BARCODE_SERIAL_SHEET_NAME = 'Barcode & Serial Database';
 
 // Header mapping: Original F2 Excel headers -> Common database names
-// Row 1: Original Excel headers (17 columns + Serial Number, same for Complete and Incomplete exports)
+// Row 1: Original Excel headers (18 columns + Serial Number, same for Complete and Incomplete exports)
 // Row 2: Common database header names (mapped below)
 // Schema for Row 2 (common names) - Column layout in F2 Imports sheet:
 //   Column A (1): PrepDate -> Prep Date
@@ -54,7 +54,8 @@ const BARCODE_SERIAL_SHEET_NAME = 'Barcode & Serial Database';
 //   Column O (15): TimestampEnd_ts -> End Timestamp
 //   Column P (16): TimestampDuration_cti -> Duration
 //   Column Q (17): ServiceStatus_ct -> Service Status
-//   Column R (18): ServiceNotes -> Service Notes
+//   Column R (18): PrepKind_lu -> Prep Kind
+//   Column S (19): ServiceNotes -> Service Notes
 const HEADER_MAPPING = {
   'PrepDate': 'Prep Date',
   'ServicePriority_aet': 'Service Priority',
@@ -72,6 +73,7 @@ const HEADER_MAPPING = {
   'TimestampEnd_ts': 'End Timestamp',
   'TimestampDuration_cti': 'Duration',
   'ServiceStatus_ct': 'Service Status',
+  'PrepKind_lu': 'Prep Kind',
   'ServiceNotes': 'Service Notes',
   // Additional metadata columns (added during import)
   'SerialNumber': 'Serial Number',
@@ -730,29 +732,51 @@ function writeToF2ImportsSheet(data) {
     const firstRecord = data[0];
     const originalHeaders = Object.keys(firstRecord);
     
-    // Remove SerialNumber from headers list (we'll insert it manually at position 4)
-    const headersWithoutSerial = originalHeaders.filter(h => h !== 'SerialNumber');
+    // Define the correct order for standard F2 columns
+    // This ensures PrepKind_lu is in the correct position (Column R, after ServiceStatus_ct)
+    const STANDARD_F2_COLUMN_ORDER = [
+      'PrepDate',
+      'ServicePriority_aet',
+      'AssetBarcode',
+      'SerialNumber', // Inserted after AssetBarcode
+      'EquipmentName_lu',
+      'EquipmentCategory_lu',
+      'OrderNumber_lu',
+      'JobName_lu',
+      'Puller_lu',
+      'PrepTech_lu',
+      'ServiceTech',
+      'EstimatedCompletionTime_t',
+      'z_log_CreateHost_ts_ae',
+      'TimestampStart_ts',
+      'TimestampEnd_ts',
+      'TimestampDuration_cti',
+      'ServiceStatus_ct',
+      'PrepKind_lu', // Column R - NEW column
+      'ServiceNotes'
+    ];
     
-    // Insert SerialNumber at position 3 (column D, 0-indexed position 3)
-    // Order: PrepDate(0), ServicePriority(1), AssetBarcode(2), SerialNumber(3), EquipmentName(4), ...
+    // Separate standard columns from metadata columns
+    const metadataColumns = ['ImportDate', 'ImportTimestamp', 'SourceFile', 
+                            'VerificationStatus', 'VerificationNotes'];
+    
+    // Build ordered headers: standard columns first (in correct order), then metadata
     const orderedHeaders = [];
-    let serialInserted = false;
+    const seenHeaders = new Set();
     
-    for (let i = 0; i < headersWithoutSerial.length; i++) {
-      const header = headersWithoutSerial[i];
-      // Insert SerialNumber after AssetBarcode (position 3, which is column D)
-      if (header === 'AssetBarcode' && !serialInserted) {
-        orderedHeaders.push(header);
-        orderedHeaders.push('SerialNumber');
-        serialInserted = true;
-      } else {
-        orderedHeaders.push(header);
+    // First, add standard F2 columns in the correct order
+    for (const standardHeader of STANDARD_F2_COLUMN_ORDER) {
+      if (originalHeaders.includes(standardHeader) || standardHeader === 'SerialNumber') {
+        orderedHeaders.push(standardHeader);
+        seenHeaders.add(standardHeader);
       }
     }
     
-    // If AssetBarcode wasn't found, insert SerialNumber at position 3 anyway
-    if (!serialInserted) {
-      orderedHeaders.splice(3, 0, 'SerialNumber');
+    // Then, add any remaining columns (metadata or unexpected columns) in their original order
+    for (const header of originalHeaders) {
+      if (!seenHeaders.has(header)) {
+        orderedHeaders.push(header);
+      }
     }
     
     // Create mapped headers (Row 2) - use mapping if available, otherwise use original
