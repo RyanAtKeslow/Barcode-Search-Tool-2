@@ -276,8 +276,8 @@ function readEquipmentSchedulingData() {
         continue; // Skip if not a valid booking color
       }
       
-      // Extract barcode from column F (index 5) first - we need this for all cameras
-      const barcodeCell = row[5];
+      // Extract barcode from column E (index 4) first - we need this for all cameras
+      const barcodeCell = row[4];
       let barcode = '';
       if (typeof barcodeCell === 'string') {
         const match = barcodeCell.match(/BC#\s*([A-Z0-9-]+)/);
@@ -295,7 +295,7 @@ function readEquipmentSchedulingData() {
       while (typeRow >= 0 && data[typeRow][0] !== '') {
         typeRow--;
       }
-      const equipmentType = typeRow >= 0 ? (data[typeRow][5] || '') : ''; // Column F
+      const equipmentType = typeRow >= 0 ? (data[typeRow][4] || '') : ''; // Column E
       
       if (!equipmentType) {
         continue; // Skip if no camera type found
