@@ -80,8 +80,9 @@ function readPrepBayDataForToday(sheetName) {
       return [];
     }
     
-    // Read all data (columns A through I)
+    // Read all data from Prep Bay Assignment workbook (NO column shifts in this source workbook)
     // Schema: BAY (A), JOB NAME (B), ORDER (C), AGENT (D), CAMERAS (E), 1st AC (F), DP (G), PREP TECH (H), NOTES (I)
+    // Prep Tech is read from column H (index 7) - this workbook has NOT been modified with column shifts
     const data = sheet.getDataRange().getValues();
     
     const prepBayAssignments = [];
@@ -275,8 +276,8 @@ function readEquipmentSchedulingData() {
         continue; // Skip if not a valid booking color
       }
       
-      // Extract barcode from column E (index 4) first - we need this for all cameras
-      const barcodeCell = row[4];
+      // Extract barcode from column F (index 5) first - we need this for all cameras
+      const barcodeCell = row[5];
       let barcode = '';
       if (typeof barcodeCell === 'string') {
         const match = barcodeCell.match(/BC#\s*([A-Z0-9-]+)/);
@@ -294,7 +295,7 @@ function readEquipmentSchedulingData() {
       while (typeRow >= 0 && data[typeRow][0] !== '') {
         typeRow--;
       }
-      const equipmentType = typeRow >= 0 ? (data[typeRow][4] || '') : ''; // Column E
+      const equipmentType = typeRow >= 0 ? (data[typeRow][5] || '') : ''; // Column F
       
       if (!equipmentType) {
         continue; // Skip if no camera type found
@@ -310,7 +311,7 @@ function readEquipmentSchedulingData() {
       if (isRedBackground && isTodayCellBlank) {
         // Red background with blank cell: search leftward for order number
         Logger.log(`🔍 Red background with blank cell for barcode ${barcode}, searching left for order number...`);
-        for (let colIdx = todayColumnIndex - 1; colIdx >= 5; colIdx--) { // Start from column before today, go back to column F (index 5)
+        for (let colIdx = todayColumnIndex - 1; colIdx >= 6; colIdx--) { // Start from column before today, go back to column G (index 6)
           const leftCellValue = row[colIdx];
           if (leftCellValue && typeof leftCellValue === 'string' && leftCellValue.trim() !== '') {
             // Check if this cell has an order number
@@ -370,8 +371,12 @@ function readEquipmentSchedulingData() {
 }
 
 /**
- * Writes prep bay data to the destination sheet
+ * Writes prep bay data to the destination sheet ("Todays Prep Bays" in Digital Camera Service Forms workbook)
  * Shows all cameras for an order in all prep bays with that order number
+ * 
+ * NOTE: Column shifts (new "Pulled?" columns D, J, P) were ONLY done in this destination sheet.
+ * The source Prep Bay Assignment workbook has NO column shifts.
+ * 
  * @param {Array<Object>} prepBayData - Array of prep bay assignments
  * @param {Object} equipmentData - Camera data indexed by order number
  */
@@ -391,10 +396,11 @@ function writePrepBayDataToSheet(prepBayData, equipmentData) {
       const assignment = prepBayData.find(a => a.bayNumber === bayNum);
       
       // Calculate column position
-      // Within each group of 3, columns repeat: Bay 1/4/7/10/13/16/19 = col 1, Bay 2/5/8/11/14/17/20 = col 6, Bay 3/6/9/12/15/18/21 = col 11
-      // Bay 22 (Kitchen) = col 1
+      // Within each group of 3, columns repeat: Bay 1/4/7/10/13/16/19 = col 1 (A), Bay 2/5/8/11/14/17/20 = col 7 (G), Bay 3/6/9/12/15/18/21 = col 13 (M)
+      // Bay 22 (Kitchen) = col 1 (A)
+      // Note: Column F (6) is blank between Prep Bay 1 and Prep Bay 2
       const positionInGroup = (bayNum - 1) % 3;
-      const startCol = positionInGroup * 5 + 1; // 0->1, 1->6, 2->11
+      const startCol = positionInGroup * 6 + 1; // 0->1 (A), 1->7 (G), 2->13 (M)
       
       // Calculate row position
       // Each group of 3 prep bays shares the same starting row
@@ -412,25 +418,36 @@ function writePrepBayDataToSheet(prepBayData, equipmentData) {
       // Each group starts 13 rows after the previous (12 rows + 1 blank row)
       const startRow = 1 + group * 13;
       
-      // Only update cells B2:B12 and C5:C12 for this prep bay
-      // Clear only the specific ranges we're updating
-      // Note: D5:D12 are checkboxes and should NOT be touched
+      // Layout for each prep bay (using Prep Bay 1 as example):
+      // - A1: Datum (empty, untouched)
+      // - B1: "Prep Bay X" header (untouched)
+      // - A1:E1: Untouched (nothing printed here)
+      // - A2:A5: Left-side headers (untouched)
+      // - B2: Job Name (script writes here)
+      // - B3: Order Number (script writes here)
+      // - B4: Prep Tech name (script writes here, from Prep Bay Assignment Sheet column H)
+      // - B5:B12: Camera names (script writes here)
+      // - C5:C12: Barcodes (script writes here)
+      // - C1:E4: Untouched
+      // - D5:E12: Untouched (D5:D12 are "Pulled?" checkboxes)
+      // - Borders: Column F and Row 13 (nothing printed)
       
-      // Clear B2:B12 (rows 2-12, column B)
+      // Clear only the cells we will write to: B2:B12 and C5:C12
+      // Clear B2:B12 (Job Name, Order Number, Prep Tech, Camera names)
       sheet.getRange(startRow + 1, startCol + 1, 11, 1).clearContent();
       
-      // Clear C5:C12 (rows 5-12, column C) - barcodes only
-      // D5:D12 (checkboxes) are left untouched
+      // Clear C5:C12 (Barcodes only)
+      // Note: D5:D12 (checkboxes) are intentionally left untouched
       sheet.getRange(startRow + 4, startCol + 2, 8, 1).clearContent();
       
       if (assignment) {
-        // Write job name to B2 (row 2, column B = startCol + 1)
+        // Write job name to B2
         sheet.getRange(startRow + 1, startCol + 1).setValue(assignment.jobName);
         
         // Write order number to B3
         sheet.getRange(startRow + 2, startCol + 1).setValue(assignment.orderNumber);
         
-        // Write prep tech to B4
+        // Write prep tech to B4 (read from Prep Bay Assignment Sheet column H, index 7)
         sheet.getRange(startRow + 3, startCol + 1).setValue(assignment.prepTech);
         
         // Get all cameras scheduled for this order number TODAY
@@ -476,7 +493,8 @@ function writePrepBayDataToSheet(prepBayData, equipmentData) {
 
 /**
  * Clears all prep bay data cells for all 22 prep bays
- * For each prep bay, clears B2:B12 and C5:D12
+ * For each prep bay, clears B2:B12 (Job Name, Order Number, Prep Tech, Camera names) and C5:C12 (Barcodes)
+ * Does NOT clear: C1:E4, D5:E12 (D5:D12 are "Pulled?" checkboxes), or any headers
  */
 function clearAllPrepBays() {
   try {
@@ -493,10 +511,11 @@ function clearAllPrepBays() {
     // Process each prep bay (1-22)
     for (let bayNum = 1; bayNum <= 22; bayNum++) {
       // Calculate column position
-      // Within each group of 3, columns repeat: Bay 1/4/7/10/13/16/19 = col 1, Bay 2/5/8/11/14/17/20 = col 6, Bay 3/6/9/12/15/18/21 = col 11
-      // Bay 22 (Kitchen) = col 1
+      // Within each group of 3, columns repeat: Bay 1/4/7/10/13/16/19 = col 1 (A), Bay 2/5/8/11/14/17/20 = col 7 (G), Bay 3/6/9/12/15/18/21 = col 13 (M)
+      // Bay 22 (Kitchen) = col 1 (A)
+      // Note: Column F (6) is blank between Prep Bay 1 and Prep Bay 2
       const positionInGroup = (bayNum - 1) % 3;
-      const startCol = positionInGroup * 5 + 1; // 0->1, 1->6, 2->11
+      const startCol = positionInGroup * 6 + 1; // 0->1 (A), 1->7 (G), 2->13 (M)
       
       // Calculate row position
       // Each group of 3 prep bays shares the same starting row
@@ -514,21 +533,33 @@ function clearAllPrepBays() {
       // Each group starts 13 rows after the previous (12 rows + 1 blank row)
       const startRow = 1 + group * 13;
       
-      // Clear B2:B12 (rows 2-12, column B = startCol + 1)
-      // Skip if this is column D (4), I (9), or N (14)
+      // Layout for each prep bay (same as writePrepBayDataToSheet):
+      // - B2: Job Name (clear)
+      // - B3: Order Number (clear)
+      // - B4: Prep Tech (clear)
+      // - B5:B12: Camera names (clear)
+      // - C5:C12: Barcodes (clear)
+      // - D5:D12: "Pulled?" checkboxes (DO NOT CLEAR - these are in columns D, J, P for different prep bays)
+      
+      // Clear B2:B12 (Job Name, Order Number, Prep Tech, Camera names)
+      // Skip if column B would fall on a "Pulled?" checkbox column (D=4, J=10, P=16)
       const columnB = startCol + 1;
-      if (columnB !== 4 && columnB !== 9 && columnB !== 14) {
+      if (columnB !== 4 && columnB !== 10 && columnB !== 16) {
         sheet.getRange(startRow + 1, startCol + 1, 11, 1).clearContent();
       }
       
-      // Clear C5:C12 (rows 5-12, column C = startCol + 2)
-      // Skip if this would be column D (4), I (9), or N (14)
+      // Clear C5:C12 (Barcodes only)
+      // Skip if column C would fall on a "Pulled?" checkbox column (D=4, J=10, P=16)
       const columnC = startCol + 2;
-      if (columnC !== 4 && columnC !== 9 && columnC !== 14) {
+      if (columnC !== 4 && columnC !== 10 && columnC !== 16) {
         sheet.getRange(startRow + 4, startCol + 2, 8, 1).clearContent();
       }
       
-      // Note: Column D (startCol + 3) is intentionally skipped (checkboxes)
+      // Note: "Pulled?" checkbox columns are:
+      // - Prep Bay 1: Column D (4) = startCol (1) + 3
+      // - Prep Bay 2: Column J (10) = startCol (7) + 3
+      // - Prep Bay 3: Column P (16) = startCol (13) + 3
+      // These are intentionally skipped and never cleared
       
       const headerName = getBayDisplayName(bayNum);
       Logger.log(`🧹 Cleared ${headerName}`);
