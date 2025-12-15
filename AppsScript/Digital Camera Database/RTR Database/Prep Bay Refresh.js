@@ -182,19 +182,86 @@ function getBayDisplayName(bayNumber) {
 /**
  * Reads Equipment Scheduling Chart data using Camera Forecast logic
  * Finds cameras assigned to orders by checking LOS ANGELES rows and today's date column
+ * Reads from both "Camera" and "Consignor Use Only" sheets
  * @returns {Object} Object containing camera data indexed by order number
  */
 function readEquipmentSchedulingData() {
   try {
     const spreadsheet = SpreadsheetApp.openById(PREP_BAY_EQUIPMENT_CHART_ID);
-    const cameraSheet = spreadsheet.getSheetByName('Camera');
     
-    if (!cameraSheet) {
+    // Map to store cameras by order number (merged from both sheets)
+    // Key: order number (normalized), Value: Array of {equipmentType, barcode}
+    const camerasByOrder = {};
+    
+    // Process Camera sheet
+    const cameraSheet = spreadsheet.getSheetByName('Camera');
+    if (cameraSheet) {
+      Logger.log(`📹 Processing Camera sheet...`);
+      const cameraData = processEquipmentSheet(cameraSheet, 'Camera');
+      // Merge camera data into main object
+      for (const [orderNumber, cameras] of Object.entries(cameraData)) {
+        if (!camerasByOrder[orderNumber]) {
+          camerasByOrder[orderNumber] = [];
+        }
+        // Add cameras, avoiding duplicates by barcode
+        for (const camera of cameras) {
+          const exists = camerasByOrder[orderNumber].some(cam => cam.barcode === camera.barcode);
+          if (!exists) {
+            camerasByOrder[orderNumber].push(camera);
+          }
+        }
+      }
+    } else {
       Logger.log(`⚠️ Camera sheet not found in Equipment Scheduling Chart`);
-      return {};
     }
     
-    const data = cameraSheet.getDataRange().getValues();
+    // Process Consignor Use Only sheet
+    const consignorSheet = spreadsheet.getSheetByName('Consignor Use Only');
+    if (consignorSheet) {
+      Logger.log(`📹 Processing Consignor Use Only sheet...`);
+      const consignorData = processEquipmentSheet(consignorSheet, 'Consignor Use Only');
+      // Merge consignor data into main object
+      for (const [orderNumber, cameras] of Object.entries(consignorData)) {
+        if (!camerasByOrder[orderNumber]) {
+          camerasByOrder[orderNumber] = [];
+        }
+        // Add cameras, avoiding duplicates by barcode
+        for (const camera of cameras) {
+          const exists = camerasByOrder[orderNumber].some(cam => cam.barcode === camera.barcode);
+          if (!exists) {
+            camerasByOrder[orderNumber].push(camera);
+          }
+        }
+      }
+    } else {
+      Logger.log(`⚠️ Consignor Use Only sheet not found in Equipment Scheduling Chart`);
+    }
+    
+    Logger.log(`📚 Found cameras for ${Object.keys(camerasByOrder).length} order numbers`);
+    
+    // Log camera count for each order
+    for (const [orderNumber, cameras] of Object.entries(camerasByOrder)) {
+      Logger.log(`  Order ${orderNumber}: ${cameras.length} camera(s) - ${cameras.map(c => c.barcode).join(', ')}`);
+    }
+    
+    return camerasByOrder;
+    
+  } catch (error) {
+    Logger.log(`❌ Error reading Equipment Scheduling data: ${error.toString()}`);
+    return {};
+  }
+}
+
+/**
+ * Processes a single equipment sheet (Camera or Consignor Use Only)
+ * Finds cameras assigned to orders by checking LOS ANGELES rows and today's date column
+ * @param {Sheet} sheet - The sheet to process
+ * @param {string} sheetName - Name of the sheet (for logging)
+ * @returns {Object} Object containing camera data indexed by order number
+ */
+function processEquipmentSheet(sheet, sheetName) {
+  try {
+    const data = sheet.getDataRange().getValues();
     const headerRow = data[0];
     
     // Find today's date column
@@ -232,11 +299,11 @@ function readEquipmentSchedulingData() {
     }
     
     if (todayColumnIndex === -1) {
-      Logger.log(`⚠️ Today's date column not found in Equipment Scheduling Chart`);
+      Logger.log(`⚠️ Today's date column not found in ${sheetName} sheet`);
       return {};
     }
     
-    Logger.log(`📅 Found today's date in column ${todayColumnIndex + 1}`);
+    Logger.log(`📅 Found today's date in column ${todayColumnIndex + 1} of ${sheetName} sheet`);
     
     // Get backgrounds for all rows to check for valid booking colors
     const validTodayCellBackgrounds = [
@@ -256,10 +323,10 @@ function readEquipmentSchedulingData() {
       }
     }
     
-    Logger.log(`📹 Found ${foundLACameras.length} LOS ANGELES camera rows`);
+    Logger.log(`📹 Found ${foundLACameras.length} LOS ANGELES camera rows in ${sheetName} sheet`);
     
     // Get backgrounds for LA camera rows
-    const backgrounds = cameraSheet.getRange(1, todayColumnIndex + 1, data.length, 1).getBackgrounds();
+    const backgrounds = sheet.getRange(1, todayColumnIndex + 1, data.length, 1).getBackgrounds();
     
     // Map to store cameras by order number
     // Key: order number (normalized), Value: Array of {equipmentType, barcode}
@@ -310,7 +377,7 @@ function readEquipmentSchedulingData() {
       
       if (isRedBackground && isTodayCellBlank) {
         // Red background with blank cell: search leftward for order number
-        Logger.log(`🔍 Red background with blank cell for barcode ${barcode}, searching left for order number...`);
+        Logger.log(`🔍 Red background with blank cell for barcode ${barcode} in ${sheetName}, searching left for order number...`);
         for (let colIdx = todayColumnIndex - 1; colIdx >= 6; colIdx--) { // Start from column before today, go back to column G (index 6)
           const leftCellValue = row[colIdx];
           if (leftCellValue && typeof leftCellValue === 'string' && leftCellValue.trim() !== '') {
@@ -349,23 +416,16 @@ function readEquipmentSchedulingData() {
               equipmentType: equipmentType.toString().trim(),
               barcode: barcode
             });
-            Logger.log(`📹 Added camera: Order ${normalizedOrder}, Type: ${equipmentType}, Barcode: ${barcode}`);
+            Logger.log(`📹 Added camera from ${sheetName}: Order ${normalizedOrder}, Type: ${equipmentType}, Barcode: ${barcode}`);
           }
         }
       }
     }
     
-    Logger.log(`📚 Found cameras for ${Object.keys(camerasByOrder).length} order numbers`);
-    
-    // Log camera count for each order
-    for (const [orderNumber, cameras] of Object.entries(camerasByOrder)) {
-      Logger.log(`  Order ${orderNumber}: ${cameras.length} camera(s) - ${cameras.map(c => c.barcode).join(', ')}`);
-    }
-    
     return camerasByOrder;
     
   } catch (error) {
-    Logger.log(`❌ Error reading Equipment Scheduling data: ${error.toString()}`);
+    Logger.log(`❌ Error processing ${sheetName} sheet: ${error.toString()}`);
     return {};
   }
 }
@@ -573,4 +633,3 @@ function clearAllPrepBays() {
     throw error;
   }
 }
-
