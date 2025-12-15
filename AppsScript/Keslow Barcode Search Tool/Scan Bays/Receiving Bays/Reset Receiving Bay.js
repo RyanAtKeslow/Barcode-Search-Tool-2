@@ -4,18 +4,20 @@
  */
 
 function resetReceivingBay() {
-  console.time("ResetReceivingBay_Total_Time"); // Start Timer
-  console.log("--- Starting Reset Receiving Bay Script ---");
+  var startTime = new Date().getTime();
+  Logger.log("=== Reset Receiving Bay: Script Started ===");
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var activeSheet = ss.getActiveSheet();
   
   // Check if we're in the correct sheet
   if (activeSheet.getName() !== "Receiving Bays") {
-    console.warn("Script attempted on wrong sheet: " + activeSheet.getName());
+    Logger.log("ERROR: Script not run from 'Receiving Bays' sheet. Current sheet: " + activeSheet.getName());
     SpreadsheetApp.getUi().alert("Please run this script from the 'Receiving Bays' sheet");
     return;
   }
+  
+  Logger.log("Sheet validation passed: Running from 'Receiving Bays' sheet");
   
   var homelessGearSheet = ss.getSheetByName("HOMELESS GEAR");
   var lostAndFoundSheet = ss.getSheetByName("Lost & Found");
@@ -26,15 +28,15 @@ function resetReceivingBay() {
   try {
     const userInfo = fetchUserInfoFromEmail();
     userFirstName = userInfo.firstName;
-    console.log("User identified via fetchUserInfoFromEmail: " + userFirstName);
+    Logger.log("User identified via fetchUserInfoFromEmail: " + userFirstName);
   } catch (error) {
-    console.warn("Primary user fetch failed, trying fallback...", error);
+    Logger.log("WARN: Primary user identification failed, trying fallback method. Error: " + error.toString());
     try {
       const { nickname } = fetchUserEmailandNickname();
       userFirstName = nickname;
-      console.log("User identified via fallback (nickname): " + userFirstName);
+      Logger.log("User identified via fetchUserEmailandNickname: " + userFirstName);
     } catch (error) {
-      console.error("Critical Error: Could not identify user.");
+      Logger.log("ERROR: Could not identify user. Both identification methods failed.");
       SpreadsheetApp.getUi().alert("Could not identify user. Please ensure you are logged in with your company email.");
       return;
     }
@@ -45,6 +47,8 @@ function resetReceivingBay() {
   var row2Values = row2Range.getValues()[0];
   var usernameMatches = [];
   
+  Logger.log("Searching for username matches in row 2. Looking for: " + userFirstName);
+  
   for (let j = 0; j < row2Values.length; j++) {
     if (row2Values[j] && row2Values[j].toString().toLowerCase().includes(userFirstName.toLowerCase())) {
       usernameMatches.push({
@@ -54,25 +58,26 @@ function resetReceivingBay() {
     }
   }
   
-  console.log(`Found ${usernameMatches.length} matching bays for user: ${userFirstName}`);
+  Logger.log("Found " + usernameMatches.length + " username match(es) in row 2");
 
   // Handle multiple matches
   if (usernameMatches.length > 1) {
-    console.log("Multiple matches found, prompting user for selection.");
+    Logger.log("Multiple username matches found. Prompting user for selection.");
     const selectedMatch = setSelectedMatch(usernameMatches);
+    Logger.log("User selected: " + selectedMatch.cellA1);
     continueResetShippingBay(selectedMatch.cellA1);
   } else if (usernameMatches.length === 1) {
-    console.log("Single match found. Proceeding with bay: " + usernameMatches[0].cellA1);
+    Logger.log("Single username match found: " + usernameMatches[0].cellA1 + " (" + usernameMatches[0].value + ")");
     continueResetShippingBay(usernameMatches[0].cellA1);
   } else {
-    console.warn("No matches found in Row 2 for user: " + userFirstName);
+    Logger.log("ERROR: No username matches found in row 2");
     SpreadsheetApp.getUi().alert("Could not find your name in row 2");
     return;
   }
 }
 
 function continueResetShippingBay(selectedCellA1) {
-  console.log(`--- Processing Bay at ${selectedCellA1} ---`);
+  Logger.log("=== continueResetShippingBay: Processing bay reset for cell " + selectedCellA1 + " ===");
   
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var activeSheet = ss.getActiveSheet();
@@ -83,7 +88,7 @@ function continueResetShippingBay(selectedCellA1) {
   var analyticsSheet = ss.getSheetByName("Analytics");
   
   // Get existing data from Lost & Found
-  console.log("Loading existing Lost & Found data...");
+  Logger.log("Loading existing Lost & Found data...");
   const existingData = lostAndFoundSheet.getRange("A:D").getValues();
   const existingBarcodeMap = new Map(); // Map barcode to row index
   
@@ -95,10 +100,14 @@ function continueResetShippingBay(selectedCellA1) {
     }
   }
   
+  Logger.log("Loaded " + existingBarcodeMap.size + " existing barcodes from Lost & Found sheet");
+  
   var jobInfo = usernameCell.getValue().toString().trim();
   var userColumn = usernameCell.getColumn();
   var barcodeColumn = userColumn - 1;
   var binsColumn = userColumn + 1;
+  
+  Logger.log("Column positions - User: " + userColumn + ", Barcode: " + barcodeColumn + ", Bins: " + binsColumn);
 
   function capitalizeWords(name) {
     return name.replace(/\b\w/g, function (char) {
@@ -108,7 +117,7 @@ function continueResetShippingBay(selectedCellA1) {
 
   // Job Info / Signature Logic
   if (jobInfo === "") {
-    console.log("Job Info is empty. Prompting user for signature.");
+    Logger.log("Job info is empty. Prompting user for name.");
     var ui = SpreadsheetApp.getUi();
     var response = ui.prompt(
       "Please Enter Your Name",
@@ -117,7 +126,7 @@ function continueResetShippingBay(selectedCellA1) {
     );
 
     if (response.getSelectedButton() == ui.Button.CANCEL) {
-      console.log("User cancelled signature prompt.");
+      Logger.log("User cancelled name prompt");
       ui.alert("Please sign your work to continue");
       return;
     }
@@ -125,24 +134,28 @@ function continueResetShippingBay(selectedCellA1) {
     if (response.getResponseText().trim() !== "") {
       jobInfo = capitalizeWords(response.getResponseText().trim());
       usernameCell.setValue(jobInfo);
-      console.log("User signed as: " + jobInfo);
+      Logger.log("User entered name: " + jobInfo);
     } else {
+      Logger.log("User entered empty name. Aborting.");
       ui.alert("You must sign your work to continue");
       return;
     }
   } else {
     jobInfo = capitalizeWords(jobInfo);
     usernameCell.setValue(jobInfo);
-    console.log("Job Info present: " + jobInfo);
+    Logger.log("Using existing job info: " + jobInfo);
   }
 
   // Reading Bay Data
   var range = activeSheet.getRange(4, binsColumn, activeSheet.getLastRow() - 3, 1);
   var values = range.getValues();
-  console.log(`Scanning ${values.length} rows in the bay.`);
+  
+  Logger.log("Processing " + values.length + " rows of bin status data");
 
   var columnBValues = homelessGearSheet.getRange("B:B").getValues();
   var existingItems = new Set(columnBValues.flat().filter(String));
+  
+  Logger.log("Loaded " + existingItems.size + " existing items from HOMELESS GEAR sheet");
 
   var barcodes = activeSheet.getRange(4, barcodeColumn, values.length, 1).getValues();
   var itemNames = activeSheet.getRange(4, userColumn, values.length, 1).getValues();
@@ -151,10 +164,14 @@ function continueResetShippingBay(selectedCellA1) {
   var lostAndFoundItems = [];
   var quantityUpdates = [];
   var csvData = [];
+  var skippedItems = 0;
+  var duplicateLFSkipped = 0;
   const keywordsRegex = /\b(?:Disposed|Repair|Lost|Inactive|Sale|Pending QC)\b(?=\s*\||$)/i;
 
   // --- Main Processing Loop ---
-  console.time("Processing_Loop");
+  Logger.log("Starting item processing loop...");
+  var loopStartTime = new Date().getTime();
+  
   for (var i = 0; i < values.length; i++) {
     var binStatus = values[i][0];
     var itemName = itemNames[i][0];
@@ -171,7 +188,11 @@ function continueResetShippingBay(selectedCellA1) {
           itemCounts[itemName] = { barcode: barcode, count: 0 };
         }
         itemCounts[itemName].count += 1;
+      } else {
+        Logger.log("Skipping existing item in HOMELESS GEAR: " + itemName);
       }
+    } else if (/case|pelican/i.test(itemName)) {
+      skippedItems++;
     } 
     // Lost/Disposed Logic
     else if (["LOST", "DISPOSED", "INACTIVE"].includes(binStatus)) {
@@ -206,16 +227,19 @@ function continueResetShippingBay(selectedCellA1) {
             newQuantity: currentQuantity + 1,
             jobInfo: jobInfo
           });
+          Logger.log("Updating quantity for existing Lost & Found item at row " + rowIndex + ": " + itemName + " (new qty: " + (currentQuantity + 1) + ")");
         } else {
           // Pending item logic
           const pendingIndex = lostAndFoundItems.findIndex(item => item[0] === barcode.toString());
           if (pendingIndex !== -1) {
             lostAndFoundItems[pendingIndex][3] += 1;
+            Logger.log("Incremented quantity for pending Lost & Found item: " + itemName);
           }
         }
       } else {
         lostAndFoundItems.push([barcode, itemName, statusText, 1, jobInfo, "", consigner]);
         existingBarcodeMap.set(barcode.toString(), "pending");
+        Logger.log("Added to Lost & Found: " + itemName + " (" + statusText + ") - Consigner: " + consigner);
       }
     }
 
@@ -223,7 +247,17 @@ function continueResetShippingBay(selectedCellA1) {
       csvData.push([barcode]);
     }
   }
-  console.timeEnd("Processing_Loop");
+  
+  var loopEndTime = new Date().getTime();
+  var loopDuration = ((loopEndTime - loopStartTime) / 1000).toFixed(2);
+  Logger.log("Item processing loop complete. Duration: " + loopDuration + " seconds");
+  
+  Logger.log("Item processing complete. Summary:");
+  Logger.log("  - Homeless gear items: " + Object.keys(itemCounts).length);
+  Logger.log("  - Lost & Found items (new): " + lostAndFoundItems.length);
+  Logger.log("  - Lost & Found quantity updates: " + quantityUpdates.length);
+  Logger.log("  - Skipped items (case/pelican): " + skippedItems);
+  Logger.log("  - Total barcodes for CSV: " + csvData.length);
 
   // --- Appending Data ---
 
@@ -235,34 +269,37 @@ function continueResetShippingBay(selectedCellA1) {
   }
 
   if (dataToAppend.length > 0) {
-    console.log(`Appending ${dataToAppend.length} items to Homeless Gear.`);
     var lastDataRow = columnBValues.filter(row => row[0].toString().trim() !== "").length;
     var targetRange = homelessGearSheet.getRange(lastDataRow + 1, 1, dataToAppend.length, 5);
     targetRange.setValues(dataToAppend);
+    Logger.log("Appended " + dataToAppend.length + " items to HOMELESS GEAR sheet starting at row " + (lastDataRow + 1));
   } else {
-    console.log("No new Homeless Gear items found.");
+    Logger.log("No homeless gear items to append");
   }
 
   // Update quantities for existing L&F items
   if (quantityUpdates.length > 0) {
-    console.log(`Updating quantities for ${quantityUpdates.length} existing Lost & Found items.`);
+    Logger.log("Updating quantities for " + quantityUpdates.length + " existing Lost & Found items");
     quantityUpdates.forEach(update => {
       lostAndFoundSheet.getRange(update.row, 4).setValue(update.newQuantity);
       lostAndFoundSheet.getRange(update.row, 5).setValue(update.jobInfo);
     });
+    Logger.log("Completed quantity updates for " + quantityUpdates.length + " items");
+  } else {
+    Logger.log("No Lost & Found quantity updates needed");
   }
 
   // Append new Lost & Found items
   if (lostAndFoundItems.length > 0) {
-    console.log(`Appending ${lostAndFoundItems.length} NEW items to Lost & Found.`);
     var lastDataRowLF = lostAndFoundSheet.getRange("B:B").getValues().filter(row => row[0].toString().trim() !== "").length;
     var targetRangeLF = lostAndFoundSheet.getRange(lastDataRowLF + 1, 1, lostAndFoundItems.length, 7);
     targetRangeLF.setValues(lostAndFoundItems);
 
     var checkboxRange = lostAndFoundSheet.getRange(lastDataRowLF + 1, 6, lostAndFoundItems.length, 1);
     checkboxRange.insertCheckboxes();
+    Logger.log("Appended " + lostAndFoundItems.length + " items to Lost & Found sheet starting at row " + (lastDataRowLF + 1));
   } else {
-    console.log("No new Lost & Found items to append.");
+    Logger.log("No Lost & Found items to append");
   }
 
   // --- Update Analytics ---
@@ -270,18 +307,17 @@ function continueResetShippingBay(selectedCellA1) {
   var currentTotalAA = analyticsSheet.getRange("AA2").getValue() || 0;
   var newTotalAA = currentTotalAA + statusCount;
   analyticsSheet.getRange("AA2").setValue(newTotalAA);
-  console.log(`Analytics updated (AA2): Added ${statusCount} L&F items. New Total: ${newTotalAA}`);
+  Logger.log("Updated Lost & Found analytics (AA2): Added " + statusCount + " items, new total is " + newTotalAA);
 
   var uniqueBarcodes = new Set(barcodes.flat().filter(String)).size;
   var currentTotalZ = analyticsSheet.getRange("Z2").getValue() || 0;
   var newTotalZ = currentTotalZ + uniqueBarcodes;
   analyticsSheet.getRange("Z2").setValue(newTotalZ);
-  console.log(`Analytics updated (Z2): Added ${uniqueBarcodes} unique barcodes. New Total: ${newTotalZ}`);
+  Logger.log("Updated barcode analytics (Z2): Added " + uniqueBarcodes + " unique barcodes, new total is " + newTotalZ);
 
   // --- CSV & DB Updates ---
-  console.log("Initiating CSV Archive...");
+  Logger.log("Saving barcodes to CSV archive...");
   saveBarcodesToCSV(csvData, jobInfo);
-  console.log("CSV Archive complete.");
 
   // ============================================================================
   // COMMENTED OUT: Camera Status "Returned" Update Functionality
@@ -304,37 +340,51 @@ function continueResetShippingBay(selectedCellA1) {
   // ============================================================================
 
   // --- Cleanup ---
-  console.log("Clearing Bay content...");
+  Logger.log("Clearing bay data from columns...");
   activeSheet.getRange(4, barcodeColumn, activeSheet.getLastRow() - 3, 1).clearContent();
   usernameCell.clearContent();
   
-  console.log("--- Reset Receiving Bay Complete ---");
-  console.timeEnd("ResetReceivingBay_Total_Time"); // End Timer
+  var endTime = new Date().getTime();
+  var totalDuration = ((endTime - startTime) / 1000).toFixed(2);
+  Logger.log("=== Reset Receiving Bay: Script Complete ===");
+  Logger.log("Summary - Lost & Found added: " + statusCount + ", Quantity updates: " + quantityUpdates.length + ", Barcodes processed: " + uniqueBarcodes + ", Homeless gear added: " + dataToAppend.length);
+  Logger.log("Total execution time: " + totalDuration + " seconds");
 }
 
 /**
  * Saves the barcodes to a CSV file in the Shared Drive "Barcode Bay Archives" folder
  */
 function saveBarcodesToCSV(csvData, jobInfo) {
+  Logger.log("saveBarcodesToCSV: Starting CSV save process");
   var folderName = "Barcode Bay Archives";
-  var timestamp = new Date().toISOString().replace("T", " ").split(".")[0];
-  var fileName = timestamp + " " + jobInfo + ".csv";
+  var timestamp = getConsistentTimestamp();
+  var fileName = timestamp + "_" + jobInfo + ".csv";
   var csvContent = csvData.map(row => row.join(",")).join("\n");
-
-  console.log(`Saving CSV: ${fileName}`);
+  
+  Logger.log("CSV file details - Name: " + fileName + ", Rows: " + csvData.length);
 
   // Save to Shared Drive
-  saveToSharedDrive(folderName, fileName, csvContent);
+  try {
+    saveToSharedDrive(folderName, fileName, csvContent);
+    Logger.log("Successfully saved CSV to Shared Drive: " + folderName);
+  } catch (error) {
+    Logger.log("ERROR saving to Shared Drive: " + error.toString());
+  }
   
   // Also save to user's personal Drive as backup
-  var folders = DriveApp.getFoldersByName(folderName);
-  var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
-  folder.createFile(fileName, csvContent, MimeType.CSV);
+  try {
+    var folders = DriveApp.getFoldersByName(folderName);
+    var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+    folder.createFile(fileName, csvContent, MimeType.CSV);
+    Logger.log("Successfully saved CSV backup to personal Drive: " + folderName);
+  } catch (error) {
+    Logger.log("ERROR saving to personal Drive: " + error.toString());
+  }
 }
 
 // saveToSharedDrive function is now centralized in Data Model.js
 
 function setSelectedUsernameCell(cellA1) {
   PropertiesService.getScriptProperties().setProperty('selectedUsernameCell', cellA1);
-  console.log("Selected username cell stored: " + cellA1);
+  Logger.log("Selected username cell stored: " + cellA1);
 }
