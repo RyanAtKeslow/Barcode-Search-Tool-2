@@ -65,10 +65,10 @@ function resetReceivingBay() {
     Logger.log("Multiple username matches found. Prompting user for selection.");
     const selectedMatch = setSelectedMatch(usernameMatches);
     Logger.log("User selected: " + selectedMatch.cellA1);
-    continueResetShippingBay(selectedMatch.cellA1);
+    continueResetShippingBay(selectedMatch.cellA1, startTime);
   } else if (usernameMatches.length === 1) {
     Logger.log("Single username match found: " + usernameMatches[0].cellA1 + " (" + usernameMatches[0].value + ")");
-    continueResetShippingBay(usernameMatches[0].cellA1);
+    continueResetShippingBay(usernameMatches[0].cellA1, startTime);
   } else {
     Logger.log("ERROR: No username matches found in row 2");
     SpreadsheetApp.getUi().alert("Could not find your name in row 2");
@@ -76,7 +76,7 @@ function resetReceivingBay() {
   }
 }
 
-function continueResetShippingBay(selectedCellA1) {
+function continueResetShippingBay(selectedCellA1, startTime) {
   Logger.log("=== continueResetShippingBay: Processing bay reset for cell " + selectedCellA1 + " ===");
   
   var ss = SpreadsheetApp.getActiveSpreadsheet();
