@@ -162,6 +162,16 @@ function normalizeBayNumber(bay) {
 }
 
 /**
+ * Normalizes barcodes for comparison by trimming and converting to uppercase
+ * @param {string} barcode - Barcode to normalize
+ * @returns {string} Normalized barcode
+ */
+function normalizeBarcode(barcode) {
+  if (!barcode) return '';
+  return barcode.toString().trim().toUpperCase();
+}
+
+/**
  * Gets display name for a bay number
  * @param {number} bayNumber - Bay number (1-22)
  * @returns {string} Display name like "PREP BAY 1" or "BACKLOT 1"
@@ -180,6 +190,46 @@ function getBayDisplayName(bayNumber) {
 }
 
 /**
+ * Reads "Camera Bodies Only" sheet from destination workbook and creates a lookup map
+ * @returns {Object} Map of normalized barcode -> name from column D
+ */
+function readCameraBodiesOnlyLookup() {
+  try {
+    const spreadsheet = SpreadsheetApp.openById(PREP_BAY_DESTINATION_SPREADSHEET_ID);
+    const sheet = spreadsheet.getSheetByName('Camera Bodies Only');
+    
+    if (!sheet) {
+      Logger.log(`⚠️ Camera Bodies Only sheet not found in destination workbook`);
+      return {};
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    const lookup = {};
+    
+    // Column I is index 8, Column D is index 3
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      const barcode = row[8]; // Column I
+      const name = row[3]; // Column D
+      
+      if (barcode && name) {
+        const normalizedBarcode = normalizeBarcode(barcode);
+        if (normalizedBarcode) {
+          lookup[normalizedBarcode] = name.toString().trim();
+        }
+      }
+    }
+    
+    Logger.log(`📚 Loaded ${Object.keys(lookup).length} barcode-to-name mappings from Camera Bodies Only`);
+    return lookup;
+    
+  } catch (error) {
+    Logger.log(`❌ Error reading Camera Bodies Only lookup: ${error.toString()}`);
+    return {};
+  }
+}
+
+/**
  * Reads Equipment Scheduling Chart data using Camera Forecast logic
  * Finds cameras assigned to orders by checking LOS ANGELES rows and today's date column
  * Reads from both "Camera" and "Consignor Use Only" sheets
@@ -189,6 +239,9 @@ function readEquipmentSchedulingData() {
   try {
     const spreadsheet = SpreadsheetApp.openById(PREP_BAY_EQUIPMENT_CHART_ID);
     
+    // Read Camera Bodies Only lookup map
+    const cameraBodiesLookup = readCameraBodiesOnlyLookup();
+    
     // Map to store cameras by order number (merged from both sheets)
     // Key: order number (normalized), Value: Array of {equipmentType, barcode}
     const camerasByOrder = {};
@@ -197,7 +250,7 @@ function readEquipmentSchedulingData() {
     const cameraSheet = spreadsheet.getSheetByName('Camera');
     if (cameraSheet) {
       Logger.log(`📹 Processing Camera sheet...`);
-      const cameraData = processEquipmentSheet(cameraSheet, 'Camera');
+      const cameraData = processEquipmentSheet(cameraSheet, 'Camera', null);
       // Merge camera data into main object
       for (const [orderNumber, cameras] of Object.entries(cameraData)) {
         if (!camerasByOrder[orderNumber]) {
@@ -219,7 +272,7 @@ function readEquipmentSchedulingData() {
     const consignorSheet = spreadsheet.getSheetByName('Consignor Use Only');
     if (consignorSheet) {
       Logger.log(`📹 Processing Consignor Use Only sheet...`);
-      const consignorData = processEquipmentSheet(consignorSheet, 'Consignor Use Only');
+      const consignorData = processEquipmentSheet(consignorSheet, 'Consignor Use Only', cameraBodiesLookup);
       // Merge consignor data into main object
       for (const [orderNumber, cameras] of Object.entries(consignorData)) {
         if (!camerasByOrder[orderNumber]) {
@@ -257,9 +310,10 @@ function readEquipmentSchedulingData() {
  * Finds cameras assigned to orders by checking LOS ANGELES rows and today's date column
  * @param {Sheet} sheet - The sheet to process
  * @param {string} sheetName - Name of the sheet (for logging)
+ * @param {Object} cameraBodiesLookup - Optional lookup map for "Consignor Use Only" sheet (normalized barcode -> name from column D)
  * @returns {Object} Object containing camera data indexed by order number
  */
-function processEquipmentSheet(sheet, sheetName) {
+function processEquipmentSheet(sheet, sheetName, cameraBodiesLookup) {
   try {
     const data = sheet.getDataRange().getValues();
     const headerRow = data[0];
@@ -332,6 +386,9 @@ function processEquipmentSheet(sheet, sheetName) {
     // Key: order number (normalized), Value: Array of {equipmentType, barcode}
     const camerasByOrder = {};
     
+    // Check if this is "Consignor Use Only" sheet and we have a lookup map
+    const isConsignorSheet = sheetName === 'Consignor Use Only';
+    
     // Process each LA camera row
     for (const rowNum of foundLACameras) {
       const rowIdx = rowNum - 1; // Convert to 0-based
@@ -357,15 +414,34 @@ function processEquipmentSheet(sheet, sheetName) {
         continue; // Skip rows without barcodes
       }
       
-      // Find camera type by looking for the first empty cell above
-      let typeRow = rowIdx - 1;
-      while (typeRow >= 0 && data[typeRow][0] !== '') {
-        typeRow--;
-      }
-      const equipmentType = typeRow >= 0 ? (data[typeRow][4] || '') : ''; // Column E
-      
-      if (!equipmentType) {
-        continue; // Skip if no camera type found
+      // For "Consignor Use Only" sheet, check barcode against Camera Bodies Only lookup
+      let equipmentType = '';
+      if (isConsignorSheet && cameraBodiesLookup) {
+        const normalizedBarcode = normalizeBarcode(barcode);
+        const matchedName = cameraBodiesLookup[normalizedBarcode];
+        
+        if (!matchedName) {
+          // No match found - skip this barcode, do not default to normal lookup
+          Logger.log(`⚠️ Barcode ${barcode} from Consignor Use Only not found in Camera Bodies Only - skipping`);
+          continue;
+        }
+        
+        // Match found - use the name from column D of Camera Bodies Only
+        // We'll use this as the equipmentType below
+        equipmentType = matchedName;
+      } else {
+        // For "Camera" sheet or if no lookup provided, use normal logic
+        // Find camera type by looking for the first empty cell above
+        let typeRow = rowIdx - 1;
+        while (typeRow >= 0 && data[typeRow][0] !== '') {
+          typeRow--;
+        }
+        equipmentType = typeRow >= 0 ? (data[typeRow][4] || '') : ''; // Column E
+        
+        if (!equipmentType) {
+          continue; // Skip if no camera type found
+        }
+        equipmentType = equipmentType.toString().trim();
       }
       
       // Search for order numbers in today's column
@@ -413,7 +489,7 @@ function processEquipmentSheet(sheet, sheetName) {
           );
           if (!exists) {
             camerasByOrder[normalizedOrder].push({
-              equipmentType: equipmentType.toString().trim(),
+              equipmentType: equipmentType,
               barcode: barcode
             });
             Logger.log(`📹 Added camera from ${sheetName}: Order ${normalizedOrder}, Type: ${equipmentType}, Barcode: ${barcode}`);
