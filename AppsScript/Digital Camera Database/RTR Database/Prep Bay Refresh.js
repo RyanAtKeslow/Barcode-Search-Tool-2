@@ -17,6 +17,7 @@ const PREP_BAY_ASSIGNMENT_SPREADSHEET_ID = '1erp3GVvekFXUVzC4OJsTrLBgqL4d0s-Hill
 const PREP_BAY_EQUIPMENT_CHART_ID = '1uECRfnLO1LoDaGZaHTHS3EaUdf8tte5kiR6JNWAeOiw';
 const PREP_BAY_DESTINATION_SPREADSHEET_ID = '1FYA76P4B7vFUCDmxDwc6Ly6-tm7F6f5c5v0eNYjgwKw';
 const PREP_BAY_DESTINATION_SHEET_NAME = 'Todays Prep Bays';
+const NEXT_WORKDAY_DESTINATION_SHEET_NAME = 'Next Workday Prep Bays';
 
 // Day name abbreviations
 const DAY_PREFIXES = ['Sun', 'Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat'];
@@ -63,6 +64,34 @@ function getTodaySheetName(date) {
   const month = date.getMonth() + 1; // 1-based
   const day = date.getDate();
   return `${dayPrefix} ${month}/${day}`;
+}
+
+/**
+ * Calculates the next workday (Monday-Friday, skipping weekends)
+ * If today is Friday, returns Monday. If today is Saturday/Sunday, returns Monday.
+ * @param {Date} startDate - The starting date
+ * @returns {Date} The next workday date
+ */
+function getNextWorkday(startDate) {
+  let nextDate = new Date(startDate);
+  nextDate.setDate(nextDate.getDate() + 1); // Start with tomorrow
+  
+  // Skip weekends: if Saturday (6) or Sunday (0), advance to Monday
+  while (nextDate.getDay() === 0 || nextDate.getDay() === 6) {
+    nextDate.setDate(nextDate.getDate() + 1);
+  }
+  
+  return nextDate;
+}
+
+/**
+ * Gets next workday's sheet name in format "Mon 12/16"
+ * @param {Date} date - The starting date to calculate from
+ * @returns {string} Sheet name like "Mon 12/16"
+ */
+function getNextWorkdaySheetName(date) {
+  const nextWorkday = getNextWorkday(date);
+  return getTodaySheetName(nextWorkday);
 }
 
 /**
@@ -231,12 +260,18 @@ function readCameraBodiesOnlyLookup() {
 
 /**
  * Reads Equipment Scheduling Chart data using Camera Forecast logic
- * Finds cameras assigned to orders by checking LOS ANGELES rows and today's date column
+ * Finds cameras assigned to orders by checking LOS ANGELES rows and target date column
  * Reads from both "Camera" and "Consignor Use Only" sheets
+ * @param {Date} targetDate - Optional target date to search for (defaults to today)
  * @returns {Object} Object containing camera data indexed by order number
  */
-function readEquipmentSchedulingData() {
+function readEquipmentSchedulingData(targetDate) {
   try {
+    // Default to today if no target date provided
+    if (!targetDate) {
+      targetDate = new Date();
+    }
+    
     const spreadsheet = SpreadsheetApp.openById(PREP_BAY_EQUIPMENT_CHART_ID);
     
     // Read Camera Bodies Only lookup map
@@ -250,7 +285,7 @@ function readEquipmentSchedulingData() {
     const cameraSheet = spreadsheet.getSheetByName('Camera');
     if (cameraSheet) {
       Logger.log(`📹 Processing Camera sheet...`);
-      const cameraData = processEquipmentSheet(cameraSheet, 'Camera', null);
+      const cameraData = processEquipmentSheet(cameraSheet, 'Camera', null, targetDate);
       // Merge camera data into main object
       for (const [orderNumber, cameras] of Object.entries(cameraData)) {
         if (!camerasByOrder[orderNumber]) {
@@ -272,7 +307,7 @@ function readEquipmentSchedulingData() {
     const consignorSheet = spreadsheet.getSheetByName('Consignor Use Only');
     if (consignorSheet) {
       Logger.log(`📹 Processing Consignor Use Only sheet...`);
-      const consignorData = processEquipmentSheet(consignorSheet, 'Consignor Use Only', cameraBodiesLookup);
+      const consignorData = processEquipmentSheet(consignorSheet, 'Consignor Use Only', cameraBodiesLookup, targetDate);
       // Merge consignor data into main object
       for (const [orderNumber, cameras] of Object.entries(consignorData)) {
         if (!camerasByOrder[orderNumber]) {
@@ -307,30 +342,35 @@ function readEquipmentSchedulingData() {
 
 /**
  * Processes a single equipment sheet (Camera or Consignor Use Only)
- * Finds cameras assigned to orders by checking LOS ANGELES rows and today's date column
+ * Finds cameras assigned to orders by checking LOS ANGELES rows and target date column
  * @param {Sheet} sheet - The sheet to process
  * @param {string} sheetName - Name of the sheet (for logging)
  * @param {Object} cameraBodiesLookup - Optional lookup map for "Consignor Use Only" sheet (normalized barcode -> name from column D)
+ * @param {Date} targetDate - Optional target date to search for (defaults to today)
  * @returns {Object} Object containing camera data indexed by order number
  */
-function processEquipmentSheet(sheet, sheetName, cameraBodiesLookup) {
+function processEquipmentSheet(sheet, sheetName, cameraBodiesLookup, targetDate) {
   try {
+    // Default to today if no target date provided
+    if (!targetDate) {
+      targetDate = new Date();
+    }
+    
     const data = sheet.getDataRange().getValues();
     const headerRow = data[0];
     
-    // Find today's date column
-    const today = new Date();
-    let todayColumnIndex = -1;
+    // Find target date column
+    let targetDateColumnIndex = -1;
     
     for (let i = 0; i < headerRow.length; i++) {
       const cell = headerRow[i];
       if (cell instanceof Date) {
         if (
-          cell.getFullYear() === today.getFullYear() &&
-          cell.getMonth() === today.getMonth() &&
-          cell.getDate() === today.getDate()
+          cell.getFullYear() === targetDate.getFullYear() &&
+          cell.getMonth() === targetDate.getMonth() &&
+          cell.getDate() === targetDate.getDate()
         ) {
-          todayColumnIndex = i;
+          targetDateColumnIndex = i;
           break;
         }
       } else if (typeof cell === 'string') {
@@ -341,23 +381,23 @@ function processEquipmentSheet(sheet, sheetName, cameraBodiesLookup) {
           const d = parseInt(parts[1], 10);
           const y = parseInt(parts[2], 10);
           if (
-            y === today.getFullYear() &&
-            m === today.getMonth() + 1 &&
-            d === today.getDate()
+            y === targetDate.getFullYear() &&
+            m === targetDate.getMonth() + 1 &&
+            d === targetDate.getDate()
           ) {
-            todayColumnIndex = i;
+            targetDateColumnIndex = i;
             break;
           }
         }
       }
     }
     
-    if (todayColumnIndex === -1) {
-      Logger.log(`⚠️ Today's date column not found in ${sheetName} sheet`);
+    if (targetDateColumnIndex === -1) {
+      Logger.log(`⚠️ Target date column not found in ${sheetName} sheet`);
       return {};
     }
     
-    Logger.log(`📅 Found today's date in column ${todayColumnIndex + 1} of ${sheetName} sheet`);
+    Logger.log(`📅 Found target date in column ${targetDateColumnIndex + 1} of ${sheetName} sheet`);
     
     // Get backgrounds for all rows to check for valid booking colors
     const validTodayCellBackgrounds = [
@@ -380,7 +420,7 @@ function processEquipmentSheet(sheet, sheetName, cameraBodiesLookup) {
     Logger.log(`📹 Found ${foundLACameras.length} LOS ANGELES camera rows in ${sheetName} sheet`);
     
     // Get backgrounds for LA camera rows
-    const backgrounds = sheet.getRange(1, todayColumnIndex + 1, data.length, 1).getBackgrounds();
+    const backgrounds = sheet.getRange(1, targetDateColumnIndex + 1, data.length, 1).getBackgrounds();
     
     // Map to store cameras by order number
     // Key: order number (normalized), Value: Array of {equipmentType, barcode}
@@ -394,7 +434,7 @@ function processEquipmentSheet(sheet, sheetName, cameraBodiesLookup) {
       const rowIdx = rowNum - 1; // Convert to 0-based
       const row = data[rowIdx];
       
-      // Check if today's cell has a valid background color (indicating booking)
+      // Check if target date's cell has a valid background color (indicating booking)
       const cellBg = backgrounds[rowIdx][0];
       if (!validTodayCellBackgrounds.includes(cellBg)) {
         continue; // Skip if not a valid booking color
@@ -444,17 +484,17 @@ function processEquipmentSheet(sheet, sheetName, cameraBodiesLookup) {
         equipmentType = equipmentType.toString().trim();
       }
       
-      // Search for order numbers in today's column
-      // Special case: If today's cell has red background (#ff7171) and is blank, search left for order number
+      // Search for order numbers in target date's column
+      // Special case: If target date's cell has red background (#ff7171) and is blank, search left for order number
       const orderNumbersFound = new Set();
-      const todayCellValue = row[todayColumnIndex];
+      const targetDateCellValue = row[targetDateColumnIndex];
       const isRedBackground = cellBg === '#ff7171';
-      const isTodayCellBlank = !todayCellValue || (typeof todayCellValue === 'string' && todayCellValue.trim() === '');
+      const isTargetDateCellBlank = !targetDateCellValue || (typeof targetDateCellValue === 'string' && targetDateCellValue.trim() === '');
       
-      if (isRedBackground && isTodayCellBlank) {
+      if (isRedBackground && isTargetDateCellBlank) {
         // Red background with blank cell: search leftward for order number
         Logger.log(`🔍 Red background with blank cell for barcode ${barcode} in ${sheetName}, searching left for order number...`);
-        for (let colIdx = todayColumnIndex - 1; colIdx >= 6; colIdx--) { // Start from column before today, go back to column G (index 6)
+        for (let colIdx = targetDateColumnIndex - 1; colIdx >= 6; colIdx--) { // Start from column before target date, go back to column G (index 6)
           const leftCellValue = row[colIdx];
           if (leftCellValue && typeof leftCellValue === 'string' && leftCellValue.trim() !== '') {
             // Check if this cell has an order number
@@ -467,11 +507,11 @@ function processEquipmentSheet(sheet, sheetName, cameraBodiesLookup) {
             }
           }
         }
-      } else if (todayCellValue && typeof todayCellValue === 'string' && todayCellValue.trim() !== '') {
-        // Today's cell has content - extract order numbers from it
-        const todayOrderMatches = todayCellValue.match(/\b(\d{6})\b/g);
-        if (todayOrderMatches) {
-          todayOrderMatches.forEach(ord => orderNumbersFound.add(ord.replace(/[^0-9]/g, '')));
+      } else if (targetDateCellValue && typeof targetDateCellValue === 'string' && targetDateCellValue.trim() !== '') {
+        // Target date's cell has content - extract order numbers from it
+        const targetDateOrderMatches = targetDateCellValue.match(/\b(\d{6})\b/g);
+        if (targetDateOrderMatches) {
+          targetDateOrderMatches.forEach(ord => orderNumbersFound.add(ord.replace(/[^0-9]/g, '')));
         }
       }
       
@@ -515,16 +555,22 @@ function processEquipmentSheet(sheet, sheetName, cameraBodiesLookup) {
  * 
  * @param {Array<Object>} prepBayData - Array of prep bay assignments
  * @param {Object} equipmentData - Camera data indexed by order number
+ * @param {string} sheetName - Optional sheet name (defaults to PREP_BAY_DESTINATION_SHEET_NAME)
  */
-function writePrepBayDataToSheet(prepBayData, equipmentData) {
+function writePrepBayDataToSheet(prepBayData, equipmentData, sheetName) {
   try {
+    // Default to today's prep bays sheet if no sheet name provided
+    if (!sheetName) {
+      sheetName = PREP_BAY_DESTINATION_SHEET_NAME;
+    }
+    
     const spreadsheet = SpreadsheetApp.openById(PREP_BAY_DESTINATION_SPREADSHEET_ID);
-    let sheet = spreadsheet.getSheetByName(PREP_BAY_DESTINATION_SHEET_NAME);
+    let sheet = spreadsheet.getSheetByName(sheetName);
     
     // Create sheet if it doesn't exist
     if (!sheet) {
-      sheet = spreadsheet.insertSheet(PREP_BAY_DESTINATION_SHEET_NAME);
-      Logger.log(`✅ Created new sheet: ${PREP_BAY_DESTINATION_SHEET_NAME}`);
+      sheet = spreadsheet.insertSheet(sheetName);
+      Logger.log(`✅ Created new sheet: ${sheetName}`);
     }
     
     // Process each prep bay (1-22)
@@ -611,7 +657,7 @@ function writePrepBayDataToSheet(prepBayData, equipmentData) {
         }
         
         const headerName = getBayDisplayName(bayNum);
-        Logger.log(`✅ Wrote data for ${headerName}: ${assignment.jobName} (Order: ${assignment.orderNumber}, ${cameras.length} camera(s) scheduled for today)`);
+        Logger.log(`✅ Wrote data for ${headerName}: ${assignment.jobName} (Order: ${assignment.orderNumber}, ${cameras.length} camera(s) scheduled)`);
       } else {
         // No assignment for this bay - cells already cleared above
         const headerName = getBayDisplayName(bayNum);
@@ -619,7 +665,7 @@ function writePrepBayDataToSheet(prepBayData, equipmentData) {
       }
     }
     
-    Logger.log(`💾 Wrote prep bay data to ${PREP_BAY_DESTINATION_SHEET_NAME} sheet`);
+    Logger.log(`💾 Wrote prep bay data to ${sheetName} sheet`);
     
   } catch (error) {
     Logger.log(`❌ Error writing to sheet: ${error.toString()}`);
@@ -631,16 +677,22 @@ function writePrepBayDataToSheet(prepBayData, equipmentData) {
  * Clears all prep bay data cells for all 22 prep bays
  * For each prep bay, clears B2:B12 (Job Name, Order Number, Prep Tech, Camera names) and C5:C12 (Barcodes)
  * Does NOT clear: C1:E4, D5:E12 (D5:D12 are "Pulled?" checkboxes), or any headers
+ * @param {string} sheetName - Optional sheet name (defaults to PREP_BAY_DESTINATION_SHEET_NAME)
  */
-function clearAllPrepBays() {
+function clearAllPrepBays(sheetName) {
   try {
-    Logger.log("🧹 Starting to clear all prep bays");
+    // Default to today's prep bays sheet if no sheet name provided
+    if (!sheetName) {
+      sheetName = PREP_BAY_DESTINATION_SHEET_NAME;
+    }
+    
+    Logger.log(`🧹 Starting to clear all prep bays in ${sheetName}`);
     
     const spreadsheet = SpreadsheetApp.openById(PREP_BAY_DESTINATION_SPREADSHEET_ID);
-    const sheet = spreadsheet.getSheetByName(PREP_BAY_DESTINATION_SHEET_NAME);
+    const sheet = spreadsheet.getSheetByName(sheetName);
     
     if (!sheet) {
-      Logger.log(`⚠️ Sheet "${PREP_BAY_DESTINATION_SHEET_NAME}" not found`);
+      Logger.log(`⚠️ Sheet "${sheetName}" not found`);
       return;
     }
     
@@ -701,12 +753,146 @@ function clearAllPrepBays() {
       Logger.log(`🧹 Cleared ${headerName}`);
     }
     
-    Logger.log("✅ Successfully cleared all prep bays");
+    Logger.log(`✅ Successfully cleared all prep bays in ${sheetName}`);
     
   } catch (error) {
     Logger.log(`❌ Error clearing prep bays: ${error.toString()}`);
     Logger.log(`Stack trace: ${error.stack}`);
     throw error;
   }
+}
+
+/**
+ * Main function to refresh next workday prep bay data
+ */
+function prepBayRefreshNextWorkday() {
+  Logger.log("🚀 Starting Next Workday Prep Bay Refresh");
+  
+  try {
+    // Get next workday date and sheet name
+    const today = new Date();
+    const nextWorkday = getNextWorkday(today);
+    const nextWorkdaySheetName = getNextWorkdaySheetName(today);
+    Logger.log(`📅 Next workday: ${nextWorkdaySheetName}`);
+    
+    // Read Prep Bay Assignment data for next workday
+    const prepBayData = readPrepBayDataForNextWorkday(nextWorkdaySheetName);
+    Logger.log(`📊 Found ${prepBayData.length} prep bay assignments for next workday`);
+    
+    // Read Equipment Scheduling Chart data for next workday
+    const equipmentData = readEquipmentSchedulingDataForNextWorkday();
+    Logger.log(`📚 Loaded Equipment Scheduling Chart data for next workday`);
+    
+    // Write data to destination sheet
+    writePrepBayDataToNextWorkdaySheet(prepBayData, equipmentData);
+    
+    Logger.log("✅ Next Workday Prep Bay Refresh completed");
+    
+  } catch (error) {
+    Logger.log(`❌ Error in prepBayRefreshNextWorkday: ${error.toString()}`);
+    Logger.log(`Stack trace: ${error.stack}`);
+    throw error;
+  }
+}
+
+/**
+ * Reads Prep Bay Assignment data for next workday's sheet
+ * @param {string} sheetName - Name of next workday's sheet (e.g., "Mon 12/16")
+ * @returns {Array<Object>} Array of prep bay assignment objects
+ */
+function readPrepBayDataForNextWorkday(sheetName) {
+  try {
+    const spreadsheet = SpreadsheetApp.openById(PREP_BAY_ASSIGNMENT_SPREADSHEET_ID);
+    const sheet = spreadsheet.getSheetByName(sheetName);
+    
+    if (!sheet) {
+      Logger.log(`⚠️ Sheet "${sheetName}" not found in Prep Bay Assignment`);
+      return [];
+    }
+    
+    // Read all data from Prep Bay Assignment workbook (NO column shifts in this source workbook)
+    // Schema: BAY (A), JOB NAME (B), ORDER (C), AGENT (D), CAMERAS (E), 1st AC (F), DP (G), PREP TECH (H), NOTES (I)
+    // Prep Tech is read from column H (index 7) - this workbook has NOT been modified with column shifts
+    const data = sheet.getDataRange().getValues();
+    
+    const prepBayAssignments = [];
+    
+    // Process each row (skip header row if present)
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      const bay = row[0] ? row[0].toString().trim() : ''; // Column A
+      const jobName = row[1] ? row[1].toString().trim() : ''; // Column B
+      const orderNumber = row[2] ? row[2].toString().trim() : ''; // Column C
+      const prepTech = row[7] ? row[7].toString().trim() : ''; // Column H (Prep Tech)
+      
+      // Skip empty rows or header rows
+      if (!bay || bay.toUpperCase() === 'BAY' || !jobName) {
+        continue;
+      }
+      
+      // Normalize bay number/name
+      const bayNumber = normalizeBayNumber(bay);
+      if (bayNumber === null) {
+        continue; // Skip invalid bay numbers
+      }
+      
+      prepBayAssignments.push({
+        bayNumber: bayNumber,
+        bayName: bay,
+        jobName: jobName,
+        orderNumber: orderNumber,
+        prepTech: prepTech
+      });
+    }
+    
+    // Sort by bay number
+    prepBayAssignments.sort((a, b) => a.bayNumber - b.bayNumber);
+    
+    return prepBayAssignments;
+    
+  } catch (error) {
+    Logger.log(`❌ Error reading Prep Bay data for next workday: ${error.toString()}`);
+    return [];
+  }
+}
+
+/**
+ * Reads Equipment Scheduling Chart data for next workday
+ * Finds cameras assigned to orders by checking LOS ANGELES rows and next workday's date column
+ * Reads from both "Camera" and "Consignor Use Only" sheets
+ * @returns {Object} Object containing camera data indexed by order number
+ */
+function readEquipmentSchedulingDataForNextWorkday() {
+  try {
+    const today = new Date();
+    const nextWorkday = getNextWorkday(today);
+    return readEquipmentSchedulingData(nextWorkday);
+  } catch (error) {
+    Logger.log(`❌ Error reading Equipment Scheduling data for next workday: ${error.toString()}`);
+    return {};
+  }
+}
+
+/**
+ * Writes prep bay data to the "Next Workday Prep Bays" sheet
+ * Shows all cameras for an order in all prep bays with that order number
+ * 
+ * NOTE: Column shifts (new "Pulled?" columns D, J, P) were ONLY done in this destination sheet.
+ * The source Prep Bay Assignment workbook has NO column shifts.
+ * 
+ * @param {Array<Object>} prepBayData - Array of prep bay assignments
+ * @param {Object} equipmentData - Camera data indexed by order number
+ */
+function writePrepBayDataToNextWorkdaySheet(prepBayData, equipmentData) {
+  return writePrepBayDataToSheet(prepBayData, equipmentData, NEXT_WORKDAY_DESTINATION_SHEET_NAME);
+}
+
+/**
+ * Clears all next workday prep bay data cells for all 22 prep bays
+ * For each prep bay, clears B2:B12 (Job Name, Order Number, Prep Tech, Camera names) and C5:C12 (Barcodes)
+ * Does NOT clear: C1:E4, D5:E12 (D5:D12 are "Pulled?" checkboxes), or any headers
+ */
+function clearAllNextWorkdayPrepBays() {
+  return clearAllPrepBays(NEXT_WORKDAY_DESTINATION_SHEET_NAME);
 }
 

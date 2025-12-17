@@ -25,6 +25,10 @@ function onOpen(e) {
     .addItem('Prep Bay Refresh', 'prepBayRefresh')
     .addSeparator()
     .addItem('Clear All Prep Bays', 'clearAllPrepBays')
+    .addSeparator()
+    .addItem('Next Workday Prep Bay Refresh', 'prepBayRefreshNextWorkday')
+    .addSeparator()
+    .addItem('Clear All Next Workday Prep Bays', 'clearAllNextWorkdayPrepBays')
     .addToUi();
   
   // Create Custom Menu ESC (commented out)
