@@ -95,6 +95,52 @@ function getNextWorkdaySheetName(date) {
 }
 
 /**
+ * Normalizes a sheet name by removing emojis and special Unicode characters
+ * Keeps only ASCII letters, numbers, spaces, and forward slashes
+ * @param {string} name - Sheet name to normalize
+ * @returns {string} Normalized sheet name
+ */
+function normalizeSheetName(name) {
+  if (!name) return '';
+  // Remove all non-ASCII characters (emojis, special Unicode) except spaces and forward slashes
+  // Keep: letters, numbers, spaces, forward slashes
+  return name.replace(/[^\x00-\x7F\s\/]/g, '').trim();
+}
+
+/**
+ * Finds a sheet by name pattern, handling emojis and special characters anywhere in the name
+ * @param {Spreadsheet} spreadsheet - The spreadsheet to search
+ * @param {string} expectedName - Expected sheet name pattern (e.g., "Mon 12/22")
+ * @returns {Sheet|null} The matching sheet or null if not found
+ */
+function findSheetByNamePattern(spreadsheet, expectedName) {
+  // Try exact match first (for backward compatibility)
+  const exactMatch = spreadsheet.getSheetByName(expectedName);
+  if (exactMatch) {
+    return exactMatch;
+  }
+  
+  // Normalize expected name
+  const normalizedExpected = normalizeSheetName(expectedName);
+  if (!normalizedExpected) {
+    return null;
+  }
+  
+  // Search through all sheets
+  const sheets = spreadsheet.getSheets();
+  for (let i = 0; i < sheets.length; i++) {
+    const sheetName = sheets[i].getName();
+    // Normalize actual sheet name and compare
+    const normalizedSheet = normalizeSheetName(sheetName);
+    if (normalizedSheet === normalizedExpected) {
+      return sheets[i];
+    }
+  }
+  
+  return null;
+}
+
+/**
  * Reads Prep Bay Assignment data for today's sheet
  * @param {string} sheetName - Name of today's sheet (e.g., "Tues 12/9")
  * @returns {Array<Object>} Array of prep bay assignment objects
@@ -102,7 +148,7 @@ function getNextWorkdaySheetName(date) {
 function readPrepBayDataForToday(sheetName) {
   try {
     const spreadsheet = SpreadsheetApp.openById(PREP_BAY_ASSIGNMENT_SPREADSHEET_ID);
-    const sheet = spreadsheet.getSheetByName(sheetName);
+    const sheet = findSheetByNamePattern(spreadsheet, sheetName);
     
     if (!sheet) {
       Logger.log(`⚠️ Sheet "${sheetName}" not found in Prep Bay Assignment`);
@@ -803,7 +849,7 @@ function prepBayRefreshNextWorkday() {
 function readPrepBayDataForNextWorkday(sheetName) {
   try {
     const spreadsheet = SpreadsheetApp.openById(PREP_BAY_ASSIGNMENT_SPREADSHEET_ID);
-    const sheet = spreadsheet.getSheetByName(sheetName);
+    const sheet = findSheetByNamePattern(spreadsheet, sheetName);
     
     if (!sheet) {
       Logger.log(`⚠️ Sheet "${sheetName}" not found in Prep Bay Assignment`);
