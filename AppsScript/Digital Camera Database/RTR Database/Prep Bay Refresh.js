@@ -531,15 +531,20 @@ function processEquipmentSheet(sheet, sheetName, cameraBodiesLookup, targetDate)
       }
       
       // Search for order numbers in target date's column
-      // Special case: If target date's cell has red background (#ff7171) and is blank, search left for order number
+      // Special cases:
+      // - Red background (#ff7171): active multiple day camera prep - search left if blank
+      // - Yellow background (#f9ff71): confirmed job (may have extended prep) - search left for order number
+      // - Cyan background (#00ffff): confirmed job with consignor camera - search left for order number
       const orderNumbersFound = new Set();
       const targetDateCellValue = row[targetDateColumnIndex];
       const isRedBackground = cellBg === '#ff7171';
+      const isYellowBackground = cellBg === '#f9ff71';
+      const isCyanBackground = cellBg === '#00ffff';
       const isTargetDateCellBlank = !targetDateCellValue || (typeof targetDateCellValue === 'string' && targetDateCellValue.trim() === '');
       
-      if (isRedBackground && isTargetDateCellBlank) {
-        // Red background with blank cell: search leftward for order number
-        Logger.log(`🔍 Red background with blank cell for barcode ${barcode} in ${sheetName}, searching left for order number...`);
+      // Helper function to search leftward for order numbers
+      const searchLeftForOrderNumber = (colorDescription) => {
+        Logger.log(`🔍 ${colorDescription} background for barcode ${barcode} in ${sheetName}, searching left for order number...`);
         for (let colIdx = targetDateColumnIndex - 1; colIdx >= 6; colIdx--) { // Start from column before target date, go back to column G (index 6)
           const leftCellValue = row[colIdx];
           if (leftCellValue && typeof leftCellValue === 'string' && leftCellValue.trim() !== '') {
@@ -553,6 +558,17 @@ function processEquipmentSheet(sheet, sheetName, cameraBodiesLookup, targetDate)
             }
           }
         }
+      };
+      
+      if (isRedBackground && isTargetDateCellBlank) {
+        // Red background with blank cell: search leftward for order number
+        searchLeftForOrderNumber('Red');
+      } else if (isYellowBackground) {
+        // Yellow background (confirmed job, may have extended prep): search leftward for order number
+        searchLeftForOrderNumber('Yellow (confirmed job)');
+      } else if (isCyanBackground) {
+        // Cyan background (confirmed job with consignor camera): search leftward for order number
+        searchLeftForOrderNumber('Cyan (confirmed job with consignor camera)');
       } else if (targetDateCellValue && typeof targetDateCellValue === 'string' && targetDateCellValue.trim() !== '') {
         // Target date's cell has content - extract order numbers from it
         const targetDateOrderMatches = targetDateCellValue.match(/\b(\d{6})\b/g);
