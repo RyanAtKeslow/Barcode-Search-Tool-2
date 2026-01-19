@@ -95,7 +95,32 @@ function getNextWorkdaySheetName(date) {
 }
 
 /**
+ * Normalizes day abbreviations to canonical form
+ * Handles variations: Tue/Tues -> Tues, Thur/Thurs -> Thurs
+ * @param {string} dayAbbr - Day abbreviation to normalize
+ * @returns {string} Canonical day abbreviation
+ */
+function normalizeDayAbbreviation(dayAbbr) {
+  if (!dayAbbr) return '';
+  const upper = dayAbbr.toUpperCase();
+  
+  // Handle Tuesday variations: Tue or Tues -> Tues
+  if (upper === 'TUE' || upper === 'TUES') {
+    return 'Tues';
+  }
+  
+  // Handle Thursday variations: Thur or Thurs -> Thurs
+  if (upper === 'THUR' || upper === 'THURS') {
+    return 'Thurs';
+  }
+  
+  // Return as-is for other days (Sun, Mon, Wed, Fri, Sat)
+  return dayAbbr;
+}
+
+/**
  * Normalizes a sheet name by removing emojis and special Unicode characters
+ * Also normalizes day abbreviations (Tue/Tues -> Tues, Thur/Thurs -> Thurs)
  * Keeps only ASCII letters, numbers, spaces, and forward slashes
  * @param {string} name - Sheet name to normalize
  * @returns {string} Normalized sheet name
@@ -104,7 +129,19 @@ function normalizeSheetName(name) {
   if (!name) return '';
   // Remove all non-ASCII characters (emojis, special Unicode) except spaces and forward slashes
   // Keep: letters, numbers, spaces, forward slashes
-  return name.replace(/[^\x00-\x7F\s\/]/g, '').trim();
+  let normalized = name.replace(/[^\x00-\x7F\s\/]/g, '').trim();
+  
+  // Normalize day abbreviations in the sheet name
+  // Pattern: day abbreviation followed by space and date (e.g., "Tue 1/20" or "Tues 1/20")
+  const dayAbbrMatch = normalized.match(/^(\w+)\s+(\d+\/\d+)/);
+  if (dayAbbrMatch) {
+    const dayAbbr = dayAbbrMatch[1];
+    const datePart = dayAbbrMatch[2];
+    const normalizedDay = normalizeDayAbbreviation(dayAbbr);
+    normalized = `${normalizedDay} ${datePart}`;
+  }
+  
+  return normalized;
 }
 
 /**
