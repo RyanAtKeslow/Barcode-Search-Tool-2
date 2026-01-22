@@ -60,18 +60,27 @@ function exportGenericBay() {
   }
   
   // Find all username matches in row 2
-  var row2Range = activeSheet.getRange(2, 1, 1, activeSheet.getLastColumn());
+  // Use a reasonable maximum column limit to prevent accessing cells beyond actual data
+  const maxReasonableColumn = 100; // Limit search to first 100 columns (A through CV)
+  const lastColumn = Math.min(activeSheet.getLastColumn(), maxReasonableColumn);
+  Logger.log(`🔍 Searching row 2 from column 1 to ${lastColumn} for username: ${username}`);
+  
+  var row2Range = activeSheet.getRange(2, 1, 1, lastColumn);
   var row2Values = row2Range.getValues()[0];
   var usernameMatches = [];
   
   for (let j = 0; j < row2Values.length; j++) {
     if (row2Values[j] && row2Values[j].toString().toLowerCase().includes(username.toLowerCase())) {
+      const cellA1 = activeSheet.getRange(2, j + 1).getA1Notation();
+      Logger.log(`✅ Found username match at ${cellA1}: ${row2Values[j]}`);
       usernameMatches.push({
-        cellA1: activeSheet.getRange(2, j + 1).getA1Notation(),
+        cellA1: cellA1,
         value: row2Values[j]
       });
     }
   }
+  
+  Logger.log(`📊 Found ${usernameMatches.length} username match(es)`);
   
   // Handle multiple matches
   if (usernameMatches.length > 1) {
@@ -88,9 +97,36 @@ function exportGenericBay() {
 function continueExportGenericBay(selectedCellA1) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var activeSheet = ss.getActiveSheet();
+  
+  // Validate cell reference before using it
+  Logger.log(`🔍 Processing selected cell: ${selectedCellA1}`);
+  
+  // Check if cell reference is reasonable (not beyond column 100)
+  const cellMatch = selectedCellA1.match(/^([A-Z]+)(\d+)$/);
+  if (cellMatch) {
+    const columnLetters = cellMatch[1];
+    // Convert column letters to number (A=1, B=2, ..., Z=26, AA=27, etc.)
+    let columnNum = 0;
+    for (let i = 0; i < columnLetters.length; i++) {
+      columnNum = columnNum * 26 + (columnLetters.charCodeAt(i) - 64);
+    }
+    if (columnNum > 100) {
+      Logger.log(`❌ Invalid cell reference ${selectedCellA1} - column ${columnNum} is beyond reasonable range`);
+      SpreadsheetApp.getUi().alert(`Error: Invalid cell reference ${selectedCellA1}. Please contact support.`);
+      return;
+    }
+  }
+  
   var usernameCell = activeSheet.getRange(selectedCellA1);
   
-  var userName = usernameCell.getValue().toString().trim();
+  var userName = usernameCell.getValue();
+  // Handle different value types (string, number, Date, etc.)
+  if (userName !== null && userName !== undefined) {
+    userName = userName.toString().trim();
+  } else {
+    userName = "";
+  }
+  Logger.log(`📝 Username from cell ${selectedCellA1}: "${userName}"`);
   
   // Function to capitalize each word
   function capitalizeWords(name) {
