@@ -81,6 +81,18 @@ function sortGenericBay() {
   
   Logger.log(`📊 Found ${usernameMatches.length} username match(es)`);
   
+  // Sort matches so exact matches appear first in the dropdown
+  if (usernameMatches.length > 1) {
+    usernameMatches.sort((a, b) => {
+      const aExact = a.value.toString().toLowerCase() === username.toLowerCase();
+      const bExact = b.value.toString().toLowerCase() === username.toLowerCase();
+      if (aExact && !bExact) return -1; // a is exact, b is not - a comes first
+      if (!aExact && bExact) return 1;  // b is exact, a is not - b comes first
+      return 0; // Both are exact or both are not - maintain original order
+    });
+    Logger.log(`📋 Sorted matches - exact matches first`);
+  }
+  
   // Handle multiple matches
   if (usernameMatches.length > 1) {
     const selectedMatch = setSelectedMatch(usernameMatches);
