@@ -45,31 +45,46 @@ function printGenericBay() {
   // Try to get user info with fallback logic
   let username;
   try {
+    Logger.log("🔄 Attempting to get user info from email...");
     const userInfo = fetchUserInfoFromEmail();
     username = userInfo.firstName;
+    Logger.log(`✅ Got username from fetchUserInfoFromEmail: ${username}`);
   } catch (error) {
+    Logger.log(`⚠️ fetchUserInfoFromEmail failed: ${error.toString()}`);
     try {
+      Logger.log("🔄 Attempting fallback user identification...");
       const { nickname } = fetchUserEmailandNickname();
       username = nickname;
+      Logger.log(`✅ Got username from fetchUserEmailandNickname: ${username}`);
     } catch (error) {
+      Logger.log(`❌ Both user identification methods failed: ${error.toString()}`);
       SpreadsheetApp.getUi().alert("Could not identify user. Please ensure you are logged in with your company email.");
       return;
     }
   }
   
   // Find all username matches in row 2
-  var row2Range = activeSheet.getRange(2, 1, 1, activeSheet.getLastColumn());
+  // Use a reasonable maximum column limit to prevent accessing cells beyond actual data
+  const maxReasonableColumn = 100; // Limit search to first 100 columns (A through CV)
+  const lastColumn = Math.min(activeSheet.getLastColumn(), maxReasonableColumn);
+  Logger.log(`🔍 Searching row 2 from column 1 to ${lastColumn} for username: ${username}`);
+  
+  var row2Range = activeSheet.getRange(2, 1, 1, lastColumn);
   var row2Values = row2Range.getValues()[0];
   var usernameMatches = [];
   
   for (let j = 0; j < row2Values.length; j++) {
     if (row2Values[j] && row2Values[j].toString().toLowerCase().includes(username.toLowerCase())) {
+      const cellA1 = activeSheet.getRange(2, j + 1).getA1Notation();
+      Logger.log(`✅ Found username match at ${cellA1}: ${row2Values[j]}`);
       usernameMatches.push({
-        cellA1: activeSheet.getRange(2, j + 1).getA1Notation(),
+        cellA1: cellA1,
         value: row2Values[j]
       });
     }
   }
+  
+  Logger.log(`📊 Found ${usernameMatches.length} username match(es)`);
   
   // Handle multiple matches
   if (usernameMatches.length > 1) {
@@ -86,9 +101,36 @@ function printGenericBay() {
 function continuePrintGenericBay(selectedCellA1) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var activeSheet = ss.getActiveSheet();
+  
+  // Validate cell reference before using it
+  Logger.log(`🔍 Processing selected cell: ${selectedCellA1}`);
+  
+  // Check if cell reference is reasonable (not beyond column 100)
+  const cellMatch = selectedCellA1.match(/^([A-Z]+)(\d+)$/);
+  if (cellMatch) {
+    const columnLetters = cellMatch[1];
+    // Convert column letters to number (A=1, B=2, ..., Z=26, AA=27, etc.)
+    let columnNum = 0;
+    for (let i = 0; i < columnLetters.length; i++) {
+      columnNum = columnNum * 26 + (columnLetters.charCodeAt(i) - 64);
+    }
+    if (columnNum > 100) {
+      Logger.log(`❌ Invalid cell reference ${selectedCellA1} - column ${columnNum} is beyond reasonable range`);
+      SpreadsheetApp.getUi().alert(`Error: Invalid cell reference ${selectedCellA1}. Please contact support.`);
+      return;
+    }
+  }
+  
   var usernameCell = activeSheet.getRange(selectedCellA1);
   
-  var userName = usernameCell.getValue().toString().trim();
+  var userName = usernameCell.getValue();
+  // Handle different value types (string, number, Date, etc.)
+  if (userName !== null && userName !== undefined) {
+    userName = userName.toString().trim();
+  } else {
+    userName = "";
+  }
+  Logger.log(`📝 Username from cell ${selectedCellA1}: "${userName}"`);
 
   // Dynamically get the barcode bay name from the merged cell above the username cell
   var userRow = usernameCell.getRow();
@@ -100,14 +142,20 @@ function continuePrintGenericBay(selectedCellA1) {
     return name.replace(/\b\w/g, function(char) { return char.toUpperCase(); });
   }
 
-  // Ensure username is properly formatted
+  // Ensure username is properly formatted if it exists
   if (userName !== "") {
-    userName = capitalizeWords(userName);
-    usernameCell.setValue(userName);
+    const capitalizedName = capitalizeWords(userName);
+    // Only update the cell if the capitalization changed (to avoid unnecessary writes)
+    if (capitalizedName !== userName) {
+      Logger.log(`📝 Capitalizing username: "${userName}" -> "${capitalizedName}"`);
+      usernameCell.setValue(capitalizedName);
+      userName = capitalizedName;
+    }
   }
 
   // Prompt user if no name is entered
   if (userName === "") {
+    Logger.log(`⚠️ Username cell ${selectedCellA1} is empty, prompting user to enter name`);
     var ui = SpreadsheetApp.getUi();
     var response = ui.prompt(
       "Please Enter Your Name", 
