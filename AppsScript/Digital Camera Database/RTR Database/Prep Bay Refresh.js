@@ -206,6 +206,7 @@ function readPrepBayDataForToday(sheetName) {
       const jobName = row[1] ? row[1].toString().trim() : ''; // Column B
       const orderNumber = row[2] ? row[2].toString().trim() : ''; // Column C
       const prepTech = row[7] ? row[7].toString().trim() : ''; // Column H (Prep Tech)
+      const notes = row[8] ? row[8].toString().trim() : ''; // Column I (Notes)
       
       // Skip empty rows or header rows
       if (!bay || bay.toUpperCase() === 'BAY' || !jobName) {
@@ -223,7 +224,8 @@ function readPrepBayDataForToday(sheetName) {
         bayName: bay,
         jobName: jobName,
         orderNumber: orderNumber,
-        prepTech: prepTech
+        prepTech: prepTech,
+        notes: notes
       });
     }
     
@@ -713,13 +715,19 @@ function writePrepBayDataToSheet(prepBayData, equipmentData, sheetName) {
       // - D5:E12: Untouched (D5:D12 are "Pulled?" checkboxes)
       // - Borders: Column F and Row 13 (nothing printed)
       
-      // Clear only the cells we will write to: B2:B12 and C5:C12
+      // Clear only the cells we will write to: B2:B12, C5:C12, and notes merged cells
       // Clear B2:B12 (Job Name, Order Number, Prep Tech, Camera names)
       sheet.getRange(startRow + 1, startCol + 1, 11, 1).clearContent();
       
       // Clear C5:C12 (Barcodes only)
       // Note: D5:D12 (checkboxes) are intentionally left untouched
       sheet.getRange(startRow + 4, startCol + 2, 8, 1).clearContent();
+      
+      // Clear notes merged cells (C2:E2 for Bay 1, I2:K2 for Bay 2, etc.)
+      // Notes are in merged cells starting at (startCol + 2, startRow + 1), spanning 3 columns
+      const notesCol = startCol + 2;
+      const notesRow = startRow + 1;
+      sheet.getRange(notesRow, notesCol, 1, 3).clearContent();
       
       if (assignment) {
         // Write job name to B2
@@ -730,6 +738,12 @@ function writePrepBayDataToSheet(prepBayData, equipmentData, sheetName) {
         
         // Write prep tech to B4 (read from Prep Bay Assignment Sheet column H, index 7)
         sheet.getRange(startRow + 3, startCol + 1).setValue(assignment.prepTech);
+        
+        // Write notes to merged cells (C2:E2 for Bay 1, I2:K2 for Bay 2, etc.)
+        // Write to the top-left cell of the merged range - it will fill the entire merged area
+        if (assignment.notes) {
+          sheet.getRange(notesRow, notesCol).setValue(assignment.notes);
+        }
         
         // Get all cameras scheduled for this order number TODAY
         // All cameras for the order are shown in ALL prep bays with this order number
@@ -758,7 +772,7 @@ function writePrepBayDataToSheet(prepBayData, equipmentData, sheetName) {
         const headerName = getBayDisplayName(bayNum);
         Logger.log(`✅ Wrote data for ${headerName}: ${assignment.jobName} (Order: ${assignment.orderNumber}, ${cameras.length} camera(s) scheduled)`);
       } else {
-        // No assignment for this bay - cells already cleared above
+        // No assignment for this bay - cells already cleared above (including notes)
         const headerName = getBayDisplayName(bayNum);
         Logger.log(`ℹ️ No assignment for ${headerName} - cleared data cells`);
       }
@@ -923,6 +937,7 @@ function readPrepBayDataForNextWorkday(sheetName) {
       const jobName = row[1] ? row[1].toString().trim() : ''; // Column B
       const orderNumber = row[2] ? row[2].toString().trim() : ''; // Column C
       const prepTech = row[7] ? row[7].toString().trim() : ''; // Column H (Prep Tech)
+      const notes = row[8] ? row[8].toString().trim() : ''; // Column I (Notes)
       
       // Skip empty rows or header rows
       if (!bay || bay.toUpperCase() === 'BAY' || !jobName) {
@@ -940,7 +955,8 @@ function readPrepBayDataForNextWorkday(sheetName) {
         bayName: bay,
         jobName: jobName,
         orderNumber: orderNumber,
-        prepTech: prepTech
+        prepTech: prepTech,
+        notes: notes
       });
     }
     
