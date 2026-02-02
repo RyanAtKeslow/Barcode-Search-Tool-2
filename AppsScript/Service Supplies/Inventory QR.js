@@ -20,17 +20,18 @@ const CONFIGS = {
     inventoryBinColumn:  1,
     inventoryQuantityColumn: 10,
     headersRow:          3,
-    responseSheetName:   "Form Responses 1"   // Sheet that receives this form's responses
+    responseSheetName:   "CONNECTORS - IN / OUT"   // Sheet that receives this form's responses
   },
   supplies: {
     sheetName:           "CC Supplies",
+    // Use the form ID from the form's EDIT URL (open form → ⋮ → Edit form → URL is .../d/FORM_ID/edit). The view URL (/d/e/.../viewform) may not work.
     formId:              "1FAIpQLSeZUl4UfznbDDzA_yk0uZikrD2TVZs5whoWdOAo2HsmLeUMYQ",
     helperColumn:        "P",
     dropdownQuestionTitle: "Select the Bin",
     inventoryBinColumn:  1,
     inventoryQuantityColumn: 10,
     headersRow:          3,
-    responseSheetName:   "Form Responses 2"   // Set to the actual response sheet name for CC Supplies form
+    responseSheetName:   "SUPPLIES - IN / OUT"   // Set to the actual response sheet name for CC Supplies form
   }
 };
 // --------------------------
@@ -53,7 +54,17 @@ function updateFormDropdownForConfig(config) {
     return;
   }
 
-  const form = FormApp.openById(config.formId);
+  let form;
+  try {
+    form = FormApp.openById(config.formId);
+  } catch (openErr) {
+    throw new Error(
+      `Could not open form (ID: ${config.formId}). ` +
+      "Use the form's EDIT URL (.../d/FORM_ID/edit) and ensure this account has Editor access. " +
+      openErr.message
+    );
+  }
+
   const items = form.getItems(FormApp.ItemType.LIST);
   const dropdownItem = items.find(item => item.getTitle() === config.dropdownQuestionTitle);
 
@@ -61,7 +72,10 @@ function updateFormDropdownForConfig(config) {
     dropdownItem.asListItem().setChoiceValues(values);
     Logger.log(`Dropdown "${config.dropdownQuestionTitle}" updated successfully for ${config.sheetName}.`);
   } else {
-    throw new Error(`Question "${config.dropdownQuestionTitle}" not found in the form.`);
+    const titles = items.map(i => i.getTitle()).join(", ");
+    throw new Error(
+      `Question "${config.dropdownQuestionTitle}" not found. List question titles in this form: ${titles || "(none)"}`
+    );
   }
 }
 
@@ -181,6 +195,25 @@ function onFormSubmit(e) {
   }
 }
 
+
+/**
+* Debug: Opens the CC Supplies form and logs all question titles.
+* Run this to verify the form ID works and to see the exact dropdown question title (use it in dropdownQuestionTitle if different).
+*/
+function debugListSuppliesFormQuestions() {
+  const config = CONFIGS.supplies;
+  try {
+    const form = FormApp.openById(config.formId);
+    const items = form.getItems();
+    Logger.log("CC Supplies form opened. Question titles:");
+    items.forEach(function(item) {
+      Logger.log("  - " + item.getTitle() + " (type: " + item.getType() + ")");
+    });
+  } catch (e) {
+    Logger.log("Error: " + e.message);
+    Logger.log("Get the form ID from the form's EDIT URL: open the form, ⋮ → Edit form, copy the ID from .../d/FORM_ID/edit. Ensure this account has Editor access.");
+  }
+}
 
 /**
 * A temporary function to debug form submissions.
