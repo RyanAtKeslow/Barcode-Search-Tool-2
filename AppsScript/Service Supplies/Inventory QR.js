@@ -25,7 +25,7 @@ const CONFIGS = {
   supplies: {
     sheetName:           "CC Supplies",
     // Use the form ID from the form's EDIT URL (open form → ⋮ → Edit form → URL is .../d/FORM_ID/edit). The view URL (/d/e/.../viewform) may not work.
-    formId:              "1FAIpQLSeZUl4UfznbDDzA_yk0uZikrD2TVZs5whoWdOAo2HsmLeUMYQ",
+    formId:              "1yqTiKLfXiKFdbpbkpd0kVYV_1YfpykDX03vNwjHuGwU",
     helperColumn:        "P",
     dropdownQuestionTitle: "Select the Bin",
     inventoryBinColumn:  1,
@@ -117,6 +117,19 @@ function updateAllFormDropdowns() {
   }
 }
 
+/**
+* Runs when the spreadsheet is edited. If the edit was on the CC Supplies sheet,
+* updates the CC Supplies form dropdown. Add a trigger: Triggers → Add Trigger →
+* function: onEdit, event: From spreadsheet → On edit.
+* @param {Object} e The event object passed by the "On edit" trigger.
+*/
+function onEdit(e) {
+  if (!e || !e.range) return;
+  const sheetName = e.range.getSheet().getName();
+  if (sheetName === CONFIGS.supplies.sheetName) {
+    updateFormDropdownSupplies();
+  }
+}
 
 /**
 * Returns the config for the form that submitted (based on which sheet received the response).
