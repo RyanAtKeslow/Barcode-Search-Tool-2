@@ -23,6 +23,45 @@ const NEXT_WORKDAY_DESTINATION_SHEET_NAME = 'Next Workday Prep Bays';
 const DAY_PREFIXES = ['Sun', 'Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat'];
 
 /**
+ * Equipment Scheduling Chart status colors (scheduled equipment).
+ * On Job (AT/CH/NO/ABQ/LA/TO/VN): body is with crew, out of building — we do not process for prep bay.
+ * In possession statuses below: we process only the ones in VALID_TODAY_BACKGROUNDS_FOR_PREP_BAY.
+ */
+const STATUS_COLORS = {
+  // On Job — out of building (skip for prep bay)
+  ON_JOB_AT: '#fbacff',
+  ON_JOB_CH: '#ffc566',
+  ON_JOB_NO: '#b28701',
+  ON_JOB_ABQ: '#e65d16',
+  ON_JOB_LA: '#cb7fff',
+  ON_JOB_TO: '#bbd6ff',
+  ON_JOB_VN: '#b1ffe9',
+  // In possession — various statuses
+  IN_REPAIR: '#ff4444',                    // Append " - In Repair" to equipment name; search left for order
+  CONSIGNOR: '#00ffff',                    // Consignor; search left for order
+  TURNAROUND_MULTIDAY: '#ff7171',          // Turnaround/Multi-Day Preps; search left if blank
+  GEAR_TRANSFER: '#4a86e8',                // Moving between offices; search left if blank
+  DO_NOT_RESCHEDULE: '#bdbdbd',           // Hold for job; treat like consignor/turnaround, search left
+  CONFIRMED_JOB: '#f9ff71',               // Confirmed job; search left for order
+  PENDING_JOB: '#66ff75'                  // Append " - Pending Job" to equipment name; search left for order
+};
+const ON_JOB_COLORS = [
+  STATUS_COLORS.ON_JOB_AT, STATUS_COLORS.ON_JOB_CH, STATUS_COLORS.ON_JOB_NO,
+  STATUS_COLORS.ON_JOB_ABQ, STATUS_COLORS.ON_JOB_LA, STATUS_COLORS.ON_JOB_TO, STATUS_COLORS.ON_JOB_VN
+];
+// Cell backgrounds we treat as "booked for today" and process (excludes On Job only). In Repair and Pending get status appended to equipment name.
+const VALID_TODAY_BACKGROUNDS_FOR_PREP_BAY = [
+  '#ffffff',                               // white (unbooked or generic)
+  STATUS_COLORS.CONFIRMED_JOB,            // yellow
+  STATUS_COLORS.TURNAROUND_MULTIDAY,       // red
+  STATUS_COLORS.CONSIGNOR,                // cyan
+  STATUS_COLORS.GEAR_TRANSFER,            // blue
+  STATUS_COLORS.DO_NOT_RESCHEDULE,        // gray — Do Not Reschedule, treat like consignor/turnaround
+  STATUS_COLORS.IN_REPAIR,                // red — we append " - In Repair" to equipment name
+  STATUS_COLORS.PENDING_JOB              // green — we append " - Pending Job" to equipment name
+];
+
+/**
  * Main function to refresh prep bay data
  */
 function prepBayRefresh() {
@@ -484,16 +523,6 @@ function processEquipmentSheet(sheet, sheetName, cameraBodiesLookup, targetDate)
     
     Logger.log(`📅 Found target date in column ${targetDateColumnIndex + 1} of ${sheetName} sheet`);
     
-    // Get backgrounds for all rows to check for valid booking colors
-    const validTodayCellBackgrounds = [
-      '#ffffff', // white
-      '#f9ff71', // yellow
-      '#66ff75', // green
-      '#4a86e8', // blue
-      '#ff7171', // red
-      '#00ffff'  // cyan
-    ];
-    
     // Find all rows containing "LOS ANGELES" in column A
     const foundLACameras = [];
     for (let i = 0; i < data.length; i++) {
@@ -519,10 +548,11 @@ function processEquipmentSheet(sheet, sheetName, cameraBodiesLookup, targetDate)
       const rowIdx = rowNum - 1; // Convert to 0-based
       const row = data[rowIdx];
       
-      // Check if target date's cell has a valid background color (indicating booking)
+      // Check if target date's cell has a valid background color (indicating booking we process)
+      // Excludes: On Job (out of building), In Repair, Pending Job
       const cellBg = backgrounds[rowIdx][0];
-      if (!validTodayCellBackgrounds.includes(cellBg)) {
-        continue; // Skip if not a valid booking color
+      if (!VALID_TODAY_BACKGROUNDS_FOR_PREP_BAY.includes(cellBg)) {
+        continue; // Skip if not a valid booking color for prep bay
       }
       
       // Extract barcode from column E (index 4) first - we need this for all cameras
@@ -570,15 +600,16 @@ function processEquipmentSheet(sheet, sheetName, cameraBodiesLookup, targetDate)
       }
       
       // Search for order numbers in target date's column
-      // Special cases:
-      // - Red background (#ff7171): active multiple day camera prep - search left if blank
-      // - Yellow background (#f9ff71): confirmed job (may have extended prep) - search left for order number
-      // - Cyan background (#00ffff): confirmed job with consignor camera - search left for order number
+      // Colors that use "search left" when cell is blank or always: Turnaround, Confirmed Job, Consignor, Do Not Reschedule, Gear Transfer
       const orderNumbersFound = new Set();
       const targetDateCellValue = row[targetDateColumnIndex];
-      const isRedBackground = cellBg === '#ff7171';
-      const isYellowBackground = cellBg === '#f9ff71';
-      const isCyanBackground = cellBg === '#00ffff';
+      const isTurnaround = cellBg === STATUS_COLORS.TURNAROUND_MULTIDAY;
+      const isConfirmedJob = cellBg === STATUS_COLORS.CONFIRMED_JOB;
+      const isConsignor = cellBg === STATUS_COLORS.CONSIGNOR;
+      const isDoNotReschedule = cellBg === STATUS_COLORS.DO_NOT_RESCHEDULE;
+      const isGearTransfer = cellBg === STATUS_COLORS.GEAR_TRANSFER;
+      const isInRepair = cellBg === STATUS_COLORS.IN_REPAIR;
+      const isPendingJob = cellBg === STATUS_COLORS.PENDING_JOB;
       const isTargetDateCellBlank = !targetDateCellValue || (typeof targetDateCellValue === 'string' && targetDateCellValue.trim() === '');
       
       // Helper function to search leftward for order numbers
@@ -587,33 +618,44 @@ function processEquipmentSheet(sheet, sheetName, cameraBodiesLookup, targetDate)
         for (let colIdx = targetDateColumnIndex - 1; colIdx >= 6; colIdx--) { // Start from column before target date, go back to column G (index 6)
           const leftCellValue = row[colIdx];
           if (leftCellValue && typeof leftCellValue === 'string' && leftCellValue.trim() !== '') {
-            // Check if this cell has an order number
             const orderMatches = leftCellValue.match(/\b(\d{6})\b/g);
             if (orderMatches && orderMatches.length > 0) {
-              // Found order number(s) - use these
               orderMatches.forEach(ord => orderNumbersFound.add(ord.replace(/[^0-9]/g, '')));
               Logger.log(`  ✅ Found order number(s) ${Array.from(orderNumbersFound).join(', ')} in column ${colIdx + 1}`);
-              break; // Stop searching once we find an order number
+              break;
             }
           }
         }
       };
       
-      if (isRedBackground && isTargetDateCellBlank) {
-        // Red background with blank cell: search leftward for order number
-        searchLeftForOrderNumber('Red');
-      } else if (isYellowBackground) {
-        // Yellow background (confirmed job, may have extended prep): search leftward for order number
-        searchLeftForOrderNumber('Yellow (confirmed job)');
-      } else if (isCyanBackground) {
-        // Cyan background (confirmed job with consignor camera): search leftward for order number
-        searchLeftForOrderNumber('Cyan (confirmed job with consignor camera)');
+      if (isTurnaround && isTargetDateCellBlank) {
+        searchLeftForOrderNumber('Turnaround/Multi-Day Preps (red)');
+      } else if (isConfirmedJob) {
+        searchLeftForOrderNumber('Confirmed Job (yellow)');
+      } else if (isConsignor) {
+        searchLeftForOrderNumber('Consignor (cyan)');
+      } else if (isDoNotReschedule) {
+        searchLeftForOrderNumber('Do Not Reschedule (gray)');
+      } else if (isGearTransfer && isTargetDateCellBlank) {
+        searchLeftForOrderNumber('Gear Transfer (blue)');
+      } else if (isInRepair) {
+        searchLeftForOrderNumber('In Repair');
+      } else if (isPendingJob) {
+        searchLeftForOrderNumber('Pending Job');
       } else if (targetDateCellValue && typeof targetDateCellValue === 'string' && targetDateCellValue.trim() !== '') {
         // Target date's cell has content - extract order numbers from it
         const targetDateOrderMatches = targetDateCellValue.match(/\b(\d{6})\b/g);
         if (targetDateOrderMatches) {
           targetDateOrderMatches.forEach(ord => orderNumbersFound.add(ord.replace(/[^0-9]/g, '')));
         }
+      }
+      
+      // Append status suffix to equipment name when In Repair or Pending Job background
+      let displayEquipmentType = equipmentType;
+      if (isInRepair) {
+        displayEquipmentType = equipmentType + ' - In Repair';
+      } else if (isPendingJob) {
+        displayEquipmentType = equipmentType + ' - Pending Job';
       }
       
       // Add this camera to ALL order numbers found
@@ -630,10 +672,10 @@ function processEquipmentSheet(sheet, sheetName, cameraBodiesLookup, targetDate)
           );
           if (!exists) {
             camerasByOrder[normalizedOrder].push({
-              equipmentType: equipmentType,
+              equipmentType: displayEquipmentType,
               barcode: barcode
             });
-            Logger.log(`📹 Added camera from ${sheetName}: Order ${normalizedOrder}, Type: ${equipmentType}, Barcode: ${barcode}`);
+            Logger.log(`📹 Added camera from ${sheetName}: Order ${normalizedOrder}, Type: ${displayEquipmentType}, Barcode: ${barcode}`);
           }
         }
       }
