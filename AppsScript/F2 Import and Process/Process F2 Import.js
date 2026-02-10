@@ -1241,13 +1241,20 @@ function moveFileToProcessed(file, parentFolder) {
  * @returns {GoogleAppsScript.Content.TextOutput} Response text
  */
 function doGet(e) {
+  const logPrefix = "[doGet]";
+  Logger.log(`${logPrefix} Request received at ${new Date().toISOString()}`);
+  
   try {
     // Security: Check for token parameter
     const WEB_APP_TOKEN = "F2Import2025KeslowKey"; // CHANGE THIS to your own secret token
-    const providedToken = e.parameter.token;
+    const providedToken = e && e.parameter ? e.parameter.token : undefined;
+    const hasToken = !!providedToken;
+    const tokenValid = hasToken && providedToken === WEB_APP_TOKEN;
     
-    if (!providedToken || providedToken !== WEB_APP_TOKEN) {
-      Logger.log("❌ Web app access denied - invalid or missing token");
+    Logger.log(`${logPrefix} Token present: ${hasToken}, valid: ${tokenValid}`);
+    
+    if (!tokenValid) {
+      Logger.log(`${logPrefix} ❌ Web app access denied - invalid or missing token`);
       return ContentService.createTextOutput(JSON.stringify({
         success: false,
         error: "Unauthorized - invalid token",
@@ -1255,7 +1262,7 @@ function doGet(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
     
-    Logger.log("🌐 Web app triggered - scheduling F2 import processing");
+    Logger.log(`${logPrefix} 🌐 Web app triggered - scheduling F2 import processing`);
     
     // Return immediately to avoid web app timeout
     // Create a time-driven trigger to run processF2Imports() in the next minute
@@ -1263,12 +1270,17 @@ function doGet(e) {
     try {
       // Delete any existing triggers for processF2Imports to avoid duplicates
       const existingTriggers = ScriptApp.getProjectTriggers();
+      let deletedCount = 0;
       existingTriggers.forEach(function(trigger) {
         if (trigger.getHandlerFunction() === 'processF2Imports' && 
             trigger.getEventType() === ScriptApp.EventType.CLOCK) {
           ScriptApp.deleteTrigger(trigger);
+          deletedCount++;
         }
       });
+      if (deletedCount > 0) {
+        Logger.log(`${logPrefix} Removed ${deletedCount} existing processF2Imports trigger(s)`);
+      }
       
       // Create a one-time trigger to run in 10 seconds
       ScriptApp.newTrigger('processF2Imports')
@@ -1276,13 +1288,14 @@ function doGet(e) {
         .after(10000) // Run in 10 seconds
         .create();
       
-      Logger.log("✅ Trigger created - processF2Imports will run in 10 seconds");
+      Logger.log(`${logPrefix} ✅ Trigger created - processF2Imports will run in 10 seconds`);
     } catch (triggerError) {
-      Logger.log(`⚠️ Could not create trigger, running directly: ${triggerError.toString()}`);
-      // Fallback: try to run directly (may timeout on long operations)
+      Logger.log(`${logPrefix} ⚠️ Could not create trigger: ${triggerError.toString()}`);
+      Logger.log(`${logPrefix} Running processF2Imports directly (fallback)`);
       processF2Imports();
     }
     
+    Logger.log(`${logPrefix} Returning success response`);
     return ContentService.createTextOutput(JSON.stringify({
       success: true,
       message: "F2 import processing scheduled successfully",
@@ -1290,7 +1303,10 @@ function doGet(e) {
     })).setMimeType(ContentService.MimeType.JSON);
     
   } catch (error) {
-    Logger.log(`❌ Error in web app: ${error.toString()}`);
+    Logger.log(`${logPrefix} ❌ Error in web app: ${error.toString()}`);
+    if (error.stack) {
+      Logger.log(`${logPrefix} Stack: ${error.stack}`);
+    }
     return ContentService.createTextOutput(JSON.stringify({
       success: false,
       error: error.toString(),
