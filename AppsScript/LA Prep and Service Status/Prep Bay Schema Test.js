@@ -574,15 +574,11 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride) {
     sheet.setRowHeight(row, fmt.rowHeightCategory);
   }
 
-  // --- Subbed Equipment: header uses order # Prep Bay background (same as top section) ---
+  // --- Subbed Equipment: header same as Equipment Name (tableHeaderBg #344a5e, white bold text) ---
   const subHeaderRow = r + 19;
-  sheet.getRange(subHeaderRow, 1, subHeaderRow, numCols).setBackground(jobBg).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
+  sheet.getRange(subHeaderRow, 1, subHeaderRow, numCols).setBackground(fmt.tableHeaderBg).setFontColor(fmt.tableHeaderFg).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
   sheet.setRowHeight(subHeaderRow, fmt.rowHeightTableHeader);
   sheet.setRowHeight(subHeaderRow + 1, fmt.rowHeightCategory);
-
-  // --- Black horizontal line separating this order from the next ---
-  const lastRow = r + ROWS_PER_JOB_BLOCK - 1;
-  sheet.getRange(lastRow, 1, lastRow, numCols).setBackground('#000000');
 }
 
 /**
@@ -648,6 +644,8 @@ function writePrepBaySchemaTest() {
 
   applyJobBlockFormatting(sheet, 1, fmt, job1HeaderBg);
   applyJobBlockFormatting(sheet, 1 + ROWS_PER_JOB_BLOCK, fmt, job2HeaderBg);
+  var lastRow = 2 * ROWS_PER_JOB_BLOCK;
+  sheet.getRange(lastRow, 1, lastRow, 9).setBackground('#000000');
 
   Logger.log('Prep Bay Schema test written: ' + numRows + ' rows');
 }
@@ -700,6 +698,8 @@ function refreshPrepForecastSheets() {
         applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBg);
         startRow += ROWS_PER_JOB_BLOCK;
       });
+      var lastRow = jobs.length * ROWS_PER_JOB_BLOCK;
+      sheet.getRange(lastRow, 1, lastRow, numCols).setBackground('#000000');
     }
 
     SpreadsheetApp.flush();
