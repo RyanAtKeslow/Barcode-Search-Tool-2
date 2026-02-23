@@ -495,7 +495,7 @@ function buildJobBlockRows(job) {
   rows.push(padRow([]));
 
   // Sub-rental section
-  rows.push(padRow(['', 'Subbed Equipment', 'Quantity', 'Located', 'Locating Agent', 'Quote Rec.', 'Run Sheet Out', 'Packing Slip', 'Notes']));
+  rows.push(padRow(['Locating Agent', 'Subbed Equipment', 'Quantity', 'Located', 'Quote Received', 'Run Sheet Out', 'Packing Slip', 'Notes', '']));
   rows.push(padRow(['', '', '', false, false, false, '', '', '']));
   rows.push(padRow([]));
   rows.push(padRow([])); // black separator row (formatted in applyJobBlockFormatting)
@@ -531,7 +531,7 @@ function buildJobBlockRowsWithCameras(job, cameras) {
     }
   }
   rows.push(padRow([]));
-  rows.push(padRow(['', 'Subbed Equipment', 'Quantity', 'Located', 'Locating Agent', 'Quote Rec.', 'Run Sheet Out', 'Packing Slip', 'Notes']));
+  rows.push(padRow(['Locating Agent', 'Subbed Equipment', 'Quantity', 'Located', 'Quote Received', 'Run Sheet Out', 'Packing Slip', 'Notes', '']));
   rows.push(padRow(['', '', '', false, false, false, '', '', '']));
   rows.push(padRow([]));
   rows.push(padRow([])); // black separator row (formatted in applyJobBlockFormatting)
