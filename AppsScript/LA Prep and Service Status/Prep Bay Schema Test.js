@@ -548,8 +548,8 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride) {
   const numCols = 9;
   const jobBg = jobHeaderBgOverride != null && jobHeaderBgOverride !== '' ? jobHeaderBgOverride : fmt.jobHeaderBg;
 
-  // --- Job header (rows 1–6): Job Name most prominent; background from Prep Bay column C when provided ---
-  sheet.getRange(r, 1, r, 2).setBackground(jobBg);
+  // --- Job header (rows 1–6): entire block uses background from Prep Bay column C (order # cell) ---
+  sheet.getRange(r, 1, r + 5, numCols).setBackground(jobBg);
   sheet.getRange(r, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor);
   sheet.getRange(r, 2).setFontWeight('bold').setFontSize(fmt.jobNameValueSize).setFontColor(fmt.jobNameValueColor);
   sheet.setRowHeight(r, fmt.rowHeightJobName);
@@ -574,8 +574,9 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride) {
     sheet.setRowHeight(row, fmt.rowHeightCategory);
   }
 
-  // --- Subbed Equipment: no background styling (header + data row stay default) ---
+  // --- Subbed Equipment: same order-based background from Prep Bay (header + data row) ---
   const subHeaderRow = r + 19;
+  sheet.getRange(subHeaderRow, 1, subHeaderRow + 1, numCols).setBackground(jobBg);
   sheet.getRange(subHeaderRow, 1, subHeaderRow, numCols).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
   sheet.setRowHeight(subHeaderRow, fmt.rowHeightTableHeader);
   sheet.setRowHeight(subHeaderRow + 1, fmt.rowHeightCategory);
