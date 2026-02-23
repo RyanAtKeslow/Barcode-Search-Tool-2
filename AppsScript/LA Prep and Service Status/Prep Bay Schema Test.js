@@ -670,7 +670,7 @@ function refreshPrepForecastSheets() {
     targetDate.setDate(targetDate.getDate() + daysOffset);
     const prepBaySheetName = getTodaySheetName(targetDate);
 
-    Logger.log('Sheet: ' + sheetName + ', date: ' + prepBaySheetName);
+    Logger.log('Processing ' + sheetName + ' (date: ' + prepBaySheetName + ')...');
 
     const prepBayData = readPrepBayDataForDate(prepBaySheetName);
     const equipmentData = readEquipmentSchedulingData(targetDate);
@@ -702,7 +702,8 @@ function refreshPrepForecastSheets() {
       });
     }
 
-    Logger.log(sheetName + ': ' + jobs.length + ' jobs, ' + allRows.length + ' rows');
+    SpreadsheetApp.flush();
+    Logger.log('Done ' + sheetName + ' (' + jobs.length + ' jobs, ' + allRows.length + ' rows).');
   });
 
   Logger.log('refreshPrepForecastSheets done');
