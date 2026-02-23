@@ -571,17 +571,33 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride) {
   sheet.getRange(eqHeaderRow, 1, eqHeaderRow, numCols).setBackground(fmt.tableHeaderBg).setFontColor(fmt.tableHeaderFg).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
   sheet.setRowHeight(eqHeaderRow, fmt.rowHeightTableHeader);
 
+  // Find Locating Agent / Subbed Equipment header row so equipment block length is dynamic
+  const searchEndRow = Math.min(r + ROWS_PER_JOB_BLOCK - 1, sheet.getLastRow());
+  const colAVals = sheet.getRange(eqHeaderRow + 1, 1, searchEndRow, 1).getValues();
+  let subHeaderRow = r + 18; // fallback if not found
+  for (let i = 0; i < colAVals.length; i++) {
+    if (String(colAVals[i][0]).trim() === 'Locating Agent') {
+      subHeaderRow = eqHeaderRow + 1 + i;
+      break;
+    }
+  }
+  const equipmentBlockEndRow = subHeaderRow - 1;
+  const numEquipmentBlockRows = equipmentBlockEndRow - eqHeaderRow;
+
   for (let i = 0; i < EQUIPMENT_CATEGORIES.length; i++) {
     const row = eqHeaderRow + 1 + i;
-    sheet.getRange(row, 1, row, numCols).setBackground(jobBg);
-    sheet.getRange(row, 1).setFontWeight('bold').setFontSize(fmt.valueSize).setFontColor(fmt.valueColor || '#000000');
+    if (row > equipmentBlockEndRow) break;
+    sheet.getRange(row, 1, row, numCols).setBackground(jobBg).setFontColor('#000000');
+    sheet.getRange(row, 1).setFontWeight('bold').setFontSize(fmt.valueSize);
     sheet.setRowHeight(row, fmt.rowHeightCategory);
   }
-  // Checkboxes D,E,F only: between Equipment Name header and Subbed Equipment header (10 equipment rows)
-  sheet.getRange(eqHeaderRow + 1, 4, 10, 3).insertCheckboxes();
+  // Checkboxes D,E,F only: between Equipment Name header and Locating Agent header (dynamic row count)
+  if (numEquipmentBlockRows > 0) {
+    sheet.getRange(eqHeaderRow + 1, 4, numEquipmentBlockRows, 3).insertCheckboxes();
+    sheet.getRange(eqHeaderRow + 1, 1, numEquipmentBlockRows, numCols).setFontColor('#000000'); // stop at Locating Agent row
+  }
 
   // --- Subbed Equipment: header same as Equipment Name (white bold text) ---
-  const subHeaderRow = r + 18;
   sheet.getRange(subHeaderRow, 1, subHeaderRow, numCols).setBackground(fmt.tableHeaderBg).setFontColor(fmt.tableHeaderFg).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
   sheet.setRowHeight(subHeaderRow, fmt.rowHeightTableHeader);
   sheet.setRowHeight(subHeaderRow + 1, fmt.rowHeightCategory);
