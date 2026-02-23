@@ -46,7 +46,7 @@ const ROWS_PER_JOB_BLOCK = 22;
 /** Default formatting (used when Settings sheet is missing or a value is blank) */
 const FMT_DEFAULTS = {
   jobHeaderBg: '#e8f0fe',
-  jobNameValueSize: 18,
+  jobNameValueSize: 28,
   jobNameValueColor: '#1a73e8',
   labelColor: '#000000',
   labelSize: 11,
@@ -604,7 +604,8 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   for (let i = 1; i <= 5; i++) {
     const row = r + i;
     sheet.getRange(row, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
-    sheet.getRange(row, 2).setFontSize(fmt.valueSize).setFontColor(fmt.valueColor || '#000000');
+    const cellB = sheet.getRange(row, 2).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000');
+    if (i === 5) cellB.setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW); // Prep Notes: overflow
     sheet.setRowHeight(row, fmt.rowHeightLabel);
   }
 
