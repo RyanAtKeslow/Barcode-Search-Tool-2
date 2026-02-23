@@ -569,14 +569,14 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride) {
 
   for (let i = 0; i < EQUIPMENT_CATEGORIES.length; i++) {
     const row = eqHeaderRow + 1 + i;
-    sheet.getRange(row, 1, row, numCols).setBackground(fmt.categoryBg);
+    sheet.getRange(row, 1, row, numCols).setBackground(jobBg);
     sheet.getRange(row, 1).setFontWeight('bold').setFontSize(fmt.valueSize);
     sheet.setRowHeight(row, fmt.rowHeightCategory);
   }
 
-  // --- Subbed Equipment: header same blue + white bold as Equipment Name; data row keeps default ---
+  // --- Subbed Equipment: header uses order # Prep Bay background (same as top section) ---
   const subHeaderRow = r + 19;
-  sheet.getRange(subHeaderRow, 1, subHeaderRow, numCols).setBackground(fmt.tableHeaderBg).setFontColor(fmt.tableHeaderFg).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
+  sheet.getRange(subHeaderRow, 1, subHeaderRow, numCols).setBackground(jobBg).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
   sheet.setRowHeight(subHeaderRow, fmt.rowHeightTableHeader);
   sheet.setRowHeight(subHeaderRow + 1, fmt.rowHeightCategory);
 
