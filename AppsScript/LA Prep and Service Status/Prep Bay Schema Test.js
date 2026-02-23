@@ -577,7 +577,7 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride) {
     sheet.getRange(row, 1).setFontWeight('bold').setFontSize(fmt.valueSize).setFontColor(fmt.valueColor || '#000000');
     sheet.setRowHeight(row, fmt.rowHeightCategory);
   }
-  sheet.getRange(eqHeaderRow + 1, 4, eqHeaderRow + 10, 6).insertCheckboxes();
+  sheet.getRange(eqHeaderRow + 1, 4, 10, 3).insertCheckboxes(); // 10 rows, 3 cols (D,E,F) — equipment rows only, not subbed or black bar
 
   // --- Subbed Equipment: header same as Equipment Name (white bold text) ---
   const subHeaderRow = r + 18;
