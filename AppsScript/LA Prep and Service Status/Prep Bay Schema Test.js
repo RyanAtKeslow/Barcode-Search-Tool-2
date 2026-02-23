@@ -40,17 +40,18 @@ const VALID_TODAY_BACKGROUNDS_FOR_PREP_BAY = [
   STATUS_COLORS.GEAR_TRANSFER, STATUS_COLORS.DO_NOT_RESCHEDULE, STATUS_COLORS.IN_REPAIR, STATUS_COLORS.PENDING_JOB
 ];
 
-/** Row count per job block (job header 6 + blank 1 + eq header 1 + categories 10 + blank 1 + sub header 1 + sub row 1 + blank 1) */
+/** Row count per job block (job header 6 + eq header 1 + categories 10 + blank 1 + sub header 1 + sub row 1 + blank 1 + black 1) */
 const ROWS_PER_JOB_BLOCK = 22;
 
 /** Default formatting (used when Settings sheet is missing or a value is blank) */
 const FMT_DEFAULTS = {
   jobHeaderBg: '#e8f0fe',
-  jobNameValueSize: 14,
+  jobNameValueSize: 18,
   jobNameValueColor: '#1a73e8',
-  labelColor: '#5f6368',
+  labelColor: '#000000',
   labelSize: 11,
   valueSize: 11,
+  valueColor: '#000000',
   tableHeaderBg: '#344a5e',
   tableHeaderFg: '#ffffff',
   tableHeaderSize: 11,
@@ -217,12 +218,13 @@ function readPrepBayDataForDate(sheetName) {
       const bay = row[0] ? String(row[0]).trim() : '';
       const jobName = row[1] ? String(row[1]).trim() : '';
       const orderNumber = row[2] ? String(row[2]).trim() : '';
+      const marketingAgent = row[3] ? String(row[3]).trim() : '';
       const prepTech = row[7] ? String(row[7]).trim() : '';
       const notes = row[8] ? String(row[8]).trim() : '';
       if (!bay || bay.toUpperCase() === 'BAY' || !jobName) continue;
       const bayNumber = normalizeBayNumber(bay);
       if (bayNumber == null) continue;
-      out.push({ bayNumber: bayNumber, bayName: bay, jobName: jobName, orderNumber: orderNumber, prepTech: prepTech, notes: notes });
+      out.push({ bayNumber: bayNumber, bayName: bay, jobName: jobName, orderNumber: orderNumber, marketingAgent: marketingAgent, prepTech: prepTech, notes: notes });
     }
     out.sort(function (a, b) { return a.bayNumber - b.bayNumber; });
     return out;
@@ -424,7 +426,7 @@ function groupPrepBayByOrder(prepBayData) {
     const norm = String(a.orderNumber || '').replace(/[^0-9]/g, '');
     if (!norm) return;
     if (!byOrder[norm]) {
-      byOrder[norm] = { jobName: a.jobName, orderNumber: a.orderNumber, prepTech: a.prepTech, notes: a.notes, bayNumbers: [] };
+      byOrder[norm] = { jobName: a.jobName, orderNumber: a.orderNumber, marketingAgent: a.marketingAgent, prepTech: a.prepTech, notes: a.notes, bayNumbers: [] };
     }
     byOrder[norm].bayNumbers.push(a.bayNumber);
   });
@@ -448,7 +450,7 @@ function groupPrepBayByOrder(prepBayData) {
       jobName: j.jobName,
       orderNumber: j.orderNumber,
       prepBaysDisplay: prepBaysDisplay,
-      marketingAgent: '',
+      marketingAgent: j.marketingAgent || '',
       prepTech: j.prepTech,
       prepNotes: j.notes,
       bayNumbers: j.bayNumbers
@@ -484,9 +486,8 @@ function buildJobBlockRows(job) {
   rows.push(padRow(['Marketing Agent:', job.marketingAgent || '']));
   rows.push(padRow(['Prep Tech:', job.prepTech || '']));
   rows.push(padRow(['Prep Notes:', job.prepNotes || '']));
-  rows.push(padRow([]));
 
-  // Equipment table header
+  // Equipment table header (no blank row before)
   rows.push(padRow(['', 'Equipment Name', 'Barcode', 'Pulled?', 'RTR?', 'Serviced for Order?', 'Completion Timestamp']));
   EQUIPMENT_CATEGORIES.forEach(function (cat) {
     rows.push(padRow([cat + ':', '', '', false, false, false, '']));
@@ -497,6 +498,7 @@ function buildJobBlockRows(job) {
   rows.push(padRow(['', 'Subbed Equipment', 'Quantity', 'Located', 'Locating Agent', 'Quote Rec.', 'Run Sheet Out', 'Packing Slip', 'Notes']));
   rows.push(padRow(['', '', '', false, false, false, '', '', '']));
   rows.push(padRow([]));
+  rows.push(padRow([])); // black separator row (formatted in applyJobBlockFormatting)
 
   return rows;
 }
@@ -516,7 +518,7 @@ function buildJobBlockRowsWithCameras(job, cameras) {
   rows.push(padRow(['Marketing Agent:', job.marketingAgent || '']));
   rows.push(padRow(['Prep Tech:', job.prepTech || '']));
   rows.push(padRow(['Prep Notes:', job.prepNotes || '']));
-  rows.push(padRow([]));
+
   rows.push(padRow(['', 'Equipment Name', 'Barcode', 'Pulled?', 'RTR?', 'Serviced for Order?', 'Completion Timestamp']));
   const maxEquipmentRows = 10;
   const camList = cameras || [];
@@ -532,6 +534,7 @@ function buildJobBlockRowsWithCameras(job, cameras) {
   rows.push(padRow(['', 'Subbed Equipment', 'Quantity', 'Located', 'Locating Agent', 'Quote Rec.', 'Run Sheet Out', 'Packing Slip', 'Notes']));
   rows.push(padRow(['', '', '', false, false, false, '', '', '']));
   rows.push(padRow([]));
+  rows.push(padRow([])); // black separator row (formatted in applyJobBlockFormatting)
   return rows;
 }
 
@@ -556,29 +559,35 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride) {
 
   for (let i = 1; i <= 5; i++) {
     const row = r + i;
-    sheet.getRange(row, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor);
-    sheet.getRange(row, 2).setFontSize(fmt.valueSize);
+    sheet.getRange(row, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
+    sheet.getRange(row, 2).setFontSize(fmt.valueSize).setFontColor(fmt.valueColor || '#000000');
     sheet.setRowHeight(row, fmt.rowHeightLabel);
   }
 
-  sheet.getRange(r + 6, 1, r + 6, numCols).setBorder(null, null, true, null, null, null, fmt.borderColor, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+  sheet.getRange(r + 5, 1, r + 5, numCols).setBorder(null, null, true, null, null, null, fmt.borderColor, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
 
-  const eqHeaderRow = r + 7;
+  // --- Equipment header (no blank row before); white bold text ---
+  const eqHeaderRow = r + 6;
   sheet.getRange(eqHeaderRow, 1, eqHeaderRow, numCols).setBackground(fmt.tableHeaderBg).setFontColor(fmt.tableHeaderFg).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
   sheet.setRowHeight(eqHeaderRow, fmt.rowHeightTableHeader);
 
   for (let i = 0; i < EQUIPMENT_CATEGORIES.length; i++) {
     const row = eqHeaderRow + 1 + i;
     sheet.getRange(row, 1, row, numCols).setBackground(jobBg);
-    sheet.getRange(row, 1).setFontWeight('bold').setFontSize(fmt.valueSize);
+    sheet.getRange(row, 1).setFontWeight('bold').setFontSize(fmt.valueSize).setFontColor(fmt.valueColor || '#000000');
     sheet.setRowHeight(row, fmt.rowHeightCategory);
   }
+  sheet.getRange(eqHeaderRow + 1, 4, eqHeaderRow + 10, 6).insertCheckboxes();
 
-  // --- Subbed Equipment: header same as Equipment Name (tableHeaderBg #344a5e, white bold text) ---
-  const subHeaderRow = r + 19;
+  // --- Subbed Equipment: header same as Equipment Name (white bold text) ---
+  const subHeaderRow = r + 18;
   sheet.getRange(subHeaderRow, 1, subHeaderRow, numCols).setBackground(fmt.tableHeaderBg).setFontColor(fmt.tableHeaderFg).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
   sheet.setRowHeight(subHeaderRow, fmt.rowHeightTableHeader);
   sheet.setRowHeight(subHeaderRow + 1, fmt.rowHeightCategory);
+
+  // --- Black horizontal separator at end of each job block ---
+  const lastRow = r + ROWS_PER_JOB_BLOCK - 1;
+  sheet.getRange(lastRow, 1, lastRow, numCols).setBackground('#000000');
 }
 
 /**
@@ -644,8 +653,6 @@ function writePrepBaySchemaTest() {
 
   applyJobBlockFormatting(sheet, 1, fmt, job1HeaderBg);
   applyJobBlockFormatting(sheet, 1 + ROWS_PER_JOB_BLOCK, fmt, job2HeaderBg);
-  var lastRow = 2 * ROWS_PER_JOB_BLOCK;
-  sheet.getRange(lastRow, 1, lastRow, 9).setBackground('#000000');
 
   Logger.log('Prep Bay Schema test written: ' + numRows + ' rows');
 }
@@ -687,7 +694,7 @@ function refreshPrepForecastSheets() {
       Logger.log('Created sheet: ' + sheetName);
     }
 
-    sheet.clear();
+    sheet.clear(); // Clears all cell data and formatting from the sheet.
     if (allRows.length > 0) {
       sheet.getRange(1, 1, allRows.length, numCols).setValues(allRows);
       sheet.getRange(1, 1, allRows.length, numCols).setWrap(true);
@@ -698,8 +705,6 @@ function refreshPrepForecastSheets() {
         applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBg);
         startRow += ROWS_PER_JOB_BLOCK;
       });
-      var lastRow = jobs.length * ROWS_PER_JOB_BLOCK;
-      sheet.getRange(lastRow, 1, lastRow, numCols).setBackground('#000000');
     }
 
     SpreadsheetApp.flush();
