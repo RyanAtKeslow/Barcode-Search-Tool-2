@@ -81,6 +81,25 @@ const EQUIPMENT_CATEGORIES = [
   'Ungrouped'
 ];
 
+/**
+ * Normalizes equipment items for the dynamic block builder.
+ * Accepts either legacy cameras array [{ equipmentType, barcode }] (treated as Cameras)
+ * or full format [{ category, equipmentType, barcode }]. Returns array of { category, equipmentType, barcode }.
+ * @param {Array<Object>} equipmentList - Cameras or full equipment list
+ * @param {string} defaultCategory - Category when item has no category (e.g. 'Cameras')
+ * @returns {Array<{category: string, equipmentType: string, barcode: string}>}
+ */
+function normalizeEquipmentByCategory(equipmentList, defaultCategory) {
+  const cat = defaultCategory || 'Cameras';
+  return (equipmentList || []).map(function (item) {
+    return {
+      category: item.category && EQUIPMENT_CATEGORIES.indexOf(item.category) >= 0 ? item.category : cat,
+      equipmentType: item.equipmentType || item.name || '',
+      barcode: item.barcode || ''
+    };
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Prep Bay Assignment: sheet-by-date lookup and order number cell background
 // ---------------------------------------------------------------------------
@@ -504,13 +523,43 @@ function buildJobBlockRows(job) {
 }
 
 /**
- * Builds one job block rows with scheduled cameras from Equipment Chart (same layout as buildJobBlockRows).
- * Fills up to 10 equipment rows with camera data; remaining rows keep category labels and empty cells.
+ * Builds equipment block rows (between Equipment Name header and Locating Agent header).
+ * One row per equipment item; category label in column A only on the first row of each category.
+ * Categories with no items get one row with label and empty B/C. Order follows EQUIPMENT_CATEGORIES.
+ * @param {Array<{category: string, equipmentType: string, barcode: string}>} equipmentByCategory - from normalizeEquipmentByCategory
+ * @returns {Array<Array>} Rows (each length 9 via padRow)
+ */
+function buildEquipmentBlockRows(equipmentByCategory) {
+  const rows = [];
+  const byCat = {};
+  (equipmentByCategory || []).forEach(function (item) {
+    const c = item.category;
+    if (!byCat[c]) byCat[c] = [];
+    byCat[c].push(item);
+  });
+  EQUIPMENT_CATEGORIES.forEach(function (cat) {
+    const items = byCat[cat] || [];
+    const n = Math.max(1, items.length);
+    for (let i = 0; i < n; i++) {
+      const label = i === 0 ? cat + ':' : '';
+      const name = i < items.length ? (items[i].equipmentType || '') : '';
+      const barcode = i < items.length ? (items[i].barcode || '') : '';
+      rows.push(padRow([label, name, barcode, false, false, false, '']));
+    }
+  });
+  return rows;
+}
+
+/**
+ * Builds one job block with dynamic equipment rows. Equipment list can be legacy cameras
+ * [{ equipmentType, barcode }] (all treated as Cameras) or [{ category, equipmentType, barcode }].
+ * Column A category labels (Cameras:, Lenses:, ...) appear only on the first row of each category;
+ * extra equipment in a category pushes the next category header down.
  * @param {Object} job - { jobName, orderNumber, prepBaysDisplay, marketingAgent, prepTech, prepNotes }
- * @param {Array<Object>} cameras - [{ equipmentType, barcode }, ...] from readEquipmentSchedulingData
+ * @param {Array<Object>} equipmentList - Cameras or full equipment; normalized via normalizeEquipmentByCategory
  * @returns {Array<Array>}
  */
-function buildJobBlockRowsWithCameras(job, cameras) {
+function buildJobBlockRowsWithCameras(job, equipmentList) {
   const rows = [];
   rows.push(padRow(['Job Name:', job.jobName || '']));
   rows.push(padRow(['Order #:', job.orderNumber || '']));
@@ -520,16 +569,9 @@ function buildJobBlockRowsWithCameras(job, cameras) {
   rows.push(padRow(['Prep Notes:', job.prepNotes || '']));
 
   rows.push(padRow(['', 'Equipment Name', 'Barcode', 'Pulled?', 'RTR?', 'Serviced for Order?', 'Completion Timestamp']));
-  const maxEquipmentRows = 10;
-  const camList = cameras || [];
-  for (let i = 0; i < maxEquipmentRows; i++) {
-    const label = EQUIPMENT_CATEGORIES[i] ? EQUIPMENT_CATEGORIES[i] + ':' : '';
-    if (i < camList.length) {
-      rows.push(padRow([label, camList[i].equipmentType || '', camList[i].barcode || '', false, false, false, '']));
-    } else {
-      rows.push(padRow([label, '', '', false, false, false, '']));
-    }
-  }
+  const normalized = normalizeEquipmentByCategory(equipmentList, 'Cameras');
+  rows.push.apply(rows, buildEquipmentBlockRows(normalized));
+
   rows.push(padRow([]));
   rows.push(padRow(['Locating Agent', 'Subbed Equipment', 'Quantity', 'Located', 'Quote Received', 'Run Sheet Out', 'Packing Slip', 'Notes', '']));
   rows.push(padRow(['', '', '', false, false, false, '', '', '']));
@@ -544,17 +586,19 @@ function buildJobBlockRowsWithCameras(job, cameras) {
  * @param {number} startRow - 1-based starting row of the job block
  * @param {Object} fmt - Format options (defaults to FMT_DEFAULTS)
  * @param {string|null} jobHeaderBgOverride - Optional: use this as job header band background (e.g. from Prep Bay column C); if null, use fmt.jobHeaderBg
+ * @param {number} [blockRowCount] - Optional: number of rows in this block (for variable-height blocks); if omitted, uses ROWS_PER_JOB_BLOCK
  */
-function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride) {
+function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, blockRowCount) {
   if (!fmt) fmt = FMT_DEFAULTS;
   const r = startRow;
   const numCols = 9;
   const jobBg = jobHeaderBgOverride != null && jobHeaderBgOverride !== '' ? jobHeaderBgOverride : fmt.jobHeaderBg;
+  const blockEndRow = blockRowCount ? r + blockRowCount - 1 : r + ROWS_PER_JOB_BLOCK - 1;
 
   // --- Job header (rows 1–6): entire block uses background from Prep Bay column C (order # cell) ---
   sheet.getRange(r, 1, r + 5, numCols).setBackground(jobBg);
   sheet.getRange(r, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor);
-  sheet.getRange(r, 2).setFontWeight('bold').setFontSize(fmt.jobNameValueSize).setFontColor(fmt.jobNameValueColor);
+  sheet.getRange(r, 2).setFontWeight('bold').setFontSize(fmt.jobNameValueSize).setFontColor(fmt.jobNameValueColor).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r, fmt.rowHeightJobName);
 
   for (let i = 1; i <= 5; i++) {
@@ -572,9 +616,10 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride) {
   sheet.setRowHeight(eqHeaderRow, fmt.rowHeightTableHeader);
 
   // Find Locating Agent / Subbed Equipment header row so equipment block length is dynamic
-  const searchEndRow = Math.min(r + ROWS_PER_JOB_BLOCK - 1, sheet.getLastRow());
+  const searchEndRow = Math.min(blockEndRow, sheet.getLastRow());
   const colAVals = sheet.getRange(eqHeaderRow + 1, 1, searchEndRow, 1).getValues();
-  let subHeaderRow = r + 18; // fallback if not found
+  // Fallback: Locating Agent is 4 rows above black bar (blank, sub data, blank, black)
+  let subHeaderRow = blockEndRow - 3;
   for (let i = 0; i < colAVals.length; i++) {
     if (String(colAVals[i][0]).trim() === 'Locating Agent') {
       subHeaderRow = eqHeaderRow + 1 + i;
@@ -584,12 +629,19 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride) {
   const equipmentBlockEndRow = subHeaderRow - 1;
   const numEquipmentBlockRows = equipmentBlockEndRow - eqHeaderRow;
 
-  for (let i = 0; i < EQUIPMENT_CATEGORIES.length; i++) {
-    const row = eqHeaderRow + 1 + i;
-    if (row > equipmentBlockEndRow) break;
+  // Format all equipment data rows (dynamic count): background, black font; bold column A only for category label rows (e.g. "Cameras:")
+  for (let row = eqHeaderRow + 1; row <= equipmentBlockEndRow; row++) {
     sheet.getRange(row, 1, row, numCols).setBackground(jobBg).setFontColor('#000000');
-    sheet.getRange(row, 1).setFontWeight('bold').setFontSize(fmt.valueSize);
     sheet.setRowHeight(row, fmt.rowHeightCategory);
+  }
+  const aVals = sheet.getRange(eqHeaderRow + 1, 1, equipmentBlockEndRow, 1).getValues();
+  for (let i = 0; i < aVals.length; i++) {
+    const val = String(aVals[i][0]).trim();
+    if (val && val.slice(-1) === ':') {
+      sheet.getRange(eqHeaderRow + 1 + i, 1).setFontWeight('bold').setFontSize(fmt.valueSize);
+    } else {
+      sheet.getRange(eqHeaderRow + 1 + i, 1).setFontWeight('normal').setFontSize(fmt.valueSize);
+    }
   }
   // Checkboxes D,E,F only: between Equipment Name header and Locating Agent header (dynamic row count)
   if (numEquipmentBlockRows > 0) {
@@ -606,8 +658,7 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride) {
   sheet.getRange(subHeaderRow + 1, 4, 1, 3).insertCheckboxes();
 
   // --- Black horizontal separator at end of each job block ---
-  const lastRow = r + ROWS_PER_JOB_BLOCK - 1;
-  sheet.getRange(lastRow, 1, lastRow, numCols).setBackground('#000000');
+  sheet.getRange(blockEndRow, 1, blockEndRow, numCols).setBackground('#000000');
 }
 
 /**
@@ -702,10 +753,13 @@ function refreshPrepForecastSheets() {
     const jobs = groupPrepBayByOrder(prepBayData);
 
     const allRows = [];
+    const blockRowCounts = [];
     jobs.forEach(function (job) {
       const normOrder = String(job.orderNumber || '').replace(/[^0-9]/g, '');
       const cameras = equipmentData[normOrder] || [];
-      allRows.push.apply(allRows, buildJobBlockRowsWithCameras(job, cameras));
+      const blockRows = buildJobBlockRowsWithCameras(job, cameras);
+      blockRowCounts.push(blockRows.length);
+      allRows.push.apply(allRows, blockRows);
     });
 
     let sheet = ss.getSheetByName(sheetName);
@@ -720,11 +774,11 @@ function refreshPrepForecastSheets() {
       sheet.getRange(1, 1, allRows.length, numCols).setWrap(true);
       applySchemaColumnWidths(sheet, fmt);
       var startRow = 1;
-      jobs.forEach(function (job) {
-        var jobHeaderBg = getOrderNumberBackgroundFromPrepBay(prepBaySheetName, job.orderNumber);
-        applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBg);
-        startRow += ROWS_PER_JOB_BLOCK;
-      });
+      for (var j = 0; j < jobs.length; j++) {
+        var jobHeaderBg = getOrderNumberBackgroundFromPrepBay(prepBaySheetName, jobs[j].orderNumber);
+        applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBg, blockRowCounts[j]);
+        startRow += blockRowCounts[j];
+      }
     }
 
     SpreadsheetApp.flush();
