@@ -595,6 +595,9 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   const jobBg = jobHeaderBgOverride != null && jobHeaderBgOverride !== '' ? jobHeaderBgOverride : fmt.jobHeaderBg;
   const blockEndRow = blockRowCount ? r + blockRowCount - 1 : r + ROWS_PER_JOB_BLOCK - 1;
 
+  // Clear all borders in this block first so no default grid or stray border remains (e.g. between equipment rows).
+  sheet.getRange(r, 1, blockEndRow, numCols).setBorder(false, false, false, false, false, false, null, null);
+
   // --- Job header (rows 1–6): entire block uses background from Prep Bay column C (order # cell) ---
   sheet.getRange(r, 1, r + 5, numCols).setBackground(jobBg);
   sheet.getRange(r, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor);
@@ -609,6 +612,7 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
     sheet.setRowHeight(row, fmt.rowHeightLabel);
   }
 
+  // Only border in the block: divider under Prep Notes (row r+5).
   sheet.getRange(r + 5, 1, r + 5, numCols).setBorder(null, null, true, null, null, null, fmt.borderColor, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
 
   // --- Equipment header (no blank row before); white bold text ---

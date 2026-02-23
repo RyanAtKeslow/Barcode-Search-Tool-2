@@ -72,3 +72,31 @@
   13. (blank before next job block)
 
 - Equipment and sub-rental rows grow dynamically; no fixed slot count per job.
+
+## Order of operations: how each job block gets updated
+
+So styling is predictable and nothing from an early step is left visible where it shouldn’t be.
+
+### Phase 1: Sheet-level (once per sheet)
+
+1. **Clear** – `sheet.clear()` removes all content and formatting.
+2. **Write data** – `setValues(allRows)` for the full data range. No borders or wrap are set here.
+3. **Wrap** – `setWrap(true)` is applied to the **entire written range**. So every cell starts with wrap. Later, per-block formatting overrides this for Job Name (B1) and Prep Notes (B6) to Overflow.
+4. **Column widths** – `applySchemaColumnWidths()` (no borders).
+
+### Phase 2: Per-block formatting – `applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, blockRowCount)`
+
+For each block, `startRow` = `r` (1-based). Operations run in this order:
+
+1. **Job header band (rows r–r+5)** – Set background `jobBg` on `(r, 1, r+5, numCols)`. Then set fonts/overflow on row r (Job Name) and rows r+1…r+5 (Order #, Prep Bay, Marketing Agent, Prep Tech, Prep Notes).
+2. **Borders** – Clear all borders in the block so no default grid or previous borders remain. Then set **only** the horizontal divider under Prep Notes: bottom border on row `r+5` (grey, medium). That is the only border we want in the block.
+3. **Equipment header (row r+6)** – Background, font, row height.
+4. **Equipment data rows (r+7 up to Locating Agent row)** – Background `jobBg`, black font, row height; column A bold only for category labels (e.g. `"Cameras:"`). Then checkboxes and font color again on the same range (redundant but harmless).
+5. **Subbed Equipment header** – Row found by scanning for "Locating Agent"; same style as Equipment header.
+6. **Subbed data row** – Row height, checkboxes.
+7. **Black bar** – Last row of block: full row background `#000000`.
+
+### Styling that can look like “early vs later”
+
+- **Wrap vs overflow** – Phase 1 sets wrap on the whole range; Phase 2 sets Overflow on Job Name and Prep Notes. So those two cells are intentionally overwritten.
+- **Border between rows 11 and 12** – The only border we set is under row 6 (Prep Notes). If a line appears between 11 and 12, it was either default grid or a border we didn’t clear. Clearing all borders in the block first, then setting only the row‑6 divider, removes stray borders.
