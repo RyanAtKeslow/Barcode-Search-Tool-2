@@ -577,13 +577,17 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride) {
     sheet.getRange(row, 1).setFontWeight('bold').setFontSize(fmt.valueSize).setFontColor(fmt.valueColor || '#000000');
     sheet.setRowHeight(row, fmt.rowHeightCategory);
   }
-  sheet.getRange(eqHeaderRow + 1, 4, 10, 3).insertCheckboxes(); // 10 rows, 3 cols (D,E,F) — equipment rows only, not subbed or black bar
+  // Checkboxes D,E,F only: between Equipment Name header and Subbed Equipment header (10 equipment rows)
+  sheet.getRange(eqHeaderRow + 1, 4, 10, 3).insertCheckboxes();
 
   // --- Subbed Equipment: header same as Equipment Name (white bold text) ---
   const subHeaderRow = r + 18;
   sheet.getRange(subHeaderRow, 1, subHeaderRow, numCols).setBackground(fmt.tableHeaderBg).setFontColor(fmt.tableHeaderFg).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
   sheet.setRowHeight(subHeaderRow, fmt.rowHeightTableHeader);
   sheet.setRowHeight(subHeaderRow + 1, fmt.rowHeightCategory);
+
+  // Checkboxes D,E,F only: between Subbed Equipment header and black bar (1 data row)
+  sheet.getRange(subHeaderRow + 1, 4, 1, 3).insertCheckboxes();
 
   // --- Black horizontal separator at end of each job block ---
   const lastRow = r + ROWS_PER_JOB_BLOCK - 1;
