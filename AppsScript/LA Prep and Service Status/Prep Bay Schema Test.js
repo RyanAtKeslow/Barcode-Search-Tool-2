@@ -599,11 +599,12 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   const jobBg = jobHeaderBgOverride != null && jobHeaderBgOverride !== '' ? jobHeaderBgOverride : fmt.jobHeaderBg;
   const blockEndRow = blockRowCount ? r + blockRowCount - 1 : r + ROWS_PER_JOB_BLOCK - 1;
 
-  // Clear all borders in this block first so no default grid or stray border remains (e.g. between equipment rows).
-  sheet.getRange(r, 1, blockEndRow, numCols).setBorder(false, false, false, false, false, false, null, null);
+  // Clear all borders in this block first. getRange 4-arg = (row, column, numRows, numColumns).
+  const blockNumRows = blockEndRow - r + 1;
+  sheet.getRange(r, 1, blockNumRows, numCols).setBorder(false, false, false, false, false, false, null, null);
 
-  // --- Job header (rows 1–6): entire block uses background from Prep Bay column C (order # cell) ---
-  sheet.getRange(r, 1, r + 5, numCols).setBackground(jobBg);
+  // --- Job header (rows 1–6): entire band uses background from Prep Bay column C (order # cell); 6 rows only ---
+  sheet.getRange(r, 1, 6, numCols).setBackground(jobBg);
   sheet.getRange(r, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor);
   sheet.getRange(r, 2).setFontWeight('bold').setFontSize(fmt.jobNameValueSize).setFontColor(fmt.jobNameValueColor).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r, fmt.rowHeightJobName);
