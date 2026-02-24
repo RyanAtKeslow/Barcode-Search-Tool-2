@@ -40,8 +40,16 @@ const VALID_TODAY_BACKGROUNDS_FOR_PREP_BAY = [
   STATUS_COLORS.GEAR_TRANSFER, STATUS_COLORS.DO_NOT_RESCHEDULE, STATUS_COLORS.IN_REPAIR, STATUS_COLORS.PENDING_JOB
 ];
 
-/** Row count per job block (job header 6 + eq header 1 + categories 10 + blank 1 + sub header 1 + sub row 1 + blank 1 + black 1) */
-const ROWS_PER_JOB_BLOCK = 22;
+/** Row count per job block (job header 6 + eq header 1 + categories 10 + sub header 1 + sub row(s) + black 1); no blank rows. */
+const ROWS_PER_JOB_BLOCK = 20;
+
+/**
+ * Job block row names (by column A content; used for clarity and locating rows).
+ * Row order: Job Name: | Order #: | Prep Bay(s): | Marketing Agent: | Prep Tech: | Prep Notes: |
+ * Equipment Header (A empty) | equipment rows (Cameras:, Lenses:, ... or "" for continuation) |
+ * Locating Agent (sub header) | sub data row(s) (A often empty) | black bar (A empty).
+ * Checkboxes: Equipment rows = D,E,F (Pulled?, RTR?, Serviced for Order?). Sub row(s) = D,E,F,G (Located?, Quote Received?, Run Sheet Out?, Packing Slip?).
+ */
 
 /** Default formatting (used when Settings sheet is missing or a value is blank) */
 const FMT_DEFAULTS = {
@@ -511,12 +519,10 @@ function buildJobBlockRows(job) {
   EQUIPMENT_CATEGORIES.forEach(function (cat) {
     rows.push(padRow([cat + ':', '', '', false, false, false, '']));
   });
-  rows.push(padRow([]));
 
-  // Sub-rental section
+  // Sub-rental section (no blank before or after). Sub data row: checkboxes D,E,F,G (Located, Quote Received, Run Sheet Out, Packing Slip).
   rows.push(padRow(['Locating Agent', 'Subbed Equipment', 'Quantity', 'Located', 'Quote Received', 'Run Sheet Out', 'Packing Slip', 'Notes', '']));
-  rows.push(padRow(['', '', '', false, false, false, '', '', '']));
-  rows.push(padRow([]));
+  rows.push(padRow(['', '', '', false, false, false, false, '', ''])); // one sub data row for now; will grow when Sub Sheet is wired
   rows.push(padRow([])); // black separator row (formatted in applyJobBlockFormatting)
 
   return rows;
@@ -572,10 +578,8 @@ function buildJobBlockRowsWithCameras(job, equipmentList) {
   const normalized = normalizeEquipmentByCategory(equipmentList, 'Cameras');
   rows.push.apply(rows, buildEquipmentBlockRows(normalized));
 
-  rows.push(padRow([]));
   rows.push(padRow(['Locating Agent', 'Subbed Equipment', 'Quantity', 'Located', 'Quote Received', 'Run Sheet Out', 'Packing Slip', 'Notes', '']));
-  rows.push(padRow(['', '', '', false, false, false, '', '', '']));
-  rows.push(padRow([]));
+  rows.push(padRow(['', '', '', false, false, false, false, '', ''])); // sub data row(s); D,E,F,G = checkboxes; will grow when Sub Sheet is wired
   rows.push(padRow([])); // black separator row (formatted in applyJobBlockFormatting)
   return rows;
 }
@@ -612,19 +616,20 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
     sheet.setRowHeight(row, fmt.rowHeightLabel);
   }
 
-  // Only border in the block: divider under Prep Notes (row r+5).
-  sheet.getRange(r + 5, 1, r + 5, numCols).setBorder(null, null, true, null, null, null, fmt.borderColor, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+  // Only border in the block: divider under Prep Notes (row r+5). getRange 4-arg = (row, column, numRows, numColumns).
+  sheet.getRange(r + 5, 1, 1, numCols).setBorder(null, null, true, null, null, null, fmt.borderColor, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
 
-  // --- Equipment header (no blank row before); white bold text ---
+  // --- Equipment header (no blank row before); column A empty; white bold text ---
   const eqHeaderRow = r + 6;
-  sheet.getRange(eqHeaderRow, 1, eqHeaderRow, numCols).setBackground(fmt.tableHeaderBg).setFontColor(fmt.tableHeaderFg).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
+  sheet.getRange(eqHeaderRow, 1, 1, numCols).setBackground(fmt.tableHeaderBg).setFontColor(fmt.tableHeaderFg).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
   sheet.setRowHeight(eqHeaderRow, fmt.rowHeightTableHeader);
 
-  // Find Locating Agent / Subbed Equipment header row so equipment block length is dynamic
+  // Find Locating Agent / Subbed Equipment header row (column A = "Locating Agent") so equipment block length is dynamic
   const searchEndRow = Math.min(blockEndRow, sheet.getLastRow());
-  const colAVals = sheet.getRange(eqHeaderRow + 1, 1, searchEndRow, 1).getValues();
-  // Fallback: Locating Agent is 4 rows above black bar (blank, sub data, blank, black)
-  let subHeaderRow = blockEndRow - 3;
+  const numRowsToSearch = searchEndRow - eqHeaderRow;
+  const colAVals = numRowsToSearch > 0 ? sheet.getRange(eqHeaderRow + 1, 1, numRowsToSearch, 1).getValues() : [];
+  // Fallback: Locating Agent is 2 rows above black bar (sub data, black)
+  let subHeaderRow = blockEndRow - 2;
   for (let i = 0; i < colAVals.length; i++) {
     if (String(colAVals[i][0]).trim() === 'Locating Agent') {
       subHeaderRow = eqHeaderRow + 1 + i;
@@ -636,10 +641,10 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
 
   // Format all equipment data rows (dynamic count): background, black font; bold column A only for category label rows (e.g. "Cameras:")
   for (let row = eqHeaderRow + 1; row <= equipmentBlockEndRow; row++) {
-    sheet.getRange(row, 1, row, numCols).setBackground(jobBg).setFontColor('#000000');
+    sheet.getRange(row, 1, 1, numCols).setBackground(jobBg).setFontColor('#000000');
     sheet.setRowHeight(row, fmt.rowHeightCategory);
   }
-  const aVals = sheet.getRange(eqHeaderRow + 1, 1, equipmentBlockEndRow, 1).getValues();
+  const aVals = numEquipmentBlockRows > 0 ? sheet.getRange(eqHeaderRow + 1, 1, numEquipmentBlockRows, 1).getValues() : [];
   for (let i = 0; i < aVals.length; i++) {
     const val = String(aVals[i][0]).trim();
     if (val && val.slice(-1) === ':') {
@@ -648,22 +653,25 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
       sheet.getRange(eqHeaderRow + 1 + i, 1).setFontWeight('normal').setFontSize(fmt.valueSize);
     }
   }
-  // Checkboxes D,E,F only: between Equipment Name header and Locating Agent header (dynamic row count)
+  // Checkboxes D,E,F: all equipment rows below Equipment Header and above Locating Agent row
   if (numEquipmentBlockRows > 0) {
     sheet.getRange(eqHeaderRow + 1, 4, numEquipmentBlockRows, 3).insertCheckboxes();
-    sheet.getRange(eqHeaderRow + 1, 1, numEquipmentBlockRows, numCols).setFontColor('#000000'); // stop at Locating Agent row
+    sheet.getRange(eqHeaderRow + 1, 1, numEquipmentBlockRows, numCols).setFontColor('#000000');
   }
 
-  // --- Subbed Equipment: header same as Equipment Name (white bold text) ---
-  sheet.getRange(subHeaderRow, 1, subHeaderRow, numCols).setBackground(fmt.tableHeaderBg).setFontColor(fmt.tableHeaderFg).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
+  // --- Subbed Equipment: header row (Locating Agent); then sub data row(s) with checkboxes D,E,F,G ---
+  sheet.getRange(subHeaderRow, 1, 1, numCols).setBackground(fmt.tableHeaderBg).setFontColor(fmt.tableHeaderFg).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
   sheet.setRowHeight(subHeaderRow, fmt.rowHeightTableHeader);
-  sheet.setRowHeight(subHeaderRow + 1, fmt.rowHeightCategory);
+  const numSubRows = blockEndRow - subHeaderRow - 1; // between Locating Agent and black bar; will grow when Sub Sheet is wired
+  for (let row = subHeaderRow + 1; row <= blockEndRow - 1; row++) {
+    sheet.setRowHeight(row, fmt.rowHeightCategory);
+  }
+  if (numSubRows > 0) {
+    sheet.getRange(subHeaderRow + 1, 4, numSubRows, 4).insertCheckboxes(); // D,E,F,G (Located, Quote Received, Run Sheet Out, Packing Slip)
+  }
 
-  // Checkboxes D,E,F only: between Subbed Equipment header and black bar (1 data row)
-  sheet.getRange(subHeaderRow + 1, 4, 1, 3).insertCheckboxes();
-
-  // --- Black horizontal separator at end of each job block ---
-  sheet.getRange(blockEndRow, 1, blockEndRow, numCols).setBackground('#000000');
+  // --- Black horizontal separator at end of each job block (one row only; getRange 4-arg = row, column, numRows, numColumns) ---
+  sheet.getRange(blockEndRow, 1, 1, numCols).setBackground('#000000');
 }
 
 /**
