@@ -712,16 +712,16 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   sheet.getRange(r, 2).setFontWeight('bold').setFontSize(fmt.jobNameValueSize).setFontColor(fmt.jobNameValueColor).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r, fmt.rowHeightJobName);
 
-  // Row 2: Order # (A2:B2), Marketing Agent (D2:E2, E overflow)
+  // Row 2: Order # (A2:B2), Marketing Agent (D2:E2, E overflow); B2 center justify
   sheet.getRange(r + 1, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
-  sheet.getRange(r + 1, 2).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000');
+  sheet.getRange(r + 1, 2).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setHorizontalAlignment(SpreadsheetApp.HorizontalAlignment.CENTER);
   sheet.getRange(r + 1, 4).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
   sheet.getRange(r + 1, 5).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r + 1, fmt.rowHeightLabel);
 
-  // Row 3: Prep Bay(s) (A3:B3), Prep Tech (D3:E3, E overflow)
+  // Row 3: Prep Bay(s) (A3:B3), Prep Tech (D3:E3, E overflow); B3 center justify
   sheet.getRange(r + 2, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
-  sheet.getRange(r + 2, 2).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000');
+  sheet.getRange(r + 2, 2).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setHorizontalAlignment(SpreadsheetApp.HorizontalAlignment.CENTER);
   sheet.getRange(r + 2, 4).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
   sheet.getRange(r + 2, 5).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r + 2, fmt.rowHeightLabel);
