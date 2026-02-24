@@ -95,6 +95,12 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Prep Refresh')
     .addItem('Initialize Prep Refresh', 'refreshPrepForecastSheets')
+    .addSeparator()
+    .addItem('Refresh Today', 'refreshPrepToday')
+    .addItem('Refresh Tomorrow', 'refreshPrepTomorrow')
+    .addItem('Refresh Two Days Out', 'refreshPrepTwoDaysOut')
+    .addItem('Refresh Three Days Out', 'refreshPrepThreeDaysOut')
+    .addItem('Refresh Four Days Out', 'refreshPrepFourDaysOut')
     .addToUi();
 }
 
@@ -852,80 +858,109 @@ function writePrepBaySchemaTest() {
 }
 
 /**
- * Refreshes all five forecast sheets (Prep Today, Prep Tomorrow, Prep Two Days Out, Prep Three Days Out, Prep Four Days Out)
- * with live data from Prep Bay Assignment and Equipment Scheduling Chart.
- * Jobs are grouped by order number; scheduled cameras for each order are filled from the Equipment Chart.
+ * Refreshes a single forecast sheet by workday offset (0 = today, 1 = next workday, etc.).
+ * Used by refreshPrepForecastSheets and by the per-sheet menu items (Refresh Today, Refresh Tomorrow, ...).
+ * @param {string} sheetName - e.g. "Prep Today", "Prep Tomorrow"
+ * @param {number} workdayOffset - 0, 1, 2, 3, or 4 (skip weekends and holidays)
  */
-function refreshPrepForecastSheets() {
-  Logger.log('Starting refreshPrepForecastSheets');
+function refreshSinglePrepForecastSheet(sheetName, workdayOffset) {
   const ss = SpreadsheetApp.openById(LA_PREP_STATUS_WORKBOOK_ID);
   const fmt = FMT_DEFAULTS;
   const numCols = 9;
-
   const today = new Date();
-  PREP_FORECAST_SHEETS.forEach(function (config) {
-    const sheetName = config.name;
-    const workdayOffset = config.daysOffset; // 0 = today, 1 = next workday, etc. (skip weekends and holidays)
-    const targetDate = getDateForForecastOffset(today, workdayOffset);
-    const prepBaySheetName = getTodaySheetName(targetDate);
+  const targetDate = getDateForForecastOffset(today, workdayOffset);
+  const prepBaySheetName = getTodaySheetName(targetDate);
 
-    Logger.log('Processing ' + sheetName + ' (date: ' + prepBaySheetName + ')...');
+  Logger.log('Processing ' + sheetName + ' (date: ' + prepBaySheetName + ')...');
 
-    const prepBayData = readPrepBayDataForDate(prepBaySheetName);
-    Logger.log('  Prep Bay "' + prepBaySheetName + '": ' + (prepBayData ? prepBayData.length : 0) + ' rows read');
+  const prepBayData = readPrepBayDataForDate(prepBaySheetName);
+  Logger.log('  Prep Bay "' + prepBaySheetName + '": ' + (prepBayData ? prepBayData.length : 0) + ' rows read');
 
-    const equipmentData = readEquipmentSchedulingData(targetDate);
-    const equipmentOrderCount = equipmentData ? Object.keys(equipmentData).length : 0;
-    Logger.log('  Equipment data: ' + equipmentOrderCount + ' orders with scheduled equipment');
+  const equipmentData = readEquipmentSchedulingData(targetDate);
+  const equipmentOrderCount = equipmentData ? Object.keys(equipmentData).length : 0;
+  Logger.log('  Equipment data: ' + equipmentOrderCount + ' orders with scheduled equipment');
 
-    const jobs = groupPrepBayByOrder(prepBayData);
-    Logger.log('  Grouped into ' + jobs.length + ' jobs');
+  const jobs = groupPrepBayByOrder(prepBayData);
+  Logger.log('  Grouped into ' + jobs.length + ' jobs');
 
-    const allRows = [];
-    const blockRowCounts = [];
-    jobs.forEach(function (job) {
-      const normOrder = String(job.orderNumber || '').replace(/[^0-9]/g, '');
-      const cameras = equipmentData[normOrder] || [];
-      const blockRows = buildJobBlockRowsWithCameras(job, cameras);
-      blockRowCounts.push(blockRows.length);
-      allRows.push.apply(allRows, blockRows);
-    });
-
-    let sheet = ss.getSheetByName(sheetName);
-    if (!sheet) {
-      sheet = ss.insertSheet(sheetName);
-      Logger.log('  Created sheet: ' + sheetName);
-    }
-
-    sheet.clear(); // Clears content and format only; data validations (checkboxes) are NOT removed by clear().
-    if (allRows.length > 0) {
-      Logger.log('  Writing ' + allRows.length + ' rows, formatting ' + jobs.length + ' job blocks');
-      sheet.getRange(1, 1, allRows.length, numCols).setValues(allRows);
-      sheet.getRange(1, 1, allRows.length, numCols).setWrap(true);
-      applySchemaColumnWidths(sheet, fmt);
-      var startRow = 1;
-      for (var j = 0; j < jobs.length; j++) {
-        var jobHeaderBg = getOrderNumberBackgroundFromPrepBay(prepBaySheetName, jobs[j].orderNumber);
-        applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBg, blockRowCounts[j]);
-        Logger.log('    Block ' + (j + 1) + ': order ' + (jobs[j].orderNumber || '') + ', rows ' + blockRowCounts[j] + ', startRow ' + startRow);
-        startRow += blockRowCounts[j];
-      }
-    } else {
-      Logger.log('  No jobs for this date; sheet cleared');
-    }
-
-    // clear() does not remove checkboxes/data validations; clear rows below our data on every sheet so no leftover checkboxes or column I junk
-    var maxRow = sheet.getMaxRows();
-    var lastDataRow = allRows.length || 0;
-    if (lastDataRow < maxRow) {
-      var trailingRows = maxRow - lastDataRow;
-      var trailing = sheet.getRange(lastDataRow + 1, 1, trailingRows, numCols);
-      trailing.clearContent().clearFormat().clearDataValidations();
-    }
-
-    SpreadsheetApp.flush();
-    Logger.log('Done ' + sheetName + ' (' + jobs.length + ' jobs, ' + allRows.length + ' rows).');
+  const allRows = [];
+  const blockRowCounts = [];
+  jobs.forEach(function (job) {
+    const normOrder = String(job.orderNumber || '').replace(/[^0-9]/g, '');
+    const cameras = equipmentData[normOrder] || [];
+    const blockRows = buildJobBlockRowsWithCameras(job, cameras);
+    blockRowCounts.push(blockRows.length);
+    allRows.push.apply(allRows, blockRows);
   });
 
+  let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    Logger.log('  Created sheet: ' + sheetName);
+  }
+
+  sheet.clear();
+  if (allRows.length > 0) {
+    Logger.log('  Writing ' + allRows.length + ' rows, formatting ' + jobs.length + ' job blocks');
+    sheet.getRange(1, 1, allRows.length, numCols).setValues(allRows);
+    sheet.getRange(1, 1, allRows.length, numCols).setWrap(true);
+    applySchemaColumnWidths(sheet, fmt);
+    var startRow = 1;
+    for (var j = 0; j < jobs.length; j++) {
+      var jobHeaderBg = getOrderNumberBackgroundFromPrepBay(prepBaySheetName, jobs[j].orderNumber);
+      applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBg, blockRowCounts[j]);
+      Logger.log('    Block ' + (j + 1) + ': order ' + (jobs[j].orderNumber || '') + ', rows ' + blockRowCounts[j] + ', startRow ' + startRow);
+      startRow += blockRowCounts[j];
+    }
+  } else {
+    Logger.log('  No jobs for this date; sheet cleared');
+  }
+
+  var maxRow = sheet.getMaxRows();
+  var lastDataRow = allRows.length || 0;
+  if (lastDataRow < maxRow) {
+    var trailingRows = maxRow - lastDataRow;
+    var trailing = sheet.getRange(lastDataRow + 1, 1, trailingRows, numCols);
+    trailing.clearContent().clearFormat().clearDataValidations();
+  }
+
+  SpreadsheetApp.flush();
+  Logger.log('Done ' + sheetName + ' (' + jobs.length + ' jobs, ' + allRows.length + ' rows).');
+}
+
+/** Refreshes only the Prep Today sheet. */
+function refreshPrepToday() {
+  refreshSinglePrepForecastSheet('Prep Today', 0);
+}
+
+/** Refreshes only the Prep Tomorrow sheet. */
+function refreshPrepTomorrow() {
+  refreshSinglePrepForecastSheet('Prep Tomorrow', 1);
+}
+
+/** Refreshes only the Prep Two Days Out sheet. */
+function refreshPrepTwoDaysOut() {
+  refreshSinglePrepForecastSheet('Prep Two Days Out', 2);
+}
+
+/** Refreshes only the Prep Three Days Out sheet. */
+function refreshPrepThreeDaysOut() {
+  refreshSinglePrepForecastSheet('Prep Three Days Out', 3);
+}
+
+/** Refreshes only the Prep Four Days Out sheet. */
+function refreshPrepFourDaysOut() {
+  refreshSinglePrepForecastSheet('Prep Four Days Out', 4);
+}
+
+/**
+ * Refreshes all five forecast sheets (Prep Today, Prep Tomorrow, Prep Two Days Out, Prep Three Days Out, Prep Four Days Out)
+ * with live data from Prep Bay Assignment and Equipment Scheduling Chart.
+ */
+function refreshPrepForecastSheets() {
+  Logger.log('Starting refreshPrepForecastSheets');
+  PREP_FORECAST_SHEETS.forEach(function (config) {
+    refreshSinglePrepForecastSheet(config.name, config.daysOffset);
+  });
   Logger.log('refreshPrepForecastSheets done');
 }
