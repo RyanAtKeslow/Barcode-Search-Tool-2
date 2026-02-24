@@ -16,7 +16,7 @@ const PREP_BAY_EQUIPMENT_CHART_ID = '1uECRfnLO1LoDaGZaHTHS3EaUdf8tte5kiR6JNWAeOi
 /** Workbook that contains "Camera Bodies Only" sheet (same as Prep Bay Refresh destination) */
 const CAMERA_BODIES_ONLY_WORKBOOK_ID = '1FYA76P4B7vFUCDmxDwc6Ly6-tm7F6f5c5v0eNYjgwKw';
 
-/** Forecast sheet names in the LA Prep workbook and their day offset (0 = today) */
+/** Forecast sheet names and workday offset (0 = today, 1 = next workday; weekends and federal holidays skipped) */
 const PREP_FORECAST_SHEETS = [
   { name: 'Prep Today', daysOffset: 0 },
   { name: 'Prep Tomorrow', daysOffset: 1 },
@@ -40,15 +40,14 @@ const VALID_TODAY_BACKGROUNDS_FOR_PREP_BAY = [
   STATUS_COLORS.GEAR_TRANSFER, STATUS_COLORS.DO_NOT_RESCHEDULE, STATUS_COLORS.IN_REPAIR, STATUS_COLORS.PENDING_JOB
 ];
 
-/** Row count per job block (job header 6 + eq header 1 + categories 10 + sub header 1 + sub row(s) + black 1); no blank rows. */
-const ROWS_PER_JOB_BLOCK = 20;
+/** Row count per job block (job header 4 + eq header 1 + categories + sub header 1 + sub row(s) + black 1). Job header condensed: A1:B3 + D2:E3 (Marketing Agent, Prep Tech) + row 4 Prep Notes. */
+const ROWS_PER_JOB_BLOCK = 18;
 
 /**
  * Job block row names (by column A content; used for clarity and locating rows).
- * Row order: Job Name: | Order #: | Prep Bay(s): | Marketing Agent: | Prep Tech: | Prep Notes: |
- * Equipment Header (A empty) | equipment rows (Cameras:, Lenses:, ... or "" for continuation) |
- * Locating Agent (sub header) | sub data row(s) (A often empty) | black bar (A empty).
- * Checkboxes: Equipment rows = D,E,F (Pulled?, RTR?, Serviced for Order?). Sub row(s) = D,E,F,G (Located?, Quote Received?, Run Sheet Out?, Packing Slip?).
+ * Row 1: Job Name (A1:B1). Row 2: Order # (A2:B2), Marketing Agent (D2:E2, E overflow). Row 3: Prep Bay(s) (A3:B3), Prep Tech (D3:E3, E overflow). Row 4: Prep Notes (A4:B4).
+ * Equipment Header (A empty) | equipment rows | Locating Agent | sub data row(s) | black bar.
+ * Checkboxes: Equipment = D,E,F. Sub = D,E,F,G.
  */
 
 /** Default formatting (used when Settings sheet is missing or a value is blank) */
@@ -132,6 +131,98 @@ function getTodaySheetName(date) {
   const month = date.getMonth() + 1;
   const day = date.getDate();
   return dayPrefix + ' ' + month + '/' + day;
+}
+
+/**
+ * Whether the date is a US federal / company-observed holiday (Prep Bay closed).
+ * Same set as Tomorrow Double Check / Camera Forecast: New Year's, Memorial Day,
+ * Independence Day, Labor Day, Thanksgiving, Day after Thanksgiving, Christmas,
+ * Christmas week closure (Dec 26–31).
+ * @param {Date} date
+ * @returns {boolean}
+ */
+function isUSFederalHoliday(date) {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const day = date.getDate();
+  const dayOfWeek = date.getDay();
+
+  function getNthWeekday(y, m, weekday, n) {
+    const first = new Date(y, m, 1);
+    const firstWd = first.getDay();
+    let d = 1 + (weekday - firstWd + 7) % 7;
+    d += (n - 1) * 7;
+    return new Date(y, m, d);
+  }
+  function getLastWeekday(y, m, weekday) {
+    const last = new Date(y, m + 1, 0);
+    const lastWd = last.getDay();
+    const d = last.getDate() - ((lastWd - weekday + 7) % 7);
+    return new Date(y, m, d);
+  }
+
+  if (month === 0 && day === 1) return true;
+  if (month === 0 && day === 2 && dayOfWeek === 1) return true;
+  if (month === 11 && day === 31 && dayOfWeek === 5) return true;
+
+  const memorialDay = getLastWeekday(year, 4, 1);
+  if (month === memorialDay.getMonth() && day === memorialDay.getDate()) return true;
+
+  if (month === 6 && day === 4) return true;
+  if (month === 6 && day === 3 && dayOfWeek === 5) return true;
+  if (month === 6 && day === 5 && dayOfWeek === 1) return true;
+
+  const laborDay = getNthWeekday(year, 8, 1, 1);
+  if (month === laborDay.getMonth() && day === laborDay.getDate()) return true;
+
+  const thanksgiving = getNthWeekday(year, 10, 4, 4);
+  if (month === thanksgiving.getMonth() && day === thanksgiving.getDate()) return true;
+  const dayAfterThanksgiving = new Date(thanksgiving);
+  dayAfterThanksgiving.setDate(dayAfterThanksgiving.getDate() + 1);
+  if (month === dayAfterThanksgiving.getMonth() && day === dayAfterThanksgiving.getDate()) return true;
+
+  if (month === 11 && day === 25) return true;
+  if (month === 11 && day === 24 && dayOfWeek === 5) return true;
+  if (month === 11 && day === 26 && dayOfWeek === 1) return true;
+  if (month === 11 && day >= 26 && day <= 31) return true;
+
+  return false;
+}
+
+/**
+ * Next business day (Monday–Friday, skip weekends and federal holidays).
+ * @param {Date} date
+ * @returns {Date}
+ */
+function getNextBusinessDay(date) {
+  const next = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const dow = date.getDay();
+  if (dow === 5) next.setDate(date.getDate() + 3);
+  else if (dow === 6) next.setDate(date.getDate() + 2);
+  else if (dow === 0) next.setDate(date.getDate() + 1);
+  else next.setDate(date.getDate() + 1);
+  while (isUSFederalHoliday(next) || next.getDay() === 0 || next.getDay() === 6) {
+    next.setDate(next.getDate() + 1);
+  }
+  return next;
+}
+
+/**
+ * Date for a forecast sheet by workday offset (skip weekends and holidays).
+ * Offset 0 = today; 1 = next workday; 2 = 2nd workday out; etc.
+ * Prep Bay Assignment only has weekdays, so "Prep Four Days Out" on Tuesday = Monday (skip Sat/Sun).
+ * @param {Date} startDate - usually today
+ * @param {number} workdayOffset - 0, 1, 2, 3, or 4
+ * @returns {Date}
+ */
+function getDateForForecastOffset(startDate, workdayOffset) {
+  const d = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  if (workdayOffset === 0) return d;
+  for (let i = 0; i < workdayOffset; i++) {
+    const next = getNextBusinessDay(d);
+    d.setTime(next.getTime());
+  }
+  return d;
 }
 
 function normalizeDayAbbreviation(dayAbbr) {
@@ -518,10 +609,8 @@ function buildJobBlockRows(job) {
   const rows = [];
 
   rows.push(padRow(['Job Name:', job.jobName || '']));
-  rows.push(padRow(['Order #:', job.orderNumber || '']));
-  rows.push(padRow(['Prep Bay(s):', job.prepBaysDisplay || '']));
-  rows.push(padRow(['Marketing Agent:', job.marketingAgent || '']));
-  rows.push(padRow(['Prep Tech:', job.prepTech || '']));
+  rows.push(padRow(['Order #:', job.orderNumber || '', '', 'Marketing Agent:', job.marketingAgent || '']));
+  rows.push(padRow(['Prep Bay(s):', job.prepBaysDisplay || '', '', 'Prep Tech:', job.prepTech || '']));
   rows.push(padRow(['Prep Notes:', job.prepNotes || '']));
 
   // Equipment table header (no blank row before)
@@ -578,10 +667,8 @@ function buildEquipmentBlockRows(equipmentByCategory) {
 function buildJobBlockRowsWithCameras(job, equipmentList) {
   const rows = [];
   rows.push(padRow(['Job Name:', job.jobName || '']));
-  rows.push(padRow(['Order #:', job.orderNumber || '']));
-  rows.push(padRow(['Prep Bay(s):', job.prepBaysDisplay || '']));
-  rows.push(padRow(['Marketing Agent:', job.marketingAgent || '']));
-  rows.push(padRow(['Prep Tech:', job.prepTech || '']));
+  rows.push(padRow(['Order #:', job.orderNumber || '', '', 'Marketing Agent:', job.marketingAgent || '']));
+  rows.push(padRow(['Prep Bay(s):', job.prepBaysDisplay || '', '', 'Prep Tech:', job.prepTech || '']));
   rows.push(padRow(['Prep Notes:', job.prepNotes || '']));
 
   rows.push(padRow(['', 'Equipment Name', 'Barcode', 'Pulled?', 'RTR?', 'Serviced for Order?', 'Completion Timestamp']));
@@ -613,25 +700,36 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   const blockNumRows = blockEndRow - r + 1;
   sheet.getRange(r, 1, blockNumRows, numCols).setBorder(false, false, false, false, false, false, null, null);
 
-  // --- Job header (rows 1–6): entire band uses background from Prep Bay column C (order # cell); 6 rows only ---
-  sheet.getRange(r, 1, 6, numCols).setBackground(jobBg);
+  // --- Job header (rows 1–4): A1:B3 left as-is; Marketing Agent / Prep Tech in D2:E3 with E overflow; row 4 Prep Notes ---
+  sheet.getRange(r, 1, 4, numCols).setBackground(jobBg);
   sheet.getRange(r, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor);
   sheet.getRange(r, 2).setFontWeight('bold').setFontSize(fmt.jobNameValueSize).setFontColor(fmt.jobNameValueColor).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r, fmt.rowHeightJobName);
 
-  for (let i = 1; i <= 5; i++) {
-    const row = r + i;
-    sheet.getRange(row, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
-    const cellB = sheet.getRange(row, 2).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000');
-    if (i === 5) cellB.setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW); // Prep Notes: overflow
-    sheet.setRowHeight(row, fmt.rowHeightLabel);
-  }
+  // Row 2: Order # (A2:B2), Marketing Agent (D2:E2, E overflow)
+  sheet.getRange(r + 1, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
+  sheet.getRange(r + 1, 2).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000');
+  sheet.getRange(r + 1, 4).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
+  sheet.getRange(r + 1, 5).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  sheet.setRowHeight(r + 1, fmt.rowHeightLabel);
 
-  // Only border in the block: divider under Prep Notes (row r+5). getRange 4-arg = (row, column, numRows, numColumns).
-  sheet.getRange(r + 5, 1, 1, numCols).setBorder(null, null, true, null, null, null, fmt.borderColor, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+  // Row 3: Prep Bay(s) (A3:B3), Prep Tech (D3:E3, E overflow)
+  sheet.getRange(r + 2, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
+  sheet.getRange(r + 2, 2).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000');
+  sheet.getRange(r + 2, 4).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
+  sheet.getRange(r + 2, 5).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  sheet.setRowHeight(r + 2, fmt.rowHeightLabel);
+
+  // Row 4: Prep Notes (A4:B4, B overflow)
+  sheet.getRange(r + 3, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
+  sheet.getRange(r + 3, 2).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  sheet.setRowHeight(r + 3, fmt.rowHeightLabel);
+
+  // Only border in the block: divider under Prep Notes (row r+3).
+  sheet.getRange(r + 3, 1, 1, numCols).setBorder(null, null, true, null, null, null, fmt.borderColor, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
 
   // --- Equipment header (no blank row before); column A empty; white bold text ---
-  const eqHeaderRow = r + 6;
+  const eqHeaderRow = r + 4;
   sheet.getRange(eqHeaderRow, 1, 1, numCols).setBackground(fmt.tableHeaderBg).setFontColor(fmt.tableHeaderFg).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
   sheet.setRowHeight(eqHeaderRow, fmt.rowHeightTableHeader);
 
@@ -764,11 +862,11 @@ function refreshPrepForecastSheets() {
   const fmt = FMT_DEFAULTS;
   const numCols = 9;
 
+  const today = new Date();
   PREP_FORECAST_SHEETS.forEach(function (config) {
     const sheetName = config.name;
-    const daysOffset = config.daysOffset;
-    const targetDate = new Date();
-    targetDate.setDate(targetDate.getDate() + daysOffset);
+    const workdayOffset = config.daysOffset; // 0 = today, 1 = next workday, etc. (skip weekends and holidays)
+    const targetDate = getDateForForecastOffset(today, workdayOffset);
     const prepBaySheetName = getTodaySheetName(targetDate);
 
     Logger.log('Processing ' + sheetName + ' (date: ' + prepBaySheetName + ')...');
