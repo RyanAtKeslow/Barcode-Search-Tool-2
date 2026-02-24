@@ -754,8 +754,14 @@ function refreshPrepForecastSheets() {
     Logger.log('Processing ' + sheetName + ' (date: ' + prepBaySheetName + ')...');
 
     const prepBayData = readPrepBayDataForDate(prepBaySheetName);
+    Logger.log('  Prep Bay "' + prepBaySheetName + '": ' + (prepBayData ? prepBayData.length : 0) + ' rows read');
+
     const equipmentData = readEquipmentSchedulingData(targetDate);
+    const equipmentOrderCount = equipmentData ? Object.keys(equipmentData).length : 0;
+    Logger.log('  Equipment data: ' + equipmentOrderCount + ' orders with scheduled equipment');
+
     const jobs = groupPrepBayByOrder(prepBayData);
+    Logger.log('  Grouped into ' + jobs.length + ' jobs');
 
     const allRows = [];
     const blockRowCounts = [];
@@ -770,11 +776,12 @@ function refreshPrepForecastSheets() {
     let sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
       sheet = ss.insertSheet(sheetName);
-      Logger.log('Created sheet: ' + sheetName);
+      Logger.log('  Created sheet: ' + sheetName);
     }
 
     sheet.clear(); // Clears all cell data and formatting from the sheet.
     if (allRows.length > 0) {
+      Logger.log('  Writing ' + allRows.length + ' rows, formatting ' + jobs.length + ' job blocks');
       sheet.getRange(1, 1, allRows.length, numCols).setValues(allRows);
       sheet.getRange(1, 1, allRows.length, numCols).setWrap(true);
       applySchemaColumnWidths(sheet, fmt);
@@ -782,8 +789,11 @@ function refreshPrepForecastSheets() {
       for (var j = 0; j < jobs.length; j++) {
         var jobHeaderBg = getOrderNumberBackgroundFromPrepBay(prepBaySheetName, jobs[j].orderNumber);
         applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBg, blockRowCounts[j]);
+        Logger.log('    Block ' + (j + 1) + ': order ' + (jobs[j].orderNumber || '') + ', rows ' + blockRowCounts[j] + ', startRow ' + startRow);
         startRow += blockRowCounts[j];
       }
+    } else {
+      Logger.log('  No jobs for this date; sheet cleared');
     }
 
     SpreadsheetApp.flush();
