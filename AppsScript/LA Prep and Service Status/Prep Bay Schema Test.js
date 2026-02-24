@@ -788,7 +788,7 @@ function refreshPrepForecastSheets() {
       Logger.log('  Created sheet: ' + sheetName);
     }
 
-    sheet.clear(); // Clears all cell data and formatting from the sheet.
+    sheet.clear(); // Clears content and format only; data validations (checkboxes) are NOT removed by clear().
     if (allRows.length > 0) {
       Logger.log('  Writing ' + allRows.length + ' rows, formatting ' + jobs.length + ' job blocks');
       sheet.getRange(1, 1, allRows.length, numCols).setValues(allRows);
@@ -803,6 +803,15 @@ function refreshPrepForecastSheets() {
       }
     } else {
       Logger.log('  No jobs for this date; sheet cleared');
+    }
+
+    // clear() does not remove checkboxes/data validations; clear rows below our data on every sheet so no leftover checkboxes or column I junk
+    var maxRow = sheet.getMaxRows();
+    var lastDataRow = allRows.length || 0;
+    if (lastDataRow < maxRow) {
+      var trailingRows = maxRow - lastDataRow;
+      var trailing = sheet.getRange(lastDataRow + 1, 1, trailingRows, numCols);
+      trailing.clearContent().clearFormat().clearDataValidations();
     }
 
     SpreadsheetApp.flush();
