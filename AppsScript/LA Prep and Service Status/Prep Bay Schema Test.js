@@ -90,6 +90,16 @@ const EQUIPMENT_CATEGORIES = [
 ];
 
 /**
+ * Adds the "Prep Refresh" menu when the workbook is opened.
+ */
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('Prep Refresh')
+    .addItem('Initialize Prep Refresh', 'refreshPrepForecastSheets')
+    .addToUi();
+}
+
+/**
  * Normalizes equipment items for the dynamic block builder.
  * Accepts either legacy cameras array [{ equipmentType, barcode }] (treated as Cameras)
  * or full format [{ category, equipmentType, barcode }]. Returns array of { category, equipmentType, barcode }.
@@ -654,7 +664,7 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
       sheet.getRange(eqHeaderRow + 1 + i, 1).setFontWeight('normal').setFontSize(fmt.valueSize);
     }
   }
-  // Checkboxes D,E,F: all equipment rows below Equipment Header and above Locating Agent row
+  // Checkbox data validation: one range for equipment (Pulled?, RTR?, Serviced for Order?) — cols D,E,F from first equipment row to last (e.g. D8:F18).
   if (numEquipmentBlockRows > 0) {
     sheet.getRange(eqHeaderRow + 1, 4, numEquipmentBlockRows, 3).insertCheckboxes();
     sheet.getRange(eqHeaderRow + 1, 1, numEquipmentBlockRows, numCols).setFontColor('#000000');
@@ -667,8 +677,9 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   for (let row = subHeaderRow + 1; row <= blockEndRow - 1; row++) {
     sheet.setRowHeight(row, fmt.rowHeightCategory);
   }
+  // Checkbox data validation: one range for sub row(s) (Located?, Quote Received?, Run Sheet Out?, Packing Slip?) — cols D,E,F,G (e.g. D20:G20).
   if (numSubRows > 0) {
-    sheet.getRange(subHeaderRow + 1, 4, numSubRows, 4).insertCheckboxes(); // D,E,F,G (Located, Quote Received, Run Sheet Out, Packing Slip)
+    sheet.getRange(subHeaderRow + 1, 4, numSubRows, 4).insertCheckboxes();
   }
 
   // --- Black horizontal separator at end of each job block (one row only; getRange 4-arg = row, column, numRows, numColumns) ---
