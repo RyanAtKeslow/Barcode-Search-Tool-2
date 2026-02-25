@@ -45,7 +45,7 @@ const ROWS_PER_JOB_BLOCK = 18;
 
 /**
  * Job block row names (by column A content; used for clarity and locating rows).
- * Row 1: Job Name (A1:B1). Row 2: Order # (A2:B2), Marketing Agent (D2:E2, E overflow). Row 3: Prep Bay(s) (A3:B3), Prep Tech (D3:E3, E overflow). Row 4: Prep Notes (A4:B4).
+ * Row 1: Job Name (A1:B1). Row 2: Order # (A2:B2), Marketing Agent (D2:E2), DP (G2:H2, H overflow). Row 3: Prep Bay(s) (A3:B3), Prep Tech (D3:E3). Row 4: Prep Notes (A4:B4).
  * Equipment Header (A empty) | equipment rows | Locating Agent | sub data row(s) | black bar.
  * Checkboxes: Equipment = D,E,F. Sub = D,E,F,G.
  */
@@ -231,6 +231,18 @@ function getDateForForecastOffset(startDate, workdayOffset) {
   return d;
 }
 
+/** Returns the day-of-week name in all caps for a date (e.g. "WEDNESDAY"). */
+function getDayNameAllCaps(date) {
+  const names = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+  return names[date.getDay()] || '';
+}
+
+/** Returns the row 1 title for prep sheets: day name + date (e.g. "WEDNESDAY, 2/25/2026"). */
+function getPrepSheetTitle(date) {
+  const d = date || new Date();
+  return getDayNameAllCaps(d) + ', ' + (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear();
+}
+
 function normalizeDayAbbreviation(dayAbbr) {
   if (!dayAbbr) return '';
   const upper = String(dayAbbr).toUpperCase();
@@ -335,7 +347,7 @@ function normalizeBayNumber(bay) {
  * Reads Prep Bay Assignment for a given date sheet name.
  * Schema: A=Bay, B=Job Name, C=Order, D=Agent, E=Cameras, F=1st AC, G=DP, H=Prep Tech, I=Notes.
  * @param {string} sheetName - e.g. "Fri 2/20"
- * @returns {Array<Object>} [{ bayNumber, bayName, jobName, orderNumber, prepTech, notes }, ...]
+ * @returns {Array<Object>} [{ bayNumber, bayName, jobName, orderNumber, marketingAgent, cinematographer, prepTech, notes }, ...]
  */
 function readPrepBayDataForDate(sheetName) {
   try {
@@ -353,12 +365,13 @@ function readPrepBayDataForDate(sheetName) {
       const jobName = row[1] ? String(row[1]).trim() : '';
       const orderNumber = row[2] ? String(row[2]).trim() : '';
       const marketingAgent = row[3] ? String(row[3]).trim() : '';
+      const cinematographer = row[6] ? String(row[6]).trim() : '';
       const prepTech = row[7] ? String(row[7]).trim() : '';
       const notes = row[8] ? String(row[8]).trim() : '';
       if (!bay || bay.toUpperCase() === 'BAY' || !jobName) continue;
       const bayNumber = normalizeBayNumber(bay);
       if (bayNumber == null) continue;
-      out.push({ bayNumber: bayNumber, bayName: bay, jobName: jobName, orderNumber: orderNumber, marketingAgent: marketingAgent, prepTech: prepTech, notes: notes });
+      out.push({ bayNumber: bayNumber, bayName: bay, jobName: jobName, orderNumber: orderNumber, marketingAgent: marketingAgent, cinematographer: cinematographer, prepTech: prepTech, notes: notes });
     }
     out.sort(function (a, b) { return a.bayNumber - b.bayNumber; });
     return out;
@@ -560,7 +573,7 @@ function groupPrepBayByOrder(prepBayData) {
     const norm = String(a.orderNumber || '').replace(/[^0-9]/g, '');
     if (!norm) return;
     if (!byOrder[norm]) {
-      byOrder[norm] = { jobName: a.jobName, orderNumber: a.orderNumber, marketingAgent: a.marketingAgent, prepTech: a.prepTech, notes: a.notes, bayNumbers: [] };
+      byOrder[norm] = { jobName: a.jobName, orderNumber: a.orderNumber, marketingAgent: a.marketingAgent, cinematographer: a.cinematographer, prepTech: a.prepTech, notes: a.notes, bayNumbers: [] };
     }
     byOrder[norm].bayNumbers.push(a.bayNumber);
   });
@@ -585,6 +598,7 @@ function groupPrepBayByOrder(prepBayData) {
       orderNumber: j.orderNumber,
       prepBaysDisplay: prepBaysDisplay,
       marketingAgent: j.marketingAgent || '',
+      cinematographer: j.cinematographer || '',
       prepTech: j.prepTech,
       prepNotes: j.notes,
       bayNumbers: j.bayNumbers
@@ -597,25 +611,25 @@ function groupPrepBayByOrder(prepBayData) {
   });
 }
 
-/** Pad a row to column count 9 for consistent setValues */
+/** Pad a row to column count 10 (A–J) for consistent setValues */
 function padRow(arr) {
   const out = arr.slice();
-  while (out.length < 9) out.push('');
-  return out.slice(0, 9);
+  while (out.length < 10) out.push('');
+  return out.slice(0, 10);
 }
 
 /**
  * Builds one job block (v2 layout) as a 2D array for the sheet.
  * Columns: A = label, B = value (or sub-table). Minimal horizontal width.
  *
- * @param {Object} job - { jobName, orderNumber, prepBaysDisplay, marketingAgent, prepTech, prepNotes }
- * @returns {Array<Array>} Rows for this job block (each row length 9)
+ * @param {Object} job - { jobName, orderNumber, prepBaysDisplay, marketingAgent, cinematographer, prepTech, prepNotes }
+ * @returns {Array<Array>} Rows for this job block (each row length 10)
  */
 function buildJobBlockRows(job) {
   const rows = [];
 
   rows.push(padRow(['Job Name:', job.jobName || '']));
-  rows.push(padRow(['Order #:', job.orderNumber || '', '', 'Marketing Agent:', job.marketingAgent || '']));
+  rows.push(padRow(['Order #:', job.orderNumber || '', '', 'Marketing Agent:', job.marketingAgent || '', '', 'DP:', job.cinematographer || '']));
   rows.push(padRow(['Prep Bay(s):', job.prepBaysDisplay || '', '', 'Prep Tech:', job.prepTech || '']));
   rows.push(padRow(['Prep Notes:', job.prepNotes || '']));
 
@@ -638,7 +652,7 @@ function buildJobBlockRows(job) {
  * One row per equipment item; category label in column A only on the first row of each category.
  * Categories with no items get one row with label and empty B/C. Order follows EQUIPMENT_CATEGORIES.
  * @param {Array<{category: string, equipmentType: string, barcode: string}>} equipmentByCategory - from normalizeEquipmentByCategory
- * @returns {Array<Array>} Rows (each length 9 via padRow)
+ * @returns {Array<Array>} Rows (each length 10 via padRow)
  */
 function buildEquipmentBlockRows(equipmentByCategory) {
   const rows = [];
@@ -666,14 +680,14 @@ function buildEquipmentBlockRows(equipmentByCategory) {
  * [{ equipmentType, barcode }] (all treated as Cameras) or [{ category, equipmentType, barcode }].
  * Column A category labels (Cameras:, Lenses:, ...) appear only on the first row of each category;
  * extra equipment in a category pushes the next category header down.
- * @param {Object} job - { jobName, orderNumber, prepBaysDisplay, marketingAgent, prepTech, prepNotes }
+ * @param {Object} job - { jobName, orderNumber, prepBaysDisplay, marketingAgent, cinematographer, prepTech, prepNotes }
  * @param {Array<Object>} equipmentList - Cameras or full equipment; normalized via normalizeEquipmentByCategory
  * @returns {Array<Array>}
  */
 function buildJobBlockRowsWithCameras(job, equipmentList) {
   const rows = [];
   rows.push(padRow(['Job Name:', job.jobName || '']));
-  rows.push(padRow(['Order #:', job.orderNumber || '', '', 'Marketing Agent:', job.marketingAgent || '']));
+  rows.push(padRow(['Order #:', job.orderNumber || '', '', 'Marketing Agent:', job.marketingAgent || '', '', 'DP:', job.cinematographer || '']));
   rows.push(padRow(['Prep Bay(s):', job.prepBaysDisplay || '', '', 'Prep Tech:', job.prepTech || '']));
   rows.push(padRow(['Prep Notes:', job.prepNotes || '']));
 
@@ -698,7 +712,7 @@ function buildJobBlockRowsWithCameras(job, equipmentList) {
 function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, blockRowCount) {
   if (!fmt) fmt = FMT_DEFAULTS;
   const r = startRow;
-  const numCols = 9;
+  const numCols = 10;
   const jobBg = jobHeaderBgOverride != null && jobHeaderBgOverride !== '' ? jobHeaderBgOverride : fmt.jobHeaderBg;
   const blockEndRow = blockRowCount ? r + blockRowCount - 1 : r + ROWS_PER_JOB_BLOCK - 1;
 
@@ -712,11 +726,13 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   sheet.getRange(r, 2).setFontWeight('bold').setFontSize(fmt.jobNameValueSize).setFontColor(fmt.jobNameValueColor).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r, fmt.rowHeightJobName);
 
-  // Row 2: Order # (A2:B2), Marketing Agent (D2:E2, E overflow); B2 center justify
+  // Row 2: Order # (A2:B2), Marketing Agent (D2:E2), DP (G2:H2, H overflow); B2 center justify
   sheet.getRange(r + 1, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
   sheet.getRange(r + 1, 2).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setHorizontalAlignment('center');
   sheet.getRange(r + 1, 4).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
   sheet.getRange(r + 1, 5).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  sheet.getRange(r + 1, 7).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000').setHorizontalAlignment('center');
+  sheet.getRange(r + 1, 8).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r + 1, fmt.rowHeightLabel);
 
   // Row 3: Prep Bay(s) (A3:B3), Prep Tech (D3:E3, E overflow); B3 center justify
@@ -799,7 +815,7 @@ function applySchemaColumnWidths(sheet, fmt) {
   if (!fmt) fmt = FMT_DEFAULTS;
   sheet.setColumnWidth(1, fmt.colWidthLabel);
   sheet.setColumnWidth(2, fmt.colWidthValue);
-  for (let c = 3; c <= 9; c++) {
+  for (let c = 3; c <= 10; c++) {
     sheet.setColumnWidth(c, 96);
   }
 }
@@ -820,6 +836,7 @@ function writePrepBaySchemaTest() {
     orderNumber: '123456',
     prepBaysDisplay: '1, 2, & 3',
     marketingAgent: 'Joe (sample agent name)',
+    cinematographer: 'Sample DP',
     prepTech: 'Bobby (sample prep tech name)',
     prepNotes: 'Preps 3/1 - 3/3  (sample data)'
   };
@@ -828,16 +845,18 @@ function writePrepBaySchemaTest() {
     orderNumber: '123457',
     prepBaysDisplay: '5',
     marketingAgent: 'Mary (sample agent name)',
+    cinematographer: 'Sample DP',
     prepTech: 'Pete (sample prep tech name)',
     prepNotes: 'Preps 3/1 - 3/6  (sample data)'
   };
 
-  const allRows = []
+  const titleRow = padRow([getPrepSheetTitle(new Date())]);
+  const allRows = [titleRow]
     .concat(buildJobBlockRows(job1))
     .concat(buildJobBlockRows(job2));
 
   const numRows = allRows.length;
-  const numCols = 9;
+  const numCols = 10;
   if (numRows === 0) return;
 
   sheet.clear();
@@ -847,12 +866,15 @@ function writePrepBaySchemaTest() {
   const fmt = FMT_DEFAULTS;
   applySchemaColumnWidths(sheet, fmt);
 
+  // Row 1: A1 = day name (bold, 32, black, overflow, no background)
+  sheet.getRange(1, 1).setFontWeight('bold').setFontSize(32).setFontColor('#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+
   const prepBaySheetName = getTodaySheetName(new Date());
   const job1HeaderBg = getOrderNumberBackgroundFromPrepBay(prepBaySheetName, job1.orderNumber);
   const job2HeaderBg = getOrderNumberBackgroundFromPrepBay(prepBaySheetName, job2.orderNumber);
 
-  applyJobBlockFormatting(sheet, 1, fmt, job1HeaderBg);
-  applyJobBlockFormatting(sheet, 1 + ROWS_PER_JOB_BLOCK, fmt, job2HeaderBg);
+  applyJobBlockFormatting(sheet, 2, fmt, job1HeaderBg);
+  applyJobBlockFormatting(sheet, 2 + ROWS_PER_JOB_BLOCK, fmt, job2HeaderBg);
 
   Logger.log('Prep Bay Schema test written: ' + numRows + ' rows');
 }
@@ -866,7 +888,7 @@ function writePrepBaySchemaTest() {
 function refreshSinglePrepForecastSheet(sheetName, workdayOffset) {
   const ss = SpreadsheetApp.openById(LA_PREP_STATUS_WORKBOOK_ID);
   const fmt = FMT_DEFAULTS;
-  const numCols = 9;
+  const numCols = 10;
   const today = new Date();
   const targetDate = getDateForForecastOffset(today, workdayOffset);
   const prepBaySheetName = getTodaySheetName(targetDate);
@@ -883,7 +905,7 @@ function refreshSinglePrepForecastSheet(sheetName, workdayOffset) {
   const jobs = groupPrepBayByOrder(prepBayData);
   Logger.log('  Grouped into ' + jobs.length + ' jobs');
 
-  const allRows = [];
+  const allRows = [padRow([getPrepSheetTitle(targetDate)])];
   const blockRowCounts = [];
   jobs.forEach(function (job) {
     const normOrder = String(job.orderNumber || '').replace(/[^0-9]/g, '');
@@ -905,7 +927,9 @@ function refreshSinglePrepForecastSheet(sheetName, workdayOffset) {
     sheet.getRange(1, 1, allRows.length, numCols).setValues(allRows);
     sheet.getRange(1, 1, allRows.length, numCols).setWrap(true);
     applySchemaColumnWidths(sheet, fmt);
-    var startRow = 1;
+    // Row 1: A1 = day name (bold, 32, black, overflow, no background)
+    sheet.getRange(1, 1).setFontWeight('bold').setFontSize(32).setFontColor('#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+    var startRow = 2;
     for (var j = 0; j < jobs.length; j++) {
       var jobHeaderBg = getOrderNumberBackgroundFromPrepBay(prepBaySheetName, jobs[j].orderNumber);
       applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBg, blockRowCounts[j]);
