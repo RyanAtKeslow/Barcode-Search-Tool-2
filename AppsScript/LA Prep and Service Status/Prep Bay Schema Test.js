@@ -880,8 +880,8 @@ function writePrepBaySchemaTest() {
   const fmt = FMT_DEFAULTS;
   applySchemaColumnWidths(sheet, fmt);
 
-  // Row 1: A1 = day name (bold, 32, black, overflow, no background). Set overflow after bulk setWrap so it sticks.
-  sheet.getRange(1, 1).setFontWeight('bold').setFontSize(32).setFontColor('#000000').setWrap(false).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  // Row 1: A1 = day name as plain text (bold, 32, black, overflow). Force number format to text so it overflows.
+  sheet.getRange(1, 1).setNumberFormat('@').setFontWeight('bold').setFontSize(32).setFontColor('#000000').setWrap(false).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
 
   const prepBaySheetName = getTodaySheetName(new Date());
   const job1HeaderBg = getOrderNumberBackgroundFromPrepBay(prepBaySheetName, job1.orderNumber);
@@ -941,8 +941,8 @@ function refreshSinglePrepForecastSheet(sheetName, workdayOffset) {
     sheet.getRange(1, 1, allRows.length, numCols).setValues(allRows);
     if (allRows.length > 1) sheet.getRange(2, 1, allRows.length, numCols).setWrap(true);
     applySchemaColumnWidths(sheet, fmt);
-    // Row 1: A1 = day name (bold, 32, black, overflow, no background). Set overflow after bulk setWrap so it sticks.
-    sheet.getRange(1, 1).setFontWeight('bold').setFontSize(32).setFontColor('#000000').setWrap(false).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+    // Row 1: A1 = day name as plain text (bold, 32, black, overflow). Force number format to text so it overflows.
+    sheet.getRange(1, 1).setNumberFormat('@').setFontWeight('bold').setFontSize(32).setFontColor('#000000').setWrap(false).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
     var startRow = 2;
     for (var j = 0; j < jobs.length; j++) {
       var jobHeaderBg = getOrderNumberBackgroundFromPrepBay(prepBaySheetName, jobs[j].orderNumber);
