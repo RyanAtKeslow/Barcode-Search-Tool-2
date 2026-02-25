@@ -45,7 +45,7 @@ const ROWS_PER_JOB_BLOCK = 18;
 
 /**
  * Job block row names (by column A content; used for clarity and locating rows).
- * Row 1: Job Name (A1:B1). Row 2: Order # (A2:B2), Marketing Agent (D2:E2), DP (G2:H2, H overflow). Row 3: Prep Bay(s) (A3:B3), Prep Tech (D3:E3). Row 4: Prep Notes (A4:B4).
+ * Row 1: Job Name (A1:B1). Row 2: Order # (A2:B2), Marketing Agent (D2:E2), DP (G2:H2, H overflow). Row 3: Prep Bay(s) (A3:B3), Prep Tech (D3:E3), 1st AC (G3:H3, H overflow). Row 4: Prep Notes (A4:B4).
  * Equipment Header (A empty) | equipment rows | Locating Agent | sub data row(s) | black bar.
  * Checkboxes: Equipment = D,E,F. Sub = D,E,F,G.
  */
@@ -347,7 +347,7 @@ function normalizeBayNumber(bay) {
  * Reads Prep Bay Assignment for a given date sheet name.
  * Schema: A=Bay, B=Job Name, C=Order, D=Agent, E=Cameras, F=1st AC, G=DP, H=Prep Tech, I=Notes.
  * @param {string} sheetName - e.g. "Fri 2/20"
- * @returns {Array<Object>} [{ bayNumber, bayName, jobName, orderNumber, marketingAgent, cinematographer, prepTech, notes }, ...]
+ * @returns {Array<Object>} [{ bayNumber, bayName, jobName, orderNumber, marketingAgent, firstAC, cinematographer, prepTech, notes }, ...]
  */
 function readPrepBayDataForDate(sheetName) {
   try {
@@ -365,13 +365,14 @@ function readPrepBayDataForDate(sheetName) {
       const jobName = row[1] ? String(row[1]).trim() : '';
       const orderNumber = row[2] ? String(row[2]).trim() : '';
       const marketingAgent = row[3] ? String(row[3]).trim() : '';
+      const firstAC = row[5] ? String(row[5]).trim() : '';
       const cinematographer = row[6] ? String(row[6]).trim() : '';
       const prepTech = row[7] ? String(row[7]).trim() : '';
       const notes = row[8] ? String(row[8]).trim() : '';
       if (!bay || bay.toUpperCase() === 'BAY' || !jobName) continue;
       const bayNumber = normalizeBayNumber(bay);
       if (bayNumber == null) continue;
-      out.push({ bayNumber: bayNumber, bayName: bay, jobName: jobName, orderNumber: orderNumber, marketingAgent: marketingAgent, cinematographer: cinematographer, prepTech: prepTech, notes: notes });
+      out.push({ bayNumber: bayNumber, bayName: bay, jobName: jobName, orderNumber: orderNumber, marketingAgent: marketingAgent, firstAC: firstAC, cinematographer: cinematographer, prepTech: prepTech, notes: notes });
     }
     out.sort(function (a, b) { return a.bayNumber - b.bayNumber; });
     return out;
@@ -573,7 +574,7 @@ function groupPrepBayByOrder(prepBayData) {
     const norm = String(a.orderNumber || '').replace(/[^0-9]/g, '');
     if (!norm) return;
     if (!byOrder[norm]) {
-      byOrder[norm] = { jobName: a.jobName, orderNumber: a.orderNumber, marketingAgent: a.marketingAgent, cinematographer: a.cinematographer, prepTech: a.prepTech, notes: a.notes, bayNumbers: [] };
+      byOrder[norm] = { jobName: a.jobName, orderNumber: a.orderNumber, marketingAgent: a.marketingAgent, firstAC: a.firstAC, cinematographer: a.cinematographer, prepTech: a.prepTech, notes: a.notes, bayNumbers: [] };
     }
     byOrder[norm].bayNumbers.push(a.bayNumber);
   });
@@ -598,6 +599,7 @@ function groupPrepBayByOrder(prepBayData) {
       orderNumber: j.orderNumber,
       prepBaysDisplay: prepBaysDisplay,
       marketingAgent: j.marketingAgent || '',
+      firstAC: j.firstAC || '',
       cinematographer: j.cinematographer || '',
       prepTech: j.prepTech,
       prepNotes: j.notes,
@@ -622,7 +624,7 @@ function padRow(arr) {
  * Builds one job block (v2 layout) as a 2D array for the sheet.
  * Columns: A = label, B = value (or sub-table). Minimal horizontal width.
  *
- * @param {Object} job - { jobName, orderNumber, prepBaysDisplay, marketingAgent, cinematographer, prepTech, prepNotes }
+ * @param {Object} job - { jobName, orderNumber, prepBaysDisplay, marketingAgent, firstAC, cinematographer, prepTech, prepNotes }
  * @returns {Array<Array>} Rows for this job block (each row length 10)
  */
 function buildJobBlockRows(job) {
@@ -630,7 +632,7 @@ function buildJobBlockRows(job) {
 
   rows.push(padRow(['Job Name:', job.jobName || '']));
   rows.push(padRow(['Order #:', job.orderNumber || '', '', 'Marketing Agent:', job.marketingAgent || '', '', 'DP:', job.cinematographer || '']));
-  rows.push(padRow(['Prep Bay(s):', job.prepBaysDisplay || '', '', 'Prep Tech:', job.prepTech || '']));
+  rows.push(padRow(['Prep Bay(s):', job.prepBaysDisplay || '', '', 'Prep Tech:', job.prepTech || '', '', '1st AC:', job.firstAC || '']));
   rows.push(padRow(['Prep Notes:', job.prepNotes || '']));
 
   // Equipment table header (no blank row before)
@@ -680,7 +682,7 @@ function buildEquipmentBlockRows(equipmentByCategory) {
  * [{ equipmentType, barcode }] (all treated as Cameras) or [{ category, equipmentType, barcode }].
  * Column A category labels (Cameras:, Lenses:, ...) appear only on the first row of each category;
  * extra equipment in a category pushes the next category header down.
- * @param {Object} job - { jobName, orderNumber, prepBaysDisplay, marketingAgent, cinematographer, prepTech, prepNotes }
+ * @param {Object} job - { jobName, orderNumber, prepBaysDisplay, marketingAgent, firstAC, cinematographer, prepTech, prepNotes }
  * @param {Array<Object>} equipmentList - Cameras or full equipment; normalized via normalizeEquipmentByCategory
  * @returns {Array<Array>}
  */
@@ -688,7 +690,7 @@ function buildJobBlockRowsWithCameras(job, equipmentList) {
   const rows = [];
   rows.push(padRow(['Job Name:', job.jobName || '']));
   rows.push(padRow(['Order #:', job.orderNumber || '', '', 'Marketing Agent:', job.marketingAgent || '', '', 'DP:', job.cinematographer || '']));
-  rows.push(padRow(['Prep Bay(s):', job.prepBaysDisplay || '', '', 'Prep Tech:', job.prepTech || '']));
+  rows.push(padRow(['Prep Bay(s):', job.prepBaysDisplay || '', '', 'Prep Tech:', job.prepTech || '', '', '1st AC:', job.firstAC || '']));
   rows.push(padRow(['Prep Notes:', job.prepNotes || '']));
 
   rows.push(padRow(['', 'Equipment Name', 'Barcode', 'Pulled?', 'RTR?', 'Serviced for Order?', 'Completion Timestamp']));
@@ -735,11 +737,13 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   sheet.getRange(r + 1, 8).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r + 1, fmt.rowHeightLabel);
 
-  // Row 3: Prep Bay(s) (A3:B3), Prep Tech (D3:E3, E overflow); B3 center justify
+  // Row 3: Prep Bay(s) (A3:B3), Prep Tech (D3:E3), 1st AC (G3:H3, H overflow); B3 center justify — 1st AC same styling as Cinematographer
   sheet.getRange(r + 2, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
   sheet.getRange(r + 2, 2).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setHorizontalAlignment('center');
   sheet.getRange(r + 2, 4).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
   sheet.getRange(r + 2, 5).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  sheet.getRange(r + 2, 7).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000').setHorizontalAlignment('center');
+  sheet.getRange(r + 2, 8).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r + 2, fmt.rowHeightLabel);
 
   // Row 4: Prep Notes (A4:B4, B overflow)
@@ -770,36 +774,42 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   const equipmentBlockEndRow = subHeaderRow - 1;
   const numEquipmentBlockRows = equipmentBlockEndRow - eqHeaderRow;
 
+  // All row indices below are block-relative (derived from startRow r). Changing job block start row will move checkboxes with the block.
+  const equipmentDataFirstRow = eqHeaderRow + 1;
+  const equipmentDataLastRow = equipmentBlockEndRow;
+
   // Format all equipment data rows (dynamic count): background, black font; bold column A only for category label rows (e.g. "Cameras:")
-  for (let row = eqHeaderRow + 1; row <= equipmentBlockEndRow; row++) {
+  for (let row = equipmentDataFirstRow; row <= equipmentDataLastRow; row++) {
     sheet.getRange(row, 1, 1, numCols).setBackground(jobBg).setFontColor('#000000');
     sheet.setRowHeight(row, fmt.rowHeightCategory);
   }
-  const aVals = numEquipmentBlockRows > 0 ? sheet.getRange(eqHeaderRow + 1, 1, numEquipmentBlockRows, 1).getValues() : [];
+  const aVals = numEquipmentBlockRows > 0 ? sheet.getRange(equipmentDataFirstRow, 1, numEquipmentBlockRows, 1).getValues() : [];
   for (let i = 0; i < aVals.length; i++) {
     const val = String(aVals[i][0]).trim();
     if (val && val.slice(-1) === ':') {
-      sheet.getRange(eqHeaderRow + 1 + i, 1).setFontWeight('bold').setFontSize(fmt.valueSize);
+      sheet.getRange(equipmentDataFirstRow + i, 1).setFontWeight('bold').setFontSize(fmt.valueSize);
     } else {
-      sheet.getRange(eqHeaderRow + 1 + i, 1).setFontWeight('normal').setFontSize(fmt.valueSize);
+      sheet.getRange(equipmentDataFirstRow + i, 1).setFontWeight('normal').setFontSize(fmt.valueSize);
     }
   }
-  // Checkbox data validation: one range for equipment (Pulled?, RTR?, Serviced for Order?) — cols D,E,F from first equipment row to last (e.g. D8:F18).
+  // Checkboxes: equipment cols D,E,F — range tied to this block (equipmentDataFirstRow..equipmentDataLastRow). getRange(row, col, numRows, numCols).
   if (numEquipmentBlockRows > 0) {
-    sheet.getRange(eqHeaderRow + 1, 4, numEquipmentBlockRows, 3).insertCheckboxes();
-    sheet.getRange(eqHeaderRow + 1, 1, numEquipmentBlockRows, numCols).setFontColor('#000000');
+    sheet.getRange(equipmentDataFirstRow, 4, numEquipmentBlockRows, 3).insertCheckboxes();
+    sheet.getRange(equipmentDataFirstRow, 1, numEquipmentBlockRows, numCols).setFontColor('#000000');
   }
 
   // --- Subbed Equipment: header row (Locating Agent); then sub data row(s) with checkboxes D,E,F,G ---
   sheet.getRange(subHeaderRow, 1, 1, numCols).setBackground(fmt.tableHeaderBg).setFontColor(fmt.tableHeaderFg).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
   sheet.setRowHeight(subHeaderRow, fmt.rowHeightTableHeader);
   const numSubRows = blockEndRow - subHeaderRow - 1; // between Locating Agent and black bar; will grow when Sub Sheet is wired
-  for (let row = subHeaderRow + 1; row <= blockEndRow - 1; row++) {
+  const subDataFirstRow = subHeaderRow + 1;
+  const subDataLastRow = blockEndRow - 1;
+  for (let row = subDataFirstRow; row <= subDataLastRow; row++) {
     sheet.setRowHeight(row, fmt.rowHeightCategory);
   }
-  // Checkbox data validation: one range for sub row(s) (Located?, Quote Received?, Run Sheet Out?, Packing Slip?) — cols D,E,F,G (e.g. D20:G20).
+  // Checkboxes: sub cols D,E,F,G — range tied to this block (subDataFirstRow..subDataLastRow). getRange(row, col, numRows, numCols).
   if (numSubRows > 0) {
-    sheet.getRange(subHeaderRow + 1, 4, numSubRows, 4).insertCheckboxes();
+    sheet.getRange(subDataFirstRow, 4, numSubRows, 4).insertCheckboxes();
   }
 
   // --- Black horizontal separator at end of each job block (one row only; getRange 4-arg = row, column, numRows, numColumns) ---
@@ -836,6 +846,7 @@ function writePrepBaySchemaTest() {
     orderNumber: '123456',
     prepBaysDisplay: '1, 2, & 3',
     marketingAgent: 'Joe (sample agent name)',
+    firstAC: 'Sample 1st AC',
     cinematographer: 'Sample DP',
     prepTech: 'Bobby (sample prep tech name)',
     prepNotes: 'Preps 3/1 - 3/3  (sample data)'
@@ -845,6 +856,7 @@ function writePrepBaySchemaTest() {
     orderNumber: '123457',
     prepBaysDisplay: '5',
     marketingAgent: 'Mary (sample agent name)',
+    firstAC: 'Sample 1st AC',
     cinematographer: 'Sample DP',
     prepTech: 'Pete (sample prep tech name)',
     prepNotes: 'Preps 3/1 - 3/6  (sample data)'
@@ -861,13 +873,13 @@ function writePrepBaySchemaTest() {
 
   sheet.clear();
   sheet.getRange(1, 1, numRows, numCols).setValues(allRows);
-  sheet.getRange(1, 1, numRows, numCols).setWrap(true);
+  if (numRows > 1) sheet.getRange(2, 1, numRows, numCols).setWrap(true);
 
   const fmt = FMT_DEFAULTS;
   applySchemaColumnWidths(sheet, fmt);
 
-  // Row 1: A1 = day name (bold, 32, black, overflow, no background)
-  sheet.getRange(1, 1).setFontWeight('bold').setFontSize(32).setFontColor('#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  // Row 1: A1 = day name (bold, 32, black, overflow, no background). Set overflow after bulk setWrap so it sticks.
+  sheet.getRange(1, 1).setFontWeight('bold').setFontSize(32).setFontColor('#000000').setWrap(false).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
 
   const prepBaySheetName = getTodaySheetName(new Date());
   const job1HeaderBg = getOrderNumberBackgroundFromPrepBay(prepBaySheetName, job1.orderNumber);
@@ -925,10 +937,10 @@ function refreshSinglePrepForecastSheet(sheetName, workdayOffset) {
   if (allRows.length > 0) {
     Logger.log('  Writing ' + allRows.length + ' rows, formatting ' + jobs.length + ' job blocks');
     sheet.getRange(1, 1, allRows.length, numCols).setValues(allRows);
-    sheet.getRange(1, 1, allRows.length, numCols).setWrap(true);
+    if (allRows.length > 1) sheet.getRange(2, 1, allRows.length, numCols).setWrap(true);
     applySchemaColumnWidths(sheet, fmt);
-    // Row 1: A1 = day name (bold, 32, black, overflow, no background)
-    sheet.getRange(1, 1).setFontWeight('bold').setFontSize(32).setFontColor('#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+    // Row 1: A1 = day name (bold, 32, black, overflow, no background). Set overflow after bulk setWrap so it sticks.
+    sheet.getRange(1, 1).setFontWeight('bold').setFontSize(32).setFontColor('#000000').setWrap(false).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
     var startRow = 2;
     for (var j = 0; j < jobs.length; j++) {
       var jobHeaderBg = getOrderNumberBackgroundFromPrepBay(prepBaySheetName, jobs[j].orderNumber);
