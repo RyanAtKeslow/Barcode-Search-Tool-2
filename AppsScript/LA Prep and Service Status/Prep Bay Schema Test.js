@@ -40,12 +40,12 @@ const VALID_TODAY_BACKGROUNDS_FOR_PREP_BAY = [
   STATUS_COLORS.GEAR_TRANSFER, STATUS_COLORS.DO_NOT_RESCHEDULE, STATUS_COLORS.IN_REPAIR, STATUS_COLORS.PENDING_JOB
 ];
 
-/** Row count per job block (job header 4 + eq header 1 + categories + sub header 1 + sub row(s) + black 1). Job header condensed: A1:B3 + D2:E3 (Marketing Agent, Prep Tech) + row 4 Prep Notes. */
+/** Row count per job block (job header 4 + eq header 1 + categories + sub header 1 + sub row(s) + black 1). Job header: A1:B1, row 2 C2:D2 (Marketing Agent) F2:G2 (DP), row 3 C3:D3 (Prep Tech) F3:G3 (1st AC), row 4 Prep Notes. */
 const ROWS_PER_JOB_BLOCK = 18;
 
 /**
  * Job block row names (by column A content; used for clarity and locating rows).
- * Row 1: Job Name (A1:B1). Row 2: Order # (A2:B2), Marketing Agent (D2:E2), DP (G2:H2, H overflow). Row 3: Prep Bay(s) (A3:B3), Prep Tech (D3:E3), 1st AC (G3:H3, H overflow). Row 4: Prep Notes (A4:B4).
+ * Row 1: Job Name (A1:B1). Row 2: Order # (A2:B2), Marketing Agent (C2:D2), DP (F2:G2). Row 3: Prep Bay(s) (A3:B3), Prep Tech (C3:D3), 1st AC (F3:G3). Row 4: Prep Notes (A4:B4).
  * Equipment Header (A empty) | equipment rows | Locating Agent | sub data row(s) | black bar.
  * Checkboxes: Equipment = D,E,F. Sub = D,E,F,G.
  */
@@ -101,6 +101,8 @@ function onOpen() {
     .addItem('Refresh Two Days Out', 'refreshPrepTwoDaysOut')
     .addItem('Refresh Three Days Out', 'refreshPrepThreeDaysOut')
     .addItem('Refresh Four Days Out', 'refreshPrepFourDaysOut')
+    .addSeparator()
+    .addItem('Job Block Test', 'runJobBlockTest')
     .addToUi();
 }
 
@@ -631,8 +633,8 @@ function buildJobBlockRows(job) {
   const rows = [];
 
   rows.push(padRow(['Job Name:', job.jobName || '']));
-  rows.push(padRow(['Order #:', job.orderNumber || '', '', 'Marketing Agent:', job.marketingAgent || '', '', 'DP:', job.cinematographer || '']));
-  rows.push(padRow(['Prep Bay(s):', job.prepBaysDisplay || '', '', 'Prep Tech:', job.prepTech || '', '', '1st AC:', job.firstAC || '']));
+  rows.push(padRow(['Order #:', job.orderNumber || '', 'Marketing Agent:', job.marketingAgent || '', '', 'DP:', job.cinematographer || '']));
+  rows.push(padRow(['Prep Bay(s):', job.prepBaysDisplay || '', 'Prep Tech:', job.prepTech || '', '', '1st AC:', job.firstAC || '']));
   rows.push(padRow(['Prep Notes:', job.prepNotes || '']));
 
   // Equipment table header (no blank row before)
@@ -689,8 +691,8 @@ function buildEquipmentBlockRows(equipmentByCategory) {
 function buildJobBlockRowsWithCameras(job, equipmentList) {
   const rows = [];
   rows.push(padRow(['Job Name:', job.jobName || '']));
-  rows.push(padRow(['Order #:', job.orderNumber || '', '', 'Marketing Agent:', job.marketingAgent || '', '', 'DP:', job.cinematographer || '']));
-  rows.push(padRow(['Prep Bay(s):', job.prepBaysDisplay || '', '', 'Prep Tech:', job.prepTech || '', '', '1st AC:', job.firstAC || '']));
+  rows.push(padRow(['Order #:', job.orderNumber || '', 'Marketing Agent:', job.marketingAgent || '', '', 'DP:', job.cinematographer || '']));
+  rows.push(padRow(['Prep Bay(s):', job.prepBaysDisplay || '', 'Prep Tech:', job.prepTech || '', '', '1st AC:', job.firstAC || '']));
   rows.push(padRow(['Prep Notes:', job.prepNotes || '']));
 
   rows.push(padRow(['', 'Equipment Name', 'Barcode', 'Pulled?', 'RTR?', 'Serviced for Order?', 'Completion Timestamp']));
@@ -722,28 +724,28 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   const blockNumRows = blockEndRow - r + 1;
   sheet.getRange(r, 1, blockNumRows, numCols).setBorder(false, false, false, false, false, false, null, null);
 
-  // --- Job header (rows 1–4): A1:B3 left as-is; Marketing Agent / Prep Tech in D2:E3 with E overflow; row 4 Prep Notes ---
+  // --- Job header (rows 1–4): A1:B3 left as-is; Marketing Agent / Prep Tech in C2:D3; DP / 1st AC in F2:G3; row 4 Prep Notes ---
   sheet.getRange(r, 1, 4, numCols).setBackground(jobBg);
   sheet.getRange(r, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor);
   sheet.getRange(r, 2).setFontWeight('bold').setFontSize(fmt.jobNameValueSize).setFontColor(fmt.jobNameValueColor).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r, fmt.rowHeightJobName);
 
-  // Row 2: Order # (A2:B2), Marketing Agent (D2:E2), DP (G2:H2, H overflow); B2 center justify
+  // Row 2: Order # (A2:B2), Marketing Agent (C2:D2, D overflow), DP (F2:G2, G overflow); B2 center justify
   sheet.getRange(r + 1, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
   sheet.getRange(r + 1, 2).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setHorizontalAlignment('center');
-  sheet.getRange(r + 1, 4).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
-  sheet.getRange(r + 1, 5).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
-  sheet.getRange(r + 1, 7).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000').setHorizontalAlignment('center');
-  sheet.getRange(r + 1, 8).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  sheet.getRange(r + 1, 3).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
+  sheet.getRange(r + 1, 4).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  sheet.getRange(r + 1, 6).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000').setHorizontalAlignment('center');
+  sheet.getRange(r + 1, 7).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r + 1, fmt.rowHeightLabel);
 
-  // Row 3: Prep Bay(s) (A3:B3), Prep Tech (D3:E3), 1st AC (G3:H3, H overflow); B3 center justify — 1st AC same styling as Cinematographer
+  // Row 3: Prep Bay(s) (A3:B3), Prep Tech (C3:D3, D overflow), 1st AC (F3:G3, G overflow); B3 center justify
   sheet.getRange(r + 2, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
   sheet.getRange(r + 2, 2).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setHorizontalAlignment('center');
-  sheet.getRange(r + 2, 4).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
-  sheet.getRange(r + 2, 5).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
-  sheet.getRange(r + 2, 7).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000').setHorizontalAlignment('center');
-  sheet.getRange(r + 2, 8).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  sheet.getRange(r + 2, 3).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
+  sheet.getRange(r + 2, 4).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  sheet.getRange(r + 2, 6).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000').setHorizontalAlignment('center');
+  sheet.getRange(r + 2, 7).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r + 2, fmt.rowHeightLabel);
 
   // Row 4: Prep Notes (A4:B4, B overflow)
@@ -987,6 +989,56 @@ function refreshPrepThreeDaysOut() {
 /** Refreshes only the Prep Four Days Out sheet. */
 function refreshPrepFourDaysOut() {
   refreshSinglePrepForecastSheet('Prep Four Days Out', 4);
+}
+
+/**
+ * Job Block Test: writes a single job block to the "Job Block Test" sheet starting at A1,
+ * using real data for today and the first job (first prep bay) from Prep Bay Assignment.
+ * Creates the sheet if it doesn't exist.
+ */
+function runJobBlockTest() {
+  const JOB_BLOCK_TEST_SHEET_NAME = 'Job Block Test';
+  const ss = SpreadsheetApp.openById(LA_PREP_STATUS_WORKBOOK_ID);
+  let sheet = ss.getSheetByName(JOB_BLOCK_TEST_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(JOB_BLOCK_TEST_SHEET_NAME);
+    Logger.log('Created sheet: ' + JOB_BLOCK_TEST_SHEET_NAME);
+  }
+
+  const fmt = FMT_DEFAULTS;
+  const numCols = 10;
+  const today = new Date();
+  const prepBaySheetName = getTodaySheetName(today);
+
+  const prepBayData = readPrepBayDataForDate(prepBaySheetName);
+  const jobs = groupPrepBayByOrder(prepBayData);
+
+  if (!jobs || jobs.length === 0) {
+    sheet.clear();
+    Logger.log('Job Block Test: No jobs for today (' + prepBaySheetName + '); sheet cleared.');
+    SpreadsheetApp.flush();
+    return;
+  }
+
+  const job = jobs[0];
+  const normOrder = String(job.orderNumber || '').replace(/[^0-9]/g, '');
+  const equipmentData = readEquipmentSchedulingData(today);
+  const cameras = equipmentData[normOrder] || [];
+
+  const blockRows = buildJobBlockRowsWithCameras(job, cameras);
+  const numRows = blockRows.length;
+
+  sheet.clear();
+  sheet.getRange(1, 1, numRows, numCols).setValues(blockRows);
+  if (numRows > 1) sheet.getRange(2, 1, numRows, numCols).setWrap(true);
+
+  applySchemaColumnWidths(sheet, fmt);
+
+  const jobHeaderBg = getOrderNumberBackgroundFromPrepBay(prepBaySheetName, job.orderNumber);
+  applyJobBlockFormatting(sheet, 1, fmt, jobHeaderBg, numRows);
+
+  SpreadsheetApp.flush();
+  Logger.log('Job Block Test: wrote 1 job block (' + numRows + ' rows) for order ' + (job.orderNumber || '') + ' from ' + prepBaySheetName);
 }
 
 /**
