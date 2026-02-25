@@ -239,10 +239,16 @@ function getDayNameAllCaps(date) {
   return names[date.getDay()] || '';
 }
 
-/** Returns the row 1 title for prep sheets: day name + date (e.g. "WEDNESDAY, 2/25/2026"). */
+/** Returns the day-of-week name normalized / title case (e.g. "Wednesday"). */
+function getDayNameNormalized(date) {
+  const names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return names[date.getDay()] || '';
+}
+
+/** Returns the row 1 title for prep sheets: day name + date (e.g. "Wednesday, 2/25/2026"). */
 function getPrepSheetTitle(date) {
   const d = date || new Date();
-  return getDayNameAllCaps(d) + ', ' + (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear();
+  return getDayNameNormalized(d) + ', ' + (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear();
 }
 
 function normalizeDayAbbreviation(dayAbbr) {
