@@ -58,7 +58,8 @@ const ROWS_PER_JOB_BLOCK = 18;
  * Job block row names (by column A content; used for clarity and locating rows).
  * Row 1: Job Name (A1:B1). Row 2: Order # (A2:B2), Marketing Agent (C2:D2), DP (F2:G2). Row 3: Prep Bay(s) (A3:B3), Prep Tech (C3:D3), 1st AC (F3:G3). Row 4: Prep Notes (A4:B4).
  * Equipment Header (A empty) | equipment rows | Locating Agent | sub data row(s) | black bar.
- * Checkboxes: Equipment = D,E,F. Sub = D,E,F,G.
+ * Status columns (no checkboxes): Equipment D,E,F,G = Pulled?, RTR?, Serviced for Order?, Completion Timestamp. Sub D,E,F,G = Located, Quote Received, Run Sheet Out, Packing Slip.
+ * Refresh leaves these cells blank; a separate database/verification script should write "✓" or "Yes" when verified.
  */
 
 /** Default formatting (used when Settings sheet is missing or a value is blank) */
@@ -821,6 +822,11 @@ function padRow(arr) {
   return out.slice(0, 10);
 }
 
+/** Returns '✓' for truthy/checked (true, 'TRUE', ✓, yes, 1), else '' so we never write "FALSE" to the sheet. */
+function statusDisplay(v) {
+  return (v === true || v === 'TRUE' || /✓|✔|yes|true|1/i.test(String(v || '')) ? '✓' : '');
+}
+
 /**
  * Builds one job block (v2 layout) as a 2D array for the sheet.
  * Columns: A = label, B = value (or sub-table). Minimal horizontal width.
@@ -836,10 +842,10 @@ function buildJobBlockRows(job) {
   rows.push(padRow(['Prep Bay(s):', job.prepBaysDisplay || '', 'Prep Tech:', job.prepTech || '', '', '1st AC:', job.firstAC || '']));
   rows.push(padRow(['Prep Notes:', job.prepNotes || '']));
 
-  // Equipment table header (no blank row before)
+  // Equipment table header (no blank row before). Status cols D,E,F,G left blank; DB script writes "✓" when verified.
   rows.push(padRow(['', 'Equipment Name', 'Barcode', 'Pulled?', 'RTR?', 'Serviced for Order?', 'Completion Timestamp']));
   EQUIPMENT_CATEGORIES.forEach(function (cat) {
-    rows.push(padRow([cat + ':', '', '', false, false, false, '']));
+    rows.push(padRow([cat + ':', '', '', '', '', '', '']));
   });
 
   // Sub-rental section: header then one row per SUB item (from SUB sheet) or one empty row if none.
@@ -847,10 +853,10 @@ function buildJobBlockRows(job) {
   const subItems = readSubSheetDataForOrder(job.orderNumber);
   if (subItems.length > 0) {
     subItems.forEach(function (item) {
-      rows.push(padRow(['', item.subbedEquipment, item.qty, item.located, item.quoteReceived, item.runSheet, item.packingSlip, item.notes, '', '']));
+      rows.push(padRow(['', item.subbedEquipment, item.qty, statusDisplay(item.located), statusDisplay(item.quoteReceived), statusDisplay(item.runSheet), statusDisplay(item.packingSlip), item.notes, '', '']));
     });
   } else {
-    rows.push(padRow(['', '', '', false, false, false, false, '', '']));
+    rows.push(padRow(['', '', '', '', '', '', '', '', '']));
   }
   rows.push(padRow([])); // black separator row (formatted in applyJobBlockFormatting)
 
@@ -879,7 +885,7 @@ function buildEquipmentBlockRows(equipmentByCategory) {
       const label = i === 0 ? cat + ':' : '';
       const name = i < items.length ? (items[i].equipmentType || '') : '';
       const barcode = i < items.length ? (items[i].barcode || '') : '';
-      rows.push(padRow([label, name, barcode, false, false, false, '']));
+      rows.push(padRow([label, name, barcode, '', '', '', '']));
     }
   });
   return rows;
@@ -909,10 +915,10 @@ function buildJobBlockRowsWithCameras(job, equipmentList) {
   const subItems = readSubSheetDataForOrder(job.orderNumber);
   if (subItems.length > 0) {
     subItems.forEach(function (item) {
-      rows.push(padRow(['', item.subbedEquipment, item.qty, item.located, item.quoteReceived, item.runSheet, item.packingSlip, item.notes, '', '']));
+      rows.push(padRow(['', item.subbedEquipment, item.qty, statusDisplay(item.located), statusDisplay(item.quoteReceived), statusDisplay(item.runSheet), statusDisplay(item.packingSlip), item.notes, '', '']));
     });
   } else {
-    rows.push(padRow(['', '', '', false, false, false, false, '', '']));
+    rows.push(padRow(['', '', '', '', '', '', '', '', '']));
   }
   rows.push(padRow([])); // black separator row (formatted in applyJobBlockFormatting)
   return rows;
@@ -989,7 +995,7 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   const equipmentBlockEndRow = subHeaderRow - 1;
   const numEquipmentBlockRows = equipmentBlockEndRow - eqHeaderRow;
 
-  // All row indices below are block-relative (derived from startRow r). Changing job block start row will move checkboxes with the block.
+  // All row indices below are block-relative (derived from startRow r).
   const equipmentDataFirstRow = eqHeaderRow + 1;
   const equipmentDataLastRow = equipmentBlockEndRow;
 
@@ -1011,7 +1017,7 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
     sheet.getRange(equipmentDataFirstRow, 1, numEquipmentBlockRows, numCols).setFontColor('#000000');
   }
 
-  // --- Subbed Equipment: header row (Locating Agent); then sub data row(s) with checkboxes D,E,F,G ---
+  // --- Subbed Equipment: header row (Locating Agent); then sub data row(s); status in D,E,F,G ---
   sheet.getRange(subHeaderRow, 1, 1, numCols).setBackground(fmt.tableHeaderBg).setFontColor(fmt.tableHeaderFg).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
   sheet.setRowHeight(subHeaderRow, fmt.rowHeightTableHeader);
   const numSubRows = blockEndRow - subHeaderRow - 1; // between Locating Agent and black bar; will grow when Sub Sheet is wired
