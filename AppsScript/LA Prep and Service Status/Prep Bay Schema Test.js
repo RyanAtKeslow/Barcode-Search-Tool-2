@@ -18,7 +18,9 @@ const CAMERA_BODIES_ONLY_WORKBOOK_ID = '1FYA76P4B7vFUCDmxDwc6Ly6-tm7F6f5c5v0eNYj
 
 /**
  * SUB sheet workbook: subbed equipment by order. We scan column B on all sheets (except Template and hidden)
- * for Quote # matching job block Order #; first matching SUB block per order is cached in LA Prep workbook.
+ * for Quote # matching job block Order #. When the same quote appears in multiple blocks (any sheet), we merge
+ * all items. Results are written to the "Sub Equipment Helper" sheet in the LA Prep workbook for review; refresh
+ * reads from that sheet (same workbook = fast).
  * SUB sheet: first 5 rows are legend/info; first SUB block starts sheet row 6, each block is 13 rows (up to 18 blocks on template).
  * Block-relative schema (block A1 = sheet row 6): B2=Quote#; data rows 4–13: C=QTY, D:E=Requested Equipment, J=Located (vendor name),
  * K=Quote Received (✓), L=Run Sheet, M=Packing Slip, N:P=Notes. Job block sub section: B=Subbed Equipment, C=Quantity, D=Located, E=Quote Received, F=Run Sheet Out, G=Packing Slip, H:J=Notes.
@@ -29,8 +31,8 @@ const SUB_BLOCK_FIRST_ROW = 6;
 const SUB_BLOCK_ROW_COUNT = 13;
 const SUB_BLOCK_DATA_ROWS = 10; // block rows 4–13 = 10 item rows per block
 
-/** Sheet in LA Prep workbook where Scan SUB Sheet writes cache. Refresh reads from here only (no SUB workbook open). */
-const SUB_CACHE_SHEET_NAME = 'SUB Cache';
+/** Helper sheet in LA Prep workbook: Scan SUB Sheet writes here so you can review what was picked up. Refresh reads from here (same workbook = fast). */
+const SUB_HELPER_SHEET_NAME = 'Sub Equipment Helper';
 
 /** Forecast sheet names and workday offset (0 = today, 1 = next workday; weekends and federal holidays skipped) */
 const PREP_FORECAST_SHEETS = [
@@ -569,8 +571,8 @@ function scanSubWorkbookIntoMap() {
 }
 
 /**
- * Scan SUB Sheet: full scan of SUB workbook, writes SUB Cache sheet in LA Prep workbook.
- * Run from menu or trigger. Refresh then reads from cache only (no SUB open).
+ * Scan SUB Sheet: full scan of SUB workbook, writes "Sub Equipment Helper" sheet in LA Prep workbook.
+ * Run from menu or trigger. You can review the helper sheet to see what was picked up. Refresh reads from it (same workbook = fast).
  */
 function runScanSubSheet() {
   Logger.log('Scan SUB Sheet: starting full scan...');
@@ -583,10 +585,10 @@ function runScanSubSheet() {
     });
   });
   const ss = SpreadsheetApp.openById(LA_PREP_STATUS_WORKBOOK_ID);
-  let sheet = ss.getSheetByName(SUB_CACHE_SHEET_NAME);
+  let sheet = ss.getSheetByName(SUB_HELPER_SHEET_NAME);
   if (!sheet) {
-    sheet = ss.insertSheet(SUB_CACHE_SHEET_NAME);
-    Logger.log('Scan SUB Sheet: created ' + SUB_CACHE_SHEET_NAME);
+    sheet = ss.insertSheet(SUB_HELPER_SHEET_NAME);
+    Logger.log('Scan SUB Sheet: created ' + SUB_HELPER_SHEET_NAME);
   }
   sheet.clear();
   if (rows.length > 1) {
@@ -599,15 +601,15 @@ function runScanSubSheet() {
 }
 
 /**
- * Reads sub items for an order from SUB Cache sheet in LA Prep workbook (no SUB workbook open).
- * Run "Scan SUB Sheet" to refresh the cache.
+ * Reads sub items for an order from Sub Equipment Helper sheet in LA Prep workbook (no SUB workbook open).
+ * Run "Scan SUB Sheet" to refresh the helper sheet.
  */
 function readSubSheetDataForOrder(orderNumber) {
   const normOrder = String(orderNumber || '').replace(/[^0-9]/g, '');
   if (!normOrder) return [];
   try {
     const ss = SpreadsheetApp.openById(LA_PREP_STATUS_WORKBOOK_ID);
-    const sheet = ss.getSheetByName(SUB_CACHE_SHEET_NAME);
+    const sheet = ss.getSheetByName(SUB_HELPER_SHEET_NAME);
     if (!sheet) return [];
     const data = sheet.getDataRange().getValues();
     if (!data || data.length < 2) return [];
@@ -1310,7 +1312,7 @@ function runJobBlockTest() {
 /**
  * Refreshes all five forecast sheets (Prep Today, Prep Tomorrow, Prep Two Days Out, Prep Three Days Out, Prep Four Days Out)
  * with live data from Prep Bay Assignment and Equipment Scheduling Chart.
- * Runs Scan SUB Sheet first so SUB Cache is up to date before building job blocks.
+ * Runs Scan SUB Sheet first so Sub Equipment Helper is up to date before building job blocks.
  */
 function refreshPrepForecastSheets() {
   Logger.log('Starting refreshPrepForecastSheets');
