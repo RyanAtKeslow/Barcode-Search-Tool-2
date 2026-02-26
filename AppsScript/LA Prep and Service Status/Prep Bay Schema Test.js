@@ -1161,10 +1161,12 @@ function writePrepBaySchemaTest() {
 /**
  * Refreshes a single forecast sheet by workday offset (0 = today, 1 = next workday, etc.).
  * Used by refreshPrepForecastSheets and by the per-sheet menu items (Refresh Today, Refresh Tomorrow, ...).
+ * When called from a per-day menu item, runs Scan SUB Sheet first to update Sub Equipment Helper.
  * @param {string} sheetName - e.g. "Prep Today", "Prep Tomorrow"
  * @param {number} workdayOffset - 0, 1, 2, 3, or 4 (skip weekends and holidays)
+ * @param {boolean} [skipSubScan] - If true, do not run Scan SUB Sheet (e.g. when Initialize already ran it)
  */
-function refreshSinglePrepForecastSheet(sheetName, workdayOffset) {
+function refreshSinglePrepForecastSheet(sheetName, workdayOffset, skipSubScan) {
   const ss = SpreadsheetApp.openById(LA_PREP_STATUS_WORKBOOK_ID);
   const fmt = FMT_DEFAULTS;
   const numCols = 10;
@@ -1172,6 +1174,7 @@ function refreshSinglePrepForecastSheet(sheetName, workdayOffset) {
   const targetDate = getDateForForecastOffset(today, workdayOffset);
   const prepBaySheetName = getTodaySheetName(targetDate);
 
+  if (!skipSubScan) runScanSubSheet();
   Logger.log('Processing ' + sheetName + ' (date: ' + prepBaySheetName + ')...');
 
   const prepBayResult = readPrepBayDataAndBackgroundMap(prepBaySheetName);
@@ -1318,7 +1321,7 @@ function refreshPrepForecastSheets() {
   Logger.log('Starting refreshPrepForecastSheets');
   runScanSubSheet();
   PREP_FORECAST_SHEETS.forEach(function (config) {
-    refreshSinglePrepForecastSheet(config.name, config.daysOffset);
+    refreshSinglePrepForecastSheet(config.name, config.daysOffset, true);
   });
   Logger.log('refreshPrepForecastSheets done');
 }
