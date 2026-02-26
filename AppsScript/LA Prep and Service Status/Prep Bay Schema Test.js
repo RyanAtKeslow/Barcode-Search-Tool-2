@@ -415,6 +415,7 @@ function readSubSheetDataForOrder(orderNumber) {
     for (let s = 0; s < sheets.length; s++) {
       const sheet = sheets[s];
       if (sheet.getName() === SUB_SHEET_TEMPLATE_NAME) continue;
+      if (sheet.isSheetHidden()) continue;
       const lastRow = sheet.getLastRow();
       if (lastRow < SUB_BLOCK_FIRST_ROW + 1) continue;
       for (let k = 0; k < 18; k++) {
