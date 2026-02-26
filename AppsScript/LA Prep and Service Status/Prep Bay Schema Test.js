@@ -1007,9 +1007,7 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
       sheet.getRange(equipmentDataFirstRow + i, 1).setFontWeight('normal').setFontSize(fmt.valueSize);
     }
   }
-  // Checkboxes: equipment cols D,E,F — range tied to this block (equipmentDataFirstRow..equipmentDataLastRow). getRange(row, col, numRows, numCols).
   if (numEquipmentBlockRows > 0) {
-    sheet.getRange(equipmentDataFirstRow, 4, numEquipmentBlockRows, 3).insertCheckboxes();
     sheet.getRange(equipmentDataFirstRow, 1, numEquipmentBlockRows, numCols).setFontColor('#000000');
   }
 
@@ -1022,11 +1020,6 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   for (let row = subDataFirstRow; row <= subDataLastRow; row++) {
     sheet.setRowHeight(row, fmt.rowHeightCategory);
   }
-  // Checkboxes: sub cols D,E,F,G — range tied to this block (subDataFirstRow..subDataLastRow). getRange(row, col, numRows, numCols).
-  if (numSubRows > 0) {
-    sheet.getRange(subDataFirstRow, 4, numSubRows, 4).insertCheckboxes();
-  }
-
   // --- Black horizontal separator at end of each job block (one row only; getRange 4-arg = row, column, numRows, numColumns) ---
   sheet.getRange(blockEndRow, 1, 1, numCols).setBackground('#000000');
 }
