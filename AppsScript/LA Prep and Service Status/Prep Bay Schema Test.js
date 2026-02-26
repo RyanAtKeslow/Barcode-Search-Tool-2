@@ -509,8 +509,29 @@ function parseSubBlockData(data) {
 }
 
 /**
- * Scans entire SUB workbook (visible non-template sheets, all blocks). Returns map normOrder -> items.
- * First matching block per order is used. Used by runScanSubSheet to populate SUB Cache.
+ * Returns true if the row should be skipped: Requested Equipment (D or E) has strikethrough (cancelled).
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {number} dataStartRow - 1-based first data row of block
+ * @param {number} rowOffset - 0-based index into data rows (0 = first data row)
+ * @returns {boolean}
+ */
+function subBlockRowHasStrikethrough(sheet, dataStartRow, rowOffset) {
+  try {
+    const row = dataStartRow + rowOffset;
+    const cellD = sheet.getRange(row, 4).getTextStyle();
+    const cellE = sheet.getRange(row, 5).getTextStyle();
+    const d = cellD && cellD.isStrikethrough() === true;
+    const e = cellE && cellE.isStrikethrough() === true;
+    return !!(d || e);
+  } catch (err) {
+    return false;
+  }
+}
+
+/**
+ * Scans entire SUB workbook (all non-template, non-hidden sheets, all blocks). Returns map normOrder -> items.
+ * Last matching block per order wins (so job-specific tabs override date tabs). Rows with strikethrough on
+ * Requested Equipment (D or E) are skipped (cancelled items).
  */
 function scanSubWorkbookIntoMap() {
   const map = {};
@@ -528,12 +549,16 @@ function scanSubWorkbookIntoMap() {
         if (startRow + SUB_BLOCK_ROW_COUNT - 1 > lastRow) break;
         const quoteCell = sheet.getRange(startRow + 1, 2).getValue();
         const quoteNorm = String(quoteCell || '').replace(/[^0-9]/g, '');
-        if (!quoteNorm || map[quoteNorm]) continue;
+        if (!quoteNorm) continue;
         const dataStartRow = startRow + 3;
         const numDataRows = SUB_BLOCK_DATA_ROWS;
         const numCols = 16;
         const data = sheet.getRange(dataStartRow, 1, numDataRows, numCols).getValues();
-        const items = parseSubBlockData(data);
+        const filtered = [];
+        for (let i = 0; i < data.length; i++) {
+          if (!subBlockRowHasStrikethrough(sheet, dataStartRow, i)) filtered.push(data[i]);
+        }
+        const items = parseSubBlockData(filtered);
         if (items.length > 0) map[quoteNorm] = items;
       }
     }
@@ -1285,9 +1310,11 @@ function runJobBlockTest() {
 /**
  * Refreshes all five forecast sheets (Prep Today, Prep Tomorrow, Prep Two Days Out, Prep Three Days Out, Prep Four Days Out)
  * with live data from Prep Bay Assignment and Equipment Scheduling Chart.
+ * Runs Scan SUB Sheet first so SUB Cache is up to date before building job blocks.
  */
 function refreshPrepForecastSheets() {
   Logger.log('Starting refreshPrepForecastSheets');
+  runScanSubSheet();
   PREP_FORECAST_SHEETS.forEach(function (config) {
     refreshSinglePrepForecastSheet(config.name, config.daysOffset);
   });
