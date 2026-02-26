@@ -1070,13 +1070,14 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
     sheet.getRange(equipmentDataFirstRow, 1, numEquipmentBlockRows, numCols).setFontColor('#000000');
   }
 
-  // --- Subbed Equipment: header row (Locating Agent); then sub data row(s); status in D,E,F,G ---
-  sheet.getRange(subHeaderRow, 1, 1, numCols).setBackground(fmt.tableHeaderBg).setFontColor(fmt.tableHeaderFg).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
+  // --- Subbed Equipment: header row (Locating Agent) and data row(s) use same background as rest of order (jobBg) ---
+  sheet.getRange(subHeaderRow, 1, 1, numCols).setBackground(jobBg).setFontColor(jobNameColor).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
   sheet.setRowHeight(subHeaderRow, fmt.rowHeightTableHeader);
   const numSubRows = blockEndRow - subHeaderRow - 1; // between Locating Agent and black bar; will grow when Sub Sheet is wired
   const subDataFirstRow = subHeaderRow + 1;
   const subDataLastRow = blockEndRow - 1;
   for (let row = subDataFirstRow; row <= subDataLastRow; row++) {
+    sheet.getRange(row, 1, 1, numCols).setBackground(jobBg).setFontColor('#000000');
     sheet.setRowHeight(row, fmt.rowHeightCategory);
   }
   // --- Black horizontal separator at end of each job block (one row only; getRange 4-arg = row, column, numRows, numColumns) ---
