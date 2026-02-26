@@ -86,6 +86,26 @@ const FMT_DEFAULTS = {
   colWidthValue: 220
 };
 
+/**
+ * Returns a text color that contrasts with the given background (from prep bay assignment).
+ * Dark backgrounds -> white (#ffffff); light backgrounds -> defaultJobNameColor (e.g. blue).
+ * @param {string} hexBackground - Hex color e.g. '#e8f0fe' or '#344a5e'
+ * @param {string} defaultJobNameColor - Fallback when background is light (e.g. FMT_DEFAULTS.jobNameValueColor)
+ * @returns {string} Hex color for job name text
+ */
+function getContrastingJobNameColor(hexBackground, defaultJobNameColor) {
+  if (!hexBackground || typeof hexBackground !== 'string') return defaultJobNameColor || '#1a73e8';
+  var hex = hexBackground.replace(/^#/, '').trim();
+  if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+  if (hex.length !== 6) return defaultJobNameColor || '#1a73e8';
+  var r = parseInt(hex.slice(0, 2), 16);
+  var g = parseInt(hex.slice(2, 4), 16);
+  var b = parseInt(hex.slice(4, 6), 16);
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return defaultJobNameColor || '#1a73e8';
+  var luminance = (0.299 * r + 0.587 * g + 0.116 * b) / 255;
+  return luminance < 0.45 ? '#ffffff' : (defaultJobNameColor || '#1a73e8');
+}
+
 /** Equipment categories (v2 schema) — rows can grow dynamically per job */
 const EQUIPMENT_CATEGORIES = [
   'Cameras',
@@ -945,8 +965,9 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
 
   // --- Job header (rows 1–4): A1:B3 left as-is; Marketing Agent / Prep Tech in C2:D3; DP / 1st AC in F2:G3; row 4 Prep Notes ---
   sheet.getRange(r, 1, 4, numCols).setBackground(jobBg);
-  sheet.getRange(r, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor);
-  sheet.getRange(r, 2).setFontWeight('bold').setFontSize(fmt.jobNameValueSize).setFontColor(fmt.jobNameValueColor).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  var jobNameColor = getContrastingJobNameColor(jobBg, fmt.jobNameValueColor);
+  sheet.getRange(r, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(jobNameColor);
+  sheet.getRange(r, 2).setFontWeight('bold').setFontSize(fmt.jobNameValueSize).setFontColor(jobNameColor).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r, fmt.rowHeightJobName);
 
   // Row 2: Order # (A2:B2), Marketing Agent (C2:D2, D overflow), DP (F2:G2, G overflow); B2 center justify
