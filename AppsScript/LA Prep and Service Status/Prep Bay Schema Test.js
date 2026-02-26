@@ -16,13 +16,18 @@ const PREP_BAY_EQUIPMENT_CHART_ID = '1uECRfnLO1LoDaGZaHTHS3EaUdf8tte5kiR6JNWAeOi
 /** Workbook that contains "Camera Bodies Only" sheet (same as Prep Bay Refresh destination) */
 const CAMERA_BODIES_ONLY_WORKBOOK_ID = '1FYA76P4B7vFUCDmxDwc6Ly6-tm7F6f5c5v0eNYjgwKw';
 
-/** The SUB sheet workbook: subbed equipment by order. Scan column B for Quote # (order number). Skip template sheet. */
+/**
+ * SUB sheet workbook: subbed equipment by order. We scan column B on all sheets (except Template and hidden)
+ * for Quote # matching job block Order #; first matching SUB block per order is cached in LA Prep workbook.
+ * SUB sheet: first 5 rows are legend/info; first SUB block starts sheet row 6, each block is 13 rows (up to 18 blocks on template).
+ * Block-relative schema (block A1 = sheet row 6): B2=Quote#; data rows 4–13: C=QTY, D:E=Requested Equipment, J=Located (vendor name),
+ * K=Quote Received (✓), L=Run Sheet, M=Packing Slip, N:P=Notes. Job block sub section: B=Subbed Equipment, C=Quantity, D=Located, E=Quote Received, F=Run Sheet Out, G=Packing Slip, H:J=Notes.
+ */
 const SUB_SHEET_WORKBOOK_ID = '1UUAwABLOAQLt9M4uTa8E6DkdLJSKHIC7s_xZDzLtBQw';
 const SUB_SHEET_TEMPLATE_NAME = 'Template - Please Copy to Create Tabs';
-/** SUB block: first block starts row 6, each block is 13 rows. Quote # (B2 in block terms) = row startRow+1, col B. Data rows = block rows 4–13 = startRow+3 to startRow+12. */
 const SUB_BLOCK_FIRST_ROW = 6;
 const SUB_BLOCK_ROW_COUNT = 13;
-const SUB_BLOCK_DATA_ROWS = 10; // rows 4–13 in block = 10 item rows
+const SUB_BLOCK_DATA_ROWS = 10; // block rows 4–13 = 10 item rows per block
 
 /** Sheet in LA Prep workbook where Scan SUB Sheet writes cache. Refresh reads from here only (no SUB workbook open). */
 const SUB_CACHE_SHEET_NAME = 'SUB Cache';
@@ -873,7 +878,7 @@ function buildJobBlockRows(job) {
   const subItems = readSubSheetDataForOrder(job.orderNumber);
   if (subItems.length > 0) {
     subItems.forEach(function (item) {
-      rows.push(padRow(['', item.subbedEquipment, item.qty, statusDisplay(item.located), statusDisplay(item.quoteReceived), statusDisplay(item.runSheet), statusDisplay(item.packingSlip), item.notes, '', '']));
+      rows.push(padRow(['', item.subbedEquipment, item.qty, item.located || '', statusDisplay(item.quoteReceived), statusDisplay(item.runSheet), statusDisplay(item.packingSlip), item.notes, '', '']));
     });
   } else {
     rows.push(padRow(['', '', '', '', '', '', '', '', '']));
@@ -935,7 +940,7 @@ function buildJobBlockRowsWithCameras(job, equipmentList) {
   const subItems = readSubSheetDataForOrder(job.orderNumber);
   if (subItems.length > 0) {
     subItems.forEach(function (item) {
-      rows.push(padRow(['', item.subbedEquipment, item.qty, statusDisplay(item.located), statusDisplay(item.quoteReceived), statusDisplay(item.runSheet), statusDisplay(item.packingSlip), item.notes, '', '']));
+      rows.push(padRow(['', item.subbedEquipment, item.qty, item.located || '', statusDisplay(item.quoteReceived), statusDisplay(item.runSheet), statusDisplay(item.packingSlip), item.notes, '', '']));
     });
   } else {
     rows.push(padRow(['', '', '', '', '', '', '', '', '']));
