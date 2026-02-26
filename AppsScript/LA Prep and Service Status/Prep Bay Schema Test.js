@@ -24,6 +24,9 @@ const SUB_BLOCK_FIRST_ROW = 6;
 const SUB_BLOCK_ROW_COUNT = 13;
 const SUB_BLOCK_DATA_ROWS = 10; // rows 4–13 in block = 10 item rows
 
+/** Sheet in LA Prep workbook where Scan SUB Sheet writes cache (order -> sub items). Job blocks read from here. */
+const SUB_CACHE_SHEET_NAME = 'SUB Cache';
+
 /** Forecast sheet names and workday offset (0 = today, 1 = next workday; weekends and federal holidays skipped) */
 const PREP_FORECAST_SHEETS = [
   { name: 'Prep Today', daysOffset: 0 },
@@ -111,6 +114,7 @@ function onOpen() {
     .addItem('Refresh Four Days Out', 'refreshPrepFourDaysOut')
     .addSeparator()
     .addItem('Job Block Test', 'runJobBlockTest')
+    .addItem('Scan SUB Sheet', 'runScanSubSheet')
     .addToUi();
 }
 
@@ -399,16 +403,43 @@ function readPrepBayDataForDate(sheetName) {
 }
 
 /**
- * Reads SUB sheet workbook for a given order number. Scans all sheets (except Template), column B for
- * Quote # matching the order. When a SUB block matches, parses up to 10 item rows (block rows 4–13).
- * Schema (block-relative): B2=Quote #, C4:C13=QTY, D4:E13=Requested Equipment, J4:J13=Located,
- * K/L/M4:13=Quote Received/Run Sheet/Packing Slip (✓ = true), N4:P13=Notes.
- * @param {string} orderNumber - Order/quote number to find (e.g. "881794")
+ * Parses one SUB block data array (10 rows × 16 cols) into items. Same schema as SUB block rows 4–13.
+ * @param {Array<Array>} data - From getValues() on block data range
  * @returns {Array<{subbedEquipment: string, qty: string, located: string, quoteReceived: boolean, runSheet: boolean, packingSlip: boolean, notes: string}>}
  */
-function readSubSheetDataForOrder(orderNumber) {
-  const normOrder = String(orderNumber || '').replace(/[^0-9]/g, '');
-  if (!normOrder) return [];
+function parseSubBlockData(data) {
+  const items = [];
+  const hasCheck = function (v) { return /✓|✔|yes|true|1/i.test(v); };
+  for (let i = 0; i < (data && data.length ? data.length : 0); i++) {
+    const row = data[i] || [];
+    const qty = row[2] != null ? String(row[2]).trim() : '';
+    const equipD = row[3] != null ? String(row[3]).trim() : '';
+    const equipE = row[4] != null ? String(row[4]).trim() : '';
+    const subbedEquipment = (equipD + ' ' + equipE).trim() || '';
+    const located = row[9] != null ? String(row[9]).trim() : '';
+    const kVal = row[10] != null ? String(row[10]).trim() : '';
+    const lVal = row[11] != null ? String(row[11]).trim() : '';
+    const mVal = row[12] != null ? String(row[12]).trim() : '';
+    const quoteReceived = hasCheck(kVal);
+    const runSheet = hasCheck(lVal);
+    const packingSlip = hasCheck(mVal);
+    const notesD = row[13] != null ? String(row[13]).trim() : '';
+    const notesE = row[14] != null ? String(row[14]).trim() : '';
+    const notesF = row[15] != null ? String(row[15]).trim() : '';
+    const notes = [notesD, notesE, notesF].filter(Boolean).join(' ').trim();
+    if (!subbedEquipment && !qty && !located && !notes) continue;
+    items.push({ subbedEquipment: subbedEquipment, qty: qty, located: located, quoteReceived: quoteReceived, runSheet: runSheet, packingSlip: packingSlip, notes: notes });
+  }
+  return items;
+}
+
+/**
+ * Scans the entire SUB workbook (all visible non-template sheets, all blocks) and returns a map
+ * of normalized order number -> array of sub items. First matching block per order is used.
+ * @returns {Object.<string, Array<Object>>} normOrder -> [{ subbedEquipment, qty, located, quoteReceived, runSheet, packingSlip, notes }, ...]
+ */
+function scanSubWorkbookIntoMap() {
+  const map = {};
   try {
     const ss = SpreadsheetApp.openById(SUB_SHEET_WORKBOOK_ID);
     const sheets = ss.getSheets();
@@ -423,37 +454,92 @@ function readSubSheetDataForOrder(orderNumber) {
         if (startRow + SUB_BLOCK_ROW_COUNT - 1 > lastRow) break;
         const quoteCell = sheet.getRange(startRow + 1, 2).getValue();
         const quoteNorm = String(quoteCell || '').replace(/[^0-9]/g, '');
-        if (quoteNorm !== normOrder) continue;
+        if (!quoteNorm) continue;
+        if (map[quoteNorm]) continue;
         const dataStartRow = startRow + 3;
         const numDataRows = SUB_BLOCK_DATA_ROWS;
         const numCols = 16;
-        const data = sheet.getRange(dataStartRow, 1, numDataRows, numCols).getValues(); // 10 rows, 16 cols (A–P)
-        const items = [];
-        for (let i = 0; i < (data && data.length ? data.length : 0); i++) {
-          const row = data[i] || [];
-          const qty = row[2] != null ? String(row[2]).trim() : '';
-          const equipD = row[3] != null ? String(row[3]).trim() : '';
-          const equipE = row[4] != null ? String(row[4]).trim() : '';
-          const subbedEquipment = (equipD + ' ' + equipE).trim() || '';
-          const located = row[9] != null ? String(row[9]).trim() : '';
-          const kVal = row[10] != null ? String(row[10]).trim() : '';
-          const lVal = row[11] != null ? String(row[11]).trim() : '';
-          const mVal = row[12] != null ? String(row[12]).trim() : '';
-          const hasCheck = function (v) { return /✓|✔|yes|true|1/i.test(v); };
-          const quoteReceived = hasCheck(kVal);
-          const runSheet = hasCheck(lVal);
-          const packingSlip = hasCheck(mVal);
-          const notesD = row[13] != null ? String(row[13]).trim() : '';
-          const notesE = row[14] != null ? String(row[14]).trim() : '';
-          const notesF = row[15] != null ? String(row[15]).trim() : '';
-          const notes = [notesD, notesE, notesF].filter(Boolean).join(' ').trim();
-          if (!subbedEquipment && !qty && !located && !notes) continue;
-          items.push({ subbedEquipment: subbedEquipment, qty: qty, located: located, quoteReceived: quoteReceived, runSheet: runSheet, packingSlip: packingSlip, notes: notes });
-        }
-        return items;
+        const data = sheet.getRange(dataStartRow, 1, numDataRows, numCols).getValues();
+        const items = parseSubBlockData(data);
+        if (items.length > 0) map[quoteNorm] = items;
       }
     }
-    return [];
+  } catch (e) {
+    Logger.log('scanSubWorkbookIntoMap: ' + e.message);
+  }
+  return map;
+}
+
+/**
+ * Scan SUB Sheet: runs the full SUB workbook scan and writes results to the SUB Cache sheet in the
+ * LA Prep workbook. Run from menu or trigger. Job blocks then read from the cache (fast).
+ */
+function runScanSubSheet() {
+  Logger.log('Scan SUB Sheet: starting full scan...');
+  const map = scanSubWorkbookIntoMap();
+  const orderCount = Object.keys(map).length;
+  const rows = [['OrderNumber', 'SubbedEquipment', 'Qty', 'Located', 'QuoteReceived', 'RunSheet', 'PackingSlip', 'Notes']];
+  Object.keys(map).forEach(function (normOrder) {
+    const items = map[normOrder];
+    items.forEach(function (item) {
+      rows.push([
+        normOrder,
+        item.subbedEquipment,
+        item.qty,
+        item.located,
+        item.quoteReceived,
+        item.runSheet,
+        item.packingSlip,
+        item.notes
+      ]);
+    });
+  });
+  const ss = SpreadsheetApp.openById(LA_PREP_STATUS_WORKBOOK_ID);
+  let sheet = ss.getSheetByName(SUB_CACHE_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SUB_CACHE_SHEET_NAME);
+    Logger.log('Scan SUB Sheet: created sheet ' + SUB_CACHE_SHEET_NAME);
+  }
+  sheet.clear();
+  if (rows.length > 1) {
+    sheet.getRange(1, 1, rows.length, 8).setValues(rows);
+  } else {
+    sheet.getRange(1, 1, 1, 8).setValues([rows[0]]);
+  }
+  SpreadsheetApp.flush();
+  Logger.log('Scan SUB Sheet: done. ' + orderCount + ' orders, ' + (rows.length - 1) + ' sub items written to ' + SUB_CACHE_SHEET_NAME);
+}
+
+/**
+ * Reads sub items for an order from the SUB Cache sheet (no scanning). Run "Scan SUB Sheet" to refresh cache.
+ * @param {string} orderNumber - Order/quote number (e.g. "881794")
+ * @returns {Array<{subbedEquipment: string, qty: string, located: string, quoteReceived: boolean, runSheet: boolean, packingSlip: boolean, notes: string}>}
+ */
+function readSubSheetDataForOrder(orderNumber) {
+  const normOrder = String(orderNumber || '').replace(/[^0-9]/g, '');
+  if (!normOrder) return [];
+  try {
+    const ss = SpreadsheetApp.openById(LA_PREP_STATUS_WORKBOOK_ID);
+    const sheet = ss.getSheetByName(SUB_CACHE_SHEET_NAME);
+    if (!sheet) return [];
+    const data = sheet.getDataRange().getValues();
+    if (!data || data.length < 2) return [];
+    const items = [];
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const rowOrder = String(row[0] != null ? row[0] : '').replace(/[^0-9]/g, '');
+      if (rowOrder !== normOrder) continue;
+      items.push({
+        subbedEquipment: row[1] != null ? String(row[1]).trim() : '',
+        qty: row[2] != null ? String(row[2]).trim() : '',
+        located: row[3] != null ? String(row[3]).trim() : '',
+        quoteReceived: row[4] === true || row[4] === 'TRUE' || /✓|✔|yes|true|1/i.test(String(row[4] || '')),
+        runSheet: row[5] === true || row[5] === 'TRUE' || /✓|✔|yes|true|1/i.test(String(row[5] || '')),
+        packingSlip: row[6] === true || row[6] === 'TRUE' || /✓|✔|yes|true|1/i.test(String(row[6] || '')),
+        notes: row[7] != null ? String(row[7]).trim() : ''
+      });
+    }
+    return items;
   } catch (e) {
     Logger.log('readSubSheetDataForOrder: ' + e.message);
     return [];
