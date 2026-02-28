@@ -16,22 +16,7 @@ const PREP_BAY_EQUIPMENT_CHART_ID = '1uECRfnLO1LoDaGZaHTHS3EaUdf8tte5kiR6JNWAeOi
 /** Workbook that contains "Camera Bodies Only" sheet (same as Prep Bay Refresh destination) */
 const CAMERA_BODIES_ONLY_WORKBOOK_ID = '1FYA76P4B7vFUCDmxDwc6Ly6-tm7F6f5c5v0eNYjgwKw';
 
-/**
- * SUB sheet workbook: subbed equipment by order. We scan column B on all sheets (except Template and hidden)
- * for Quote # matching job block Order #. When the same quote appears in multiple blocks (any sheet), we merge
- * all items. Results are written to the "Sub Equipment Helper" sheet in the LA Prep workbook for review; refresh
- * reads from that sheet (same workbook = fast).
- * SUB sheet: first 5 rows are legend/info; first SUB block starts sheet row 6, each block is 13 rows (up to 18 blocks on template).
- * Block-relative schema (block A1 = sheet row 6): B2=Quote#; data rows 4–13: C=QTY, D:E=Requested Equipment, J=Located (vendor name),
- * K=Quote Received (✓), L=Run Sheet, M=Packing Slip, N:P=Notes. Job block sub section: B=Subbed Equipment, C=Quantity, D=Located, E=Quote Received, F=Run Sheet Out, G=Packing Slip, H:J=Notes.
- */
-const SUB_SHEET_WORKBOOK_ID = '1UUAwABLOAQLt9M4uTa8E6DkdLJSKHIC7s_xZDzLtBQw';
-const SUB_SHEET_TEMPLATE_NAME = 'Template - Please Copy to Create Tabs';
-const SUB_BLOCK_FIRST_ROW = 6;
-const SUB_BLOCK_ROW_COUNT = 13;
-const SUB_BLOCK_DATA_ROWS = 10; // block rows 4–13 = 10 item rows per block
-
-/** Helper sheet in LA Prep workbook: Scan SUB Sheet writes here so you can review what was picked up. Refresh reads from here (same workbook = fast). */
+/** Subbed equipment: refresh reads from "Sub Equipment Helper" sheet (same workbook = fast). That sheet is updated by the separate Scan SUB Sheet script (menu or time-driven trigger every 5–10 min). */
 const SUB_HELPER_SHEET_NAME = 'Sub Equipment Helper';
 
 /** Forecast sheet names and workday offset (0 = today, 1 = next workday; weekends and federal holidays skipped) */
@@ -482,127 +467,8 @@ function readPrepBayDataAndBackgroundMap(sheetName) {
 }
 
 /**
- * Parses one SUB block data array (10 rows × 16 cols) into items. Same schema as SUB block rows 4–13.
- */
-function parseSubBlockData(data) {
-  const items = [];
-  const hasCheck = function (v) { return /✓|✔|yes|true|1/i.test(v); };
-  for (let i = 0; i < (data && data.length ? data.length : 0); i++) {
-    const row = data[i] || [];
-    const qty = row[2] != null ? String(row[2]).trim() : '';
-    const equipD = row[3] != null ? String(row[3]).trim() : '';
-    const equipE = row[4] != null ? String(row[4]).trim() : '';
-    const subbedEquipment = (equipD + ' ' + equipE).trim() || '';
-    const located = row[9] != null ? String(row[9]).trim() : '';
-    const kVal = row[10] != null ? String(row[10]).trim() : '';
-    const lVal = row[11] != null ? String(row[11]).trim() : '';
-    const mVal = row[12] != null ? String(row[12]).trim() : '';
-    const quoteReceived = hasCheck(kVal);
-    const runSheet = hasCheck(lVal);
-    const packingSlip = hasCheck(mVal);
-    const notesD = row[13] != null ? String(row[13]).trim() : '';
-    const notesE = row[14] != null ? String(row[14]).trim() : '';
-    const notesF = row[15] != null ? String(row[15]).trim() : '';
-    const notes = [notesD, notesE, notesF].filter(Boolean).join(' ').trim();
-    if (!subbedEquipment && !qty && !located && !notes) continue;
-    items.push({ subbedEquipment: subbedEquipment, qty: qty, located: located, quoteReceived: quoteReceived, runSheet: runSheet, packingSlip: packingSlip, notes: notes });
-  }
-  return items;
-}
-
-/**
- * Returns true if the row should be skipped: Requested Equipment (D or E) has strikethrough (cancelled).
- * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
- * @param {number} dataStartRow - 1-based first data row of block
- * @param {number} rowOffset - 0-based index into data rows (0 = first data row)
- * @returns {boolean}
- */
-function subBlockRowHasStrikethrough(sheet, dataStartRow, rowOffset) {
-  try {
-    const row = dataStartRow + rowOffset;
-    const cellD = sheet.getRange(row, 4).getTextStyle();
-    const cellE = sheet.getRange(row, 5).getTextStyle();
-    const d = cellD && cellD.isStrikethrough() === true;
-    const e = cellE && cellE.isStrikethrough() === true;
-    return !!(d || e);
-  } catch (err) {
-    return false;
-  }
-}
-
-/**
- * Scans entire SUB workbook (all non-template, non-hidden sheets, all blocks). Returns map normOrder -> items.
- * Last matching block per order wins (so job-specific tabs override date tabs). Rows with strikethrough on
- * Requested Equipment (D or E) are skipped (cancelled items).
- */
-function scanSubWorkbookIntoMap() {
-  const map = {};
-  try {
-    const ss = SpreadsheetApp.openById(SUB_SHEET_WORKBOOK_ID);
-    const sheets = ss.getSheets();
-    for (let s = 0; s < sheets.length; s++) {
-      const sheet = sheets[s];
-      if (sheet.getName() === SUB_SHEET_TEMPLATE_NAME) continue;
-      if (sheet.isSheetHidden()) continue;
-      const lastRow = sheet.getLastRow();
-      if (lastRow < SUB_BLOCK_FIRST_ROW + 1) continue;
-      for (let k = 0; k < 18; k++) {
-        const startRow = SUB_BLOCK_FIRST_ROW + k * SUB_BLOCK_ROW_COUNT;
-        if (startRow + SUB_BLOCK_ROW_COUNT - 1 > lastRow) break;
-        const quoteCell = sheet.getRange(startRow + 1, 2).getValue();
-        const quoteNorm = String(quoteCell || '').replace(/[^0-9]/g, '');
-        if (!quoteNorm) continue;
-        const dataStartRow = startRow + 3;
-        const numDataRows = SUB_BLOCK_DATA_ROWS;
-        const numCols = 16;
-        const data = sheet.getRange(dataStartRow, 1, numDataRows, numCols).getValues();
-        const filtered = [];
-        for (let i = 0; i < data.length; i++) {
-          if (!subBlockRowHasStrikethrough(sheet, dataStartRow, i)) filtered.push(data[i]);
-        }
-        const items = parseSubBlockData(filtered);
-        if (items.length > 0) map[quoteNorm] = items;
-      }
-    }
-  } catch (e) {
-    Logger.log('scanSubWorkbookIntoMap: ' + e.message);
-  }
-  return map;
-}
-
-/**
- * Scan SUB Sheet: full scan of SUB workbook, writes "Sub Equipment Helper" sheet in LA Prep workbook.
- * Run from menu or trigger. You can review the helper sheet to see what was picked up. Refresh reads from it (same workbook = fast).
- */
-function runScanSubSheet() {
-  Logger.log('Scan SUB Sheet: starting full scan...');
-  const map = scanSubWorkbookIntoMap();
-  const orderCount = Object.keys(map).length;
-  const rows = [['OrderNumber', 'SubbedEquipment', 'Qty', 'Located', 'QuoteReceived', 'RunSheet', 'PackingSlip', 'Notes']];
-  Object.keys(map).forEach(function (normOrder) {
-    map[normOrder].forEach(function (item) {
-      rows.push([normOrder, item.subbedEquipment, item.qty, item.located, item.quoteReceived, item.runSheet, item.packingSlip, item.notes]);
-    });
-  });
-  const ss = SpreadsheetApp.openById(LA_PREP_STATUS_WORKBOOK_ID);
-  let sheet = ss.getSheetByName(SUB_HELPER_SHEET_NAME);
-  if (!sheet) {
-    sheet = ss.insertSheet(SUB_HELPER_SHEET_NAME);
-    Logger.log('Scan SUB Sheet: created ' + SUB_HELPER_SHEET_NAME);
-  }
-  sheet.clear();
-  if (rows.length > 1) {
-    sheet.getRange(1, 1, rows.length, 8).setValues(rows);
-  } else {
-    sheet.getRange(1, 1, 1, 8).setValues([rows[0]]);
-  }
-  SpreadsheetApp.flush();
-  Logger.log('Scan SUB Sheet: done. ' + orderCount + ' orders, ' + (rows.length - 1) + ' items.');
-}
-
-/**
  * Reads sub items for an order from Sub Equipment Helper sheet in LA Prep workbook (no SUB workbook open).
- * Run "Scan SUB Sheet" to refresh the helper sheet.
+ * The helper sheet is updated by the separate Scan SUB Sheet script (menu or time-driven trigger).
  */
 function readSubSheetDataForOrder(orderNumber) {
   const normOrder = String(orderNumber || '').replace(/[^0-9]/g, '');
@@ -1070,14 +936,13 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
     sheet.getRange(equipmentDataFirstRow, 1, numEquipmentBlockRows, numCols).setFontColor('#000000');
   }
 
-  // --- Subbed Equipment: header row (Locating Agent) and data row(s) use same background as rest of order (jobBg) ---
-  sheet.getRange(subHeaderRow, 1, 1, numCols).setBackground(jobBg).setFontColor(jobNameColor).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
+  // --- Subbed Equipment: header row (Locating Agent); then sub data row(s); status in D,E,F,G ---
+  sheet.getRange(subHeaderRow, 1, 1, numCols).setBackground(fmt.tableHeaderBg).setFontColor(fmt.tableHeaderFg).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
   sheet.setRowHeight(subHeaderRow, fmt.rowHeightTableHeader);
   const numSubRows = blockEndRow - subHeaderRow - 1; // between Locating Agent and black bar; will grow when Sub Sheet is wired
   const subDataFirstRow = subHeaderRow + 1;
   const subDataLastRow = blockEndRow - 1;
   for (let row = subDataFirstRow; row <= subDataLastRow; row++) {
-    sheet.getRange(row, 1, 1, numCols).setBackground(jobBg).setFontColor('#000000');
     sheet.setRowHeight(row, fmt.rowHeightCategory);
   }
   // --- Black horizontal separator at end of each job block (one row only; getRange 4-arg = row, column, numRows, numColumns) ---
@@ -1162,12 +1027,11 @@ function writePrepBaySchemaTest() {
 /**
  * Refreshes a single forecast sheet by workday offset (0 = today, 1 = next workday, etc.).
  * Used by refreshPrepForecastSheets and by the per-sheet menu items (Refresh Today, Refresh Tomorrow, ...).
- * When called from a per-day menu item, runs Scan SUB Sheet first to update Sub Equipment Helper.
+ * Reads subbed equipment from Sub Equipment Helper sheet (updated by separate Scan SUB Sheet script).
  * @param {string} sheetName - e.g. "Prep Today", "Prep Tomorrow"
  * @param {number} workdayOffset - 0, 1, 2, 3, or 4 (skip weekends and holidays)
- * @param {boolean} [skipSubScan] - If true, do not run Scan SUB Sheet (e.g. when Initialize already ran it)
  */
-function refreshSinglePrepForecastSheet(sheetName, workdayOffset, skipSubScan) {
+function refreshSinglePrepForecastSheet(sheetName, workdayOffset) {
   const ss = SpreadsheetApp.openById(LA_PREP_STATUS_WORKBOOK_ID);
   const fmt = FMT_DEFAULTS;
   const numCols = 10;
@@ -1175,7 +1039,6 @@ function refreshSinglePrepForecastSheet(sheetName, workdayOffset, skipSubScan) {
   const targetDate = getDateForForecastOffset(today, workdayOffset);
   const prepBaySheetName = getTodaySheetName(targetDate);
 
-  if (!skipSubScan) runScanSubSheet();
   Logger.log('Processing ' + sheetName + ' (date: ' + prepBaySheetName + ')...');
 
   const prepBayResult = readPrepBayDataAndBackgroundMap(prepBaySheetName);
@@ -1316,13 +1179,12 @@ function runJobBlockTest() {
 /**
  * Refreshes all five forecast sheets (Prep Today, Prep Tomorrow, Prep Two Days Out, Prep Three Days Out, Prep Four Days Out)
  * with live data from Prep Bay Assignment and Equipment Scheduling Chart.
- * Runs Scan SUB Sheet first so Sub Equipment Helper is up to date before building job blocks.
+ * Subbed equipment is read from Sub Equipment Helper (updated by separate Scan SUB Sheet script/trigger).
  */
 function refreshPrepForecastSheets() {
   Logger.log('Starting refreshPrepForecastSheets');
-  runScanSubSheet();
   PREP_FORECAST_SHEETS.forEach(function (config) {
-    refreshSinglePrepForecastSheet(config.name, config.daysOffset, true);
+    refreshSinglePrepForecastSheet(config.name, config.daysOffset);
   });
   Logger.log('refreshPrepForecastSheets done');
 }
