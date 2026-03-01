@@ -129,7 +129,7 @@ function onOpen() {
 function addPrepMenus() {
   var ui = SpreadsheetApp.getUi();
 
-  // Prep Refresh menu: all days and single-day refresh
+  // Prep Refresh menu: all days and single-day refresh; then Scan SUB Sheet
   ui.createMenu('Prep Refresh')
     .addItem('Initialize Prep Refresh (all 5 days)', 'refreshPrepForecastSheets')
     .addSeparator()
@@ -138,6 +138,8 @@ function addPrepMenus() {
     .addItem('Refresh Two Days Out', 'refreshPrepTwoDaysOut')
     .addItem('Refresh Three Days Out', 'refreshPrepThreeDaysOut')
     .addItem('Refresh Four Days Out', 'refreshPrepFourDaysOut')
+    .addSeparator()
+    .addItem('Scan SUB Sheet', 'runScanSubSheet')
     .addToUi();
 
   // Admin menu: only for ryan@keslowcamera.com
@@ -148,7 +150,6 @@ function addPrepMenus() {
   if (email === ADMIN_EMAIL.toLowerCase()) {
     ui.createMenu('Admin')
       .addItem('Job Block Test', 'runJobBlockTest')
-      .addItem('Scan SUB Sheet', 'runScanSubSheet')
       .addSeparator()
       .addItem('Notifications: Set Google Chat webhook', 'setNotificationsWebhook')
       .addItem('Notifications: Pick orders to track', 'showPickOrdersSidebar')
