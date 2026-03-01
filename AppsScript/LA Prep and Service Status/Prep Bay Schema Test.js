@@ -996,10 +996,13 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   // Only border in the block: divider under Prep Notes (row r+3).
   sheet.getRange(r + 3, 1, 1, numCols).setBorder(null, null, true, null, null, null, fmt.borderColor, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
 
-  // --- Equipment header (no blank row before); column A empty; white bold text ---
+  // --- Equipment and Locating Agent headers: same style (tableHeaderBg/Fg, bold, rowHeightTableHeader) ---
   const eqHeaderRow = r + 4;
-  sheet.getRange(eqHeaderRow, 1, 1, numCols).setBackground(fmt.tableHeaderBg).setFontColor(fmt.tableHeaderFg).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
-  sheet.setRowHeight(eqHeaderRow, fmt.rowHeightTableHeader);
+  const applyTableHeaderStyle = function (row) {
+    sheet.getRange(row, 1, 1, numCols).setBackground(fmt.tableHeaderBg).setFontColor(fmt.tableHeaderFg).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
+    sheet.setRowHeight(row, fmt.rowHeightTableHeader);
+  };
+  applyTableHeaderStyle(eqHeaderRow);
 
   // Find Locating Agent / Subbed Equipment header row (column A = "Locating Agent") so equipment block length is dynamic
   const searchEndRow = Math.min(blockEndRow, sheet.getLastRow());
@@ -1038,13 +1041,12 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
     sheet.getRange(equipmentDataFirstRow, 1, numEquipmentBlockRows, numCols).setFontColor('#000000');
   }
 
-  // --- Subbed Equipment: header row (Locating Agent); then sub data row(s); status in D,E,F,G ---
-  sheet.getRange(subHeaderRow, 1, 1, numCols).setBackground(fmt.tableHeaderBg).setFontColor(fmt.tableHeaderFg).setFontWeight('bold').setFontSize(fmt.tableHeaderSize);
-  sheet.setRowHeight(subHeaderRow, fmt.rowHeightTableHeader);
-  const numSubRows = blockEndRow - subHeaderRow - 1; // between Locating Agent and black bar; will grow when Sub Sheet is wired
+  // --- Subbed Equipment: Locating Agent header uses same style as equipment header; data row(s) use job block background (jobBg) ---
+  applyTableHeaderStyle(subHeaderRow);
   const subDataFirstRow = subHeaderRow + 1;
   const subDataLastRow = blockEndRow - 1;
   for (let row = subDataFirstRow; row <= subDataLastRow; row++) {
+    sheet.getRange(row, 1, 1, numCols).setBackground(jobBg).setFontColor('#000000');
     sheet.setRowHeight(row, fmt.rowHeightCategory);
   }
   // --- Black horizontal separator at end of each job block (one row only; getRange 4-arg = row, column, numRows, numColumns) ---

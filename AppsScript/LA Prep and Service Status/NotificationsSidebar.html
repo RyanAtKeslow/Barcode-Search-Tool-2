@@ -19,9 +19,11 @@
   <p><strong>Orders to track</strong> <span class="hint">(from job blocks / Sub Equipment Helper)</span></p>
   <div id="orderList"></div>
   <button id="saveBtn">Save</button>
+  <script type="application/json" id="sidebar-data"><?!= (typeof sidebarData !== 'undefined' && sidebarData != null ? JSON.stringify(sidebarData).replace(/<\//g, '<\\/') : '{"users":[],"orders":[]}') ?></script>
   <script>
-    var users = <?!= (typeof users !== 'undefined' && users != null ? JSON.stringify(users).replace(/<\//g, '<\\/') : '[]') ?>;
-    var orders = <?!= (typeof orders !== 'undefined' && orders != null ? JSON.stringify(orders).replace(/<\//g, '<\\/') : '[]') ?>;
+    var data = JSON.parse(document.getElementById('sidebar-data').textContent);
+    var users = data.users || [];
+    var orders = data.orders || [];
     var userSelect = document.getElementById('userSelect');
     var orderList = document.getElementById('orderList');
     var saveBtn = document.getElementById('saveBtn');

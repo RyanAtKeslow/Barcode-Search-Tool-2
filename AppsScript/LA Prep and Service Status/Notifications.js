@@ -146,8 +146,7 @@ function showPickOrdersSidebar() {
   var orderNumbers = getCurrentOrderNumbersForTracking();
   var orderList = orderNumbers.map(function (o) { return { id: o, label: 'Order ' + o }; });
   var template = HtmlService.createTemplateFromFile('NotificationsSidebar');
-  template.users = users;
-  template.orders = orderList;
+  template.sidebarData = { users: users, orders: orderList };
   SpreadsheetApp.getUi().showSidebar(template.evaluate().setTitle('Pick orders to track').setWidth(320));
 }
 
