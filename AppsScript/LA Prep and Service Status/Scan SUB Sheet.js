@@ -6,15 +6,15 @@
  *
  * Trigger: Add a time-driven trigger (Edit > Current project's triggers) for runScanSubSheet
  * every 5–10 minutes if desired.
+ *
+ * Uses LA_PREP_STATUS_WORKBOOK_ID and SUB_HELPER_SHEET_NAME from Prep Bay Schema Test.js (same project).
  */
 
-const LA_PREP_STATUS_WORKBOOK_ID = '1j_slMWpLIbjqbvGdAurozTh_1vv17SASshCZSkTUNw0';
 const SUB_SHEET_WORKBOOK_ID = '1UUAwABLOAQLt9M4uTa8E6DkdLJSKHIC7s_xZDzLtBQw';
 const SUB_SHEET_TEMPLATE_NAME = 'Template - Please Copy to Create Tabs';
 const SUB_BLOCK_FIRST_ROW = 6;
 const SUB_BLOCK_ROW_COUNT = 13;
 const SUB_BLOCK_DATA_ROWS = 10;
-const SUB_HELPER_SHEET_NAME = 'Sub Equipment Helper';
 
 /**
  * Parses one SUB block data array (10 rows × 16 cols) into items. Same schema as SUB block rows 4–13.
