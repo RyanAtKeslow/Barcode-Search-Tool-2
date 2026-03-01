@@ -20,20 +20,20 @@
   <div id="orderList"></div>
   <button id="saveBtn">Save</button>
   <script>
-    var users = <?!= JSON.stringify(users) ?>;
-    var orders = <?!= JSON.stringify(orders) ?>;
+    var users = <?!= (typeof users !== 'undefined' && users != null ? JSON.stringify(users).replace(/<\//g, '<\\/') : '[]') ?>;
+    var orders = <?!= (typeof orders !== 'undefined' && orders != null ? JSON.stringify(orders).replace(/<\//g, '<\\/') : '[]') ?>;
     var userSelect = document.getElementById('userSelect');
     var orderList = document.getElementById('orderList');
     var saveBtn = document.getElementById('saveBtn');
 
-    users.forEach(function(u) {
+    (users || []).forEach(function(u) {
       var opt = document.createElement('option');
       opt.value = u.index;
       opt.textContent = u.label;
       userSelect.appendChild(opt);
     });
 
-    orders.forEach(function(o) {
+    (orders || []).forEach(function(o) {
       var label = document.createElement('label');
       var cb = document.createElement('input');
       cb.type = 'checkbox';
@@ -47,13 +47,18 @@
     userSelect.addEventListener('change', function() {
       var row = userSelect.value;
       if (!row) return;
-      google.script.run.withSuccessHandler(function(selected) {
-        var set = {};
-        selected.forEach(function(id) { set[id] = true; });
-        orderList.querySelectorAll('.order-cb').forEach(function(cb) {
-          cb.checked = !!set[cb.value];
-        });
-      }).getTrackedOrdersForRow(parseInt(row, 10));
+      var rowNum = parseInt(row, 10);
+      if (isNaN(rowNum) || rowNum < 2) return;
+      google.script.run
+        .withSuccessHandler(function(selected) {
+          var set = {};
+          (selected || []).forEach(function(id) { set[id] = true; });
+          orderList.querySelectorAll('.order-cb').forEach(function(cb) {
+            cb.checked = !!set[cb.value];
+          });
+        })
+        .withFailureHandler(function(err) { alert('Could not load orders: ' + (err && err.message ? err.message : String(err))); })
+        .getTrackedOrdersForRow(rowNum);
     });
 
     saveBtn.addEventListener('click', function() {
@@ -62,11 +67,19 @@
         alert('Select a user first.');
         return;
       }
+      var rowNum = parseInt(row, 10);
+      if (isNaN(rowNum) || rowNum < 2) {
+        alert('Invalid selection.');
+        return;
+      }
       var selected = [];
       orderList.querySelectorAll('.order-cb:checked').forEach(function(cb) { selected.push(cb.value); });
-      google.script.run.withSuccessHandler(function() {
-        alert('Saved. Orders tracked: ' + (selected.length ? selected.join(', ') : 'none'));
-      }).saveTrackedOrdersForRow(parseInt(row, 10), selected);
+      google.script.run
+        .withSuccessHandler(function() {
+          alert('Saved. Orders tracked: ' + (selected.length ? selected.join(', ') : 'none'));
+        })
+        .withFailureHandler(function(err) { alert('Could not save: ' + (err && err.message ? err.message : String(err))); })
+        .saveTrackedOrdersForRow(rowNum, selected);
     });
   </script>
 </body>
