@@ -112,26 +112,40 @@ const EQUIPMENT_CATEGORIES = [
   'Ungrouped'
 ];
 
+/** Email that sees the Admin menu (case-insensitive). */
+const ADMIN_EMAIL = 'ryan@keslowcamera.com';
+
 /**
- * Adds the "Prep Refresh" menu when the workbook is opened.
+ * Adds Prep Refresh and (for admin only) Admin menu when the workbook is opened.
  */
 function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu('Prep Refresh')
-    .addItem('Initialize Prep Refresh', 'refreshPrepForecastSheets')
+  var ui = SpreadsheetApp.getUi();
+
+  // Prep Refresh menu: all days and single-day refresh
+  ui.createMenu('Prep Refresh')
+    .addItem('Initialize Prep Refresh (all 5 days)', 'refreshPrepForecastSheets')
     .addSeparator()
     .addItem('Refresh Today', 'refreshPrepToday')
     .addItem('Refresh Tomorrow', 'refreshPrepTomorrow')
     .addItem('Refresh Two Days Out', 'refreshPrepTwoDaysOut')
     .addItem('Refresh Three Days Out', 'refreshPrepThreeDaysOut')
     .addItem('Refresh Four Days Out', 'refreshPrepFourDaysOut')
-    .addSeparator()
-    .addItem('Job Block Test', 'runJobBlockTest')
-    .addItem('Scan SUB Sheet', 'runScanSubSheet')
-    .addSeparator()
-    .addItem('Notifications: Set Google Chat webhook', 'setNotificationsWebhook')
-    .addItem('Notifications: Pick orders to track', 'showPickOrdersSidebar')
     .addToUi();
+
+  // Admin menu: only for ryan@keslowcamera.com
+  var email = '';
+  try {
+    email = (Session.getActiveUser().getEmail() || '').trim().toLowerCase();
+  } catch (e) { /* ignore */ }
+  if (email === ADMIN_EMAIL.toLowerCase()) {
+    ui.createMenu('Admin')
+      .addItem('Job Block Test', 'runJobBlockTest')
+      .addItem('Scan SUB Sheet', 'runScanSubSheet')
+      .addSeparator()
+      .addItem('Notifications: Set Google Chat webhook', 'setNotificationsWebhook')
+      .addItem('Notifications: Pick orders to track', 'showPickOrdersSidebar')
+      .addToUi();
+  }
 }
 
 /**
