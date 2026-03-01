@@ -116,9 +116,17 @@ const EQUIPMENT_CATEGORIES = [
 const ADMIN_EMAIL = 'ryan@keslowcamera.com';
 
 /**
- * Adds Prep Refresh and (for admin only) Admin menu when the workbook is opened.
+ * Simple trigger: runs when the spreadsheet this script is bound to is opened.
+ * If the menu does not appear (e.g. first install or different container), run addPrepMenus() once from the script editor (Run > addPrepMenus).
  */
 function onOpen() {
+  addPrepMenus();
+}
+
+/**
+ * Builds the Prep Refresh and Admin menus. Called by onOpen(); you can also run this once from the script editor (Run > addPrepMenus) if the menu never appears after opening the sheet.
+ */
+function addPrepMenus() {
   var ui = SpreadsheetApp.getUi();
 
   // Prep Refresh menu: all days and single-day refresh
