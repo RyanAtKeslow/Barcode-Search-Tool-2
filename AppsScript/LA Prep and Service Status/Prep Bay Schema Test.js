@@ -128,6 +128,9 @@ function onOpen() {
     .addSeparator()
     .addItem('Job Block Test', 'runJobBlockTest')
     .addItem('Scan SUB Sheet', 'runScanSubSheet')
+    .addSeparator()
+    .addItem('Notifications: Set Google Chat webhook', 'setNotificationsWebhook')
+    .addItem('Notifications: Pick orders to track', 'showPickOrdersSidebar')
     .addToUi();
 }
 
@@ -500,6 +503,105 @@ function readSubSheetDataForOrder(orderNumber) {
     Logger.log('readSubSheetDataForOrder: ' + e.message);
     return [];
   }
+}
+
+/** Script property key for "last seen" subbed-equipment keys (so we only alert on new adds). */
+const SUB_ALERT_LAST_SEEN_KEY = 'SUB_ALERT_LAST_SEEN';
+
+/**
+ * Gets new subbed-equipment items for today and tomorrow that have run sheet confirmed, and that we haven't alerted on yet.
+ * @returns {{ newItems: Array<{orderNumber: string, subbedEquipment: string, qty: string, located: string, prepDay: string}>, allCurrentKeys: Array<string> }}
+ */
+function getSubbedEquipmentAlerts() {
+  const today = new Date();
+  const tomorrow = getDateForForecastOffset(today, 1);
+  const todaySheet = getTodaySheetName(today);
+  const tomorrowSheet = getTodaySheetName(tomorrow);
+  const todayData = readPrepBayDataForDate(todaySheet);
+  const tomorrowData = readPrepBayDataForDate(tomorrowSheet);
+  const todayOrders = {};
+  const tomorrowOrders = {};
+  (todayData || []).forEach(function (r) { todayOrders[String(r.orderNumber || '').replace(/[^0-9]/g, '')] = true; });
+  (tomorrowData || []).forEach(function (r) { tomorrowOrders[String(r.orderNumber || '').replace(/[^0-9]/g, '')] = true; });
+
+  const hasCheck = function (v) { return v === true || v === 'TRUE' || /✓|✔|yes|true|1/i.test(String(v || '')); };
+  let lastSeen = [];
+  try {
+    const raw = PropertiesService.getScriptProperties().getProperty(SUB_ALERT_LAST_SEEN_KEY);
+    if (raw) lastSeen = JSON.parse(raw);
+  } catch (e) { /* ignore */ }
+  const lastSeenSet = {};
+  lastSeen.forEach(function (k) { lastSeenSet[k] = true; });
+
+  const newItems = [];
+  const allCurrentKeys = [];
+  try {
+    const ss = SpreadsheetApp.openById(LA_PREP_STATUS_WORKBOOK_ID);
+    const sheet = ss.getSheetByName(SUB_HELPER_SHEET_NAME);
+    if (!sheet) return { newItems: newItems, allCurrentKeys: allCurrentKeys };
+    const data = sheet.getDataRange().getValues();
+    if (!data || data.length < 2) return { newItems: newItems, allCurrentKeys: allCurrentKeys };
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const orderNumber = String(row[0] != null ? row[0] : '').replace(/[^0-9]/g, '');
+      if (!orderNumber) continue;
+      const runSheet = hasCheck(row[5]);
+      if (!runSheet) continue; // only when run out slip has been confirmed
+      const subbedEquipment = row[1] != null ? String(row[1]).trim() : '';
+      const qty = row[2] != null ? String(row[2]).trim() : '';
+      const located = row[3] != null ? String(row[3]).trim() : '';
+      const key = orderNumber + '|' + subbedEquipment + '|' + qty;
+      allCurrentKeys.push(key);
+      const isToday = todayOrders[orderNumber];
+      const isTomorrow = tomorrowOrders[orderNumber];
+      if (!isToday && !isTomorrow) continue; // only today or tomorrow
+      const prepDay = isToday && isTomorrow ? 'Today & Tomorrow' : (isToday ? 'Today' : 'Tomorrow');
+      if (!lastSeenSet[key]) {
+        newItems.push({ orderNumber: orderNumber, subbedEquipment: subbedEquipment, qty: qty, located: located, prepDay: prepDay });
+      }
+    }
+  } catch (e) {
+    Logger.log('getSubbedEquipmentAlerts: ' + e.message);
+  }
+  return { newItems: newItems, allCurrentKeys: allCurrentKeys };
+}
+
+/**
+ * If there are new subbed-equipment items (today/tomorrow, run sheet confirmed), shows one pop-up listing them and updates last-seen state.
+ * Call from refresh so the user sees the alert when they run a refresh. Multiple alerts are combined into one message; user clicks OK once to clear.
+ * On first run we seed last-seen without showing (so we don't pop up for everything already in the helper).
+ */
+function showSubbedEquipmentAlertIfAny() {
+  const result = getSubbedEquipmentAlerts();
+  const newItems = result.newItems;
+  const allCurrentKeys = result.allCurrentKeys;
+  if (newItems.length === 0) return;
+  const lastSeen = [];
+  try {
+    const raw = PropertiesService.getScriptProperties().getProperty(SUB_ALERT_LAST_SEEN_KEY);
+    if (raw) lastSeen.push.apply(lastSeen, JSON.parse(raw));
+  } catch (e) { /* ignore */ }
+  if (lastSeen.length === 0 && newItems.length >= 10) {
+    try { PropertiesService.getScriptProperties().setProperty(SUB_ALERT_LAST_SEEN_KEY, JSON.stringify(allCurrentKeys)); } catch (e) { }
+    return;
+  }
+  let message = 'New subbed equipment (run sheet confirmed) for today or tomorrow:\n\n';
+  newItems.forEach(function (item) {
+    message += '• Order ' + item.orderNumber + ' — ' + (item.subbedEquipment || 'Subbed item') + (item.qty ? ' (Qty ' + item.qty + ')' : '') + ' — Prep ' + item.prepDay + '\n';
+  });
+  message += '\nClick OK to clear.';
+  try {
+    const ui = SpreadsheetApp.getUi();
+    if (ui) ui.alert('Subbed equipment added', message, ui.ButtonSet.OK);
+  } catch (e) {
+    Logger.log('showSubbedEquipmentAlertIfAny (no UI): ' + e.message);
+  }
+  try {
+    PropertiesService.getScriptProperties().setProperty(SUB_ALERT_LAST_SEEN_KEY, JSON.stringify(allCurrentKeys));
+  } catch (e) {
+    Logger.log('showSubbedEquipmentAlertIfAny save state: ' + e.message);
+  }
+  sendSubRentalsNotificationToGchat(newItems);
 }
 
 /**
@@ -1098,6 +1200,7 @@ function refreshSinglePrepForecastSheet(sheetName, workdayOffset) {
   }
 
   SpreadsheetApp.flush();
+  showSubbedEquipmentAlertIfAny();
   Logger.log('Done ' + sheetName + ' (' + jobs.length + ' jobs, ' + allRows.length + ' rows).');
 }
 

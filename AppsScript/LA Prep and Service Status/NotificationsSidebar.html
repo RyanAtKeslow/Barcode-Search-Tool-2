@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 13px; padding: 10px; }
+    select { width: 100%; margin: 6px 0; padding: 6px; }
+    #orderList { max-height: 280px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; margin: 8px 0; }
+    #orderList label { display: block; margin: 4px 0; cursor: pointer; }
+    #saveBtn { margin-top: 8px; padding: 8px 14px; }
+    .hint { color: #666; font-size: 11px; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <p><strong>Select user</strong></p>
+  <select id="userSelect">
+    <option value="">-- Choose a user --</option>
+  </select>
+  <p><strong>Orders to track</strong> <span class="hint">(from job blocks / Sub Equipment Helper)</span></p>
+  <div id="orderList"></div>
+  <button id="saveBtn">Save</button>
+  <script>
+    var users = <?!= JSON.stringify(users) ?>;
+    var orders = <?!= JSON.stringify(orders) ?>;
+    var userSelect = document.getElementById('userSelect');
+    var orderList = document.getElementById('orderList');
+    var saveBtn = document.getElementById('saveBtn');
+
+    users.forEach(function(u) {
+      var opt = document.createElement('option');
+      opt.value = u.index;
+      opt.textContent = u.label;
+      userSelect.appendChild(opt);
+    });
+
+    orders.forEach(function(o) {
+      var label = document.createElement('label');
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = o.id;
+      cb.className = 'order-cb';
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(' ' + o.label));
+      orderList.appendChild(label);
+    });
+
+    userSelect.addEventListener('change', function() {
+      var row = userSelect.value;
+      if (!row) return;
+      google.script.run.withSuccessHandler(function(selected) {
+        var set = {};
+        selected.forEach(function(id) { set[id] = true; });
+        orderList.querySelectorAll('.order-cb').forEach(function(cb) {
+          cb.checked = !!set[cb.value];
+        });
+      }).getTrackedOrdersForRow(parseInt(row, 10));
+    });
+
+    saveBtn.addEventListener('click', function() {
+      var row = userSelect.value;
+      if (!row) {
+        alert('Select a user first.');
+        return;
+      }
+      var selected = [];
+      orderList.querySelectorAll('.order-cb:checked').forEach(function(cb) { selected.push(cb.value); });
+      google.script.run.withSuccessHandler(function() {
+        alert('Saved. Orders tracked: ' + (selected.length ? selected.join(', ') : 'none'));
+      }).saveTrackedOrdersForRow(parseInt(row, 10), selected);
+    });
+  </script>
+</body>
+</html>
