@@ -17,11 +17,28 @@ const SUB_BLOCK_ROW_COUNT = 13;
 const SUB_BLOCK_DATA_ROWS = 10;
 
 /**
- * Parses one SUB block data array (10 rows × 16 cols) into items. Same schema as SUB block rows 4–13.
+ * Returns true if the row has strikethrough on Requested Equipment (D or E) in the SUB block (cancelled).
  */
-function parseSubBlockData(data) {
+function subBlockRowHasStrikethrough(sheet, dataStartRow, rowOffset) {
+  try {
+    const row = dataStartRow + rowOffset;
+    const cellD = sheet.getRange(row, 4).getTextStyle();
+    const cellE = sheet.getRange(row, 5).getTextStyle();
+    const d = cellD && cellD.isStrikethrough() === true;
+    const e = cellE && cellE.isStrikethrough() === true;
+    return !!(d || e);
+  } catch (err) {
+    return false;
+  }
+}
+
+/**
+ * Parses one SUB block data array (10 rows × 16 cols) into items. strikethroughByRow[i] = true if that row had strikethrough on D/E (cancelled); we still include the row but set item.strikethrough so the output can render it strikethrough.
+ */
+function parseSubBlockData(data, strikethroughByRow) {
   const items = [];
   const hasCheck = function (v) { return /✓|✔|yes|true|1/i.test(v); };
+  const strike = strikethroughByRow || [];
   for (let i = 0; i < (data && data.length ? data.length : 0); i++) {
     const row = data[i] || [];
     const qty = row[2] != null ? String(row[2]).trim() : '';
@@ -40,7 +57,7 @@ function parseSubBlockData(data) {
     const notesF = row[15] != null ? String(row[15]).trim() : '';
     const notes = [notesD, notesE, notesF].filter(Boolean).join(' ').trim();
     if (!subbedEquipment && !qty && !located && !notes) continue;
-    items.push({ subbedEquipment: subbedEquipment, qty: qty, located: located, quoteReceived: quoteReceived, runSheet: runSheet, packingSlip: packingSlip, notes: notes });
+    items.push({ subbedEquipment: subbedEquipment, qty: qty, located: located, quoteReceived: quoteReceived, runSheet: runSheet, packingSlip: packingSlip, notes: notes, strikethrough: !!strike[i] });
   }
   return items;
 }
@@ -87,7 +104,11 @@ function scanSubWorkbookIntoMap() {
         const numDataRows = SUB_BLOCK_DATA_ROWS;
         const numCols = 16;
         const data = sheet.getRange(dataStartRow, 1, numDataRows, numCols).getValues();
-        const items = parseSubBlockData(data);
+        const strikethroughByRow = [];
+        for (let i = 0; i < data.length; i++) {
+          strikethroughByRow.push(subBlockRowHasStrikethrough(sheet, dataStartRow, i));
+        }
+        const items = parseSubBlockData(data, strikethroughByRow);
         if (items.length > 0) {
           if (!map[quoteNorm]) map[quoteNorm] = [];
           map[quoteNorm].push.apply(map[quoteNorm], items);
@@ -119,10 +140,10 @@ function runScanSubSheet() {
   Logger.log('[Scan SUB] scan phase total: ' + (new Date().getTime() - t0) + ' ms');
 
   t0 = new Date().getTime();
-  const rows = [['OrderNumber', 'SubbedEquipment', 'Qty', 'Located', 'QuoteReceived', 'RunSheet', 'PackingSlip', 'Notes']];
+  const rows = [['OrderNumber', 'SubbedEquipment', 'Qty', 'Located', 'QuoteReceived', 'RunSheet', 'PackingSlip', 'Notes', 'Strikethrough']];
   Object.keys(map).forEach(function (normOrder) {
     map[normOrder].forEach(function (item) {
-      rows.push([normOrder, item.subbedEquipment, item.qty, item.located, item.quoteReceived, item.runSheet, item.packingSlip, item.notes]);
+      rows.push([normOrder, item.subbedEquipment, item.qty, item.located, item.quoteReceived, item.runSheet, item.packingSlip, item.notes, item.strikethrough === true]);
     });
   });
   Logger.log('[Scan SUB] build rows array: ' + (new Date().getTime() - t0) + ' ms (rows=' + rows.length + ')');
@@ -143,11 +164,11 @@ function runScanSubSheet() {
 
   t0 = new Date().getTime();
   if (rows.length > 1) {
-    sheet.getRange(1, 1, rows.length, 8).setValues(rows);
+    sheet.getRange(1, 1, rows.length, 9).setValues(rows);
   } else {
-    sheet.getRange(1, 1, 1, 8).setValues([rows[0]]);
+    sheet.getRange(1, 1, 1, 9).setValues([rows[0]]);
   }
-  Logger.log('[Scan SUB] setValues(' + rows.length + 'x8): ' + (new Date().getTime() - t0) + ' ms');
+  Logger.log('[Scan SUB] setValues(' + rows.length + 'x9): ' + (new Date().getTime() - t0) + ' ms');
 
   t0 = new Date().getTime();
   SpreadsheetApp.flush();

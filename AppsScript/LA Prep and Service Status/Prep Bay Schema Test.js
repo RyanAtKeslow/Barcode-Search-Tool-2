@@ -511,6 +511,7 @@ function readSubSheetDataForOrder(orderNumber) {
       const rowOrder = String(row[0] != null ? row[0] : '').replace(/[^0-9]/g, '');
       if (rowOrder !== normOrder) continue;
       const hasCheck = function (v) { return v === true || v === 'TRUE' || /✓|✔|yes|true|1/i.test(String(v || '')); };
+      const strikethrough = row[8] === true || row[8] === 'TRUE' || /✓|✔|yes|true|1/i.test(String(row[8] || ''));
       items.push({
         subbedEquipment: row[1] != null ? String(row[1]).trim() : '',
         qty: row[2] != null ? String(row[2]).trim() : '',
@@ -518,7 +519,8 @@ function readSubSheetDataForOrder(orderNumber) {
         quoteReceived: hasCheck(row[4]),
         runSheet: hasCheck(row[5]),
         packingSlip: hasCheck(row[6]),
-        notes: row[7] != null ? String(row[7]).trim() : ''
+        notes: row[7] != null ? String(row[7]).trim() : '',
+        strikethrough: strikethrough
       });
     }
     return items;
@@ -894,8 +896,10 @@ function buildJobBlockRows(job) {
   // Sub-rental section: header then one row per SUB item (from SUB sheet) or one empty row if none.
   rows.push(padRow(['Locating Agent', 'Subbed Equipment', 'Quantity', 'Located', 'Quote Received', 'Run Sheet Out', 'Packing Slip', 'Notes', '']));
   const subItems = readSubSheetDataForOrder(job.orderNumber);
+  const subStrikethroughFlags = [];
   if (subItems.length > 0) {
     subItems.forEach(function (item) {
+      subStrikethroughFlags.push(item.strikethrough === true);
       rows.push(padRow(['', item.subbedEquipment, item.qty, item.located || '', statusDisplay(item.quoteReceived), statusDisplay(item.runSheet), statusDisplay(item.packingSlip), item.notes, '', '']));
     });
   } else {
@@ -903,7 +907,7 @@ function buildJobBlockRows(job) {
   }
   rows.push(padRow([])); // black separator row (formatted in applyJobBlockFormatting)
 
-  return rows;
+  return { rows: rows, subStrikethroughFlags: subStrikethroughFlags };
 }
 
 /**
@@ -956,15 +960,17 @@ function buildJobBlockRowsWithCameras(job, equipmentList) {
 
   rows.push(padRow(['Locating Agent', 'Subbed Equipment', 'Quantity', 'Located', 'Quote Received', 'Run Sheet Out', 'Packing Slip', 'Notes', '']));
   const subItems = readSubSheetDataForOrder(job.orderNumber);
+  const subStrikethroughFlags = [];
   if (subItems.length > 0) {
     subItems.forEach(function (item) {
+      subStrikethroughFlags.push(item.strikethrough === true);
       rows.push(padRow(['', item.subbedEquipment, item.qty, item.located || '', statusDisplay(item.quoteReceived), statusDisplay(item.runSheet), statusDisplay(item.packingSlip), item.notes, '', '']));
     });
   } else {
     rows.push(padRow(['', '', '', '', '', '', '', '', '']));
   }
   rows.push(padRow([])); // black separator row (formatted in applyJobBlockFormatting)
-  return rows;
+  return { rows: rows, subStrikethroughFlags: subStrikethroughFlags };
 }
 
 /**
@@ -974,8 +980,9 @@ function buildJobBlockRowsWithCameras(job, equipmentList) {
  * @param {Object} fmt - Format options (defaults to FMT_DEFAULTS)
  * @param {string|null} jobHeaderBgOverride - Optional: use this as job header band background (e.g. from Prep Bay column C); if null, use fmt.jobHeaderBg
  * @param {number} [blockRowCount] - Optional: number of rows in this block (for variable-height blocks); if omitted, uses ROWS_PER_JOB_BLOCK
+ * @param {Array<boolean>} [subStrikethroughFlags] - Optional: for each subbed-equipment data row, true = apply strikethrough (mirrors SUB sheet)
  */
-function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, blockRowCount) {
+function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, blockRowCount, subStrikethroughFlags) {
   if (!fmt) fmt = FMT_DEFAULTS;
   const r = startRow;
   const numCols = 10;
@@ -993,27 +1000,25 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   sheet.getRange(r, 2).setFontWeight('bold').setFontSize(fmt.jobNameValueSize).setFontColor(jobNameColor).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r, fmt.rowHeightJobName);
 
-  // Row 2: Order # (A2:B2), Marketing Agent (C2:D2, D overflow), DP (F2:G2, G overflow); B2 center justify
-  sheet.getRange(r + 1, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
-  sheet.getRange(r + 1, 2).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setHorizontalAlignment('center');
-  sheet.getRange(r + 1, 3).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
-  sheet.getRange(r + 1, 4).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
-  sheet.getRange(r + 1, 6).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000').setHorizontalAlignment('center');
-  sheet.getRange(r + 1, 7).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  // Row 2–4: same contrasting text as job name for dark jobBg (label/value on job header band)
+  sheet.getRange(r + 1, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(jobNameColor);
+  sheet.getRange(r + 1, 2).setFontWeight('bold').setFontSize(18).setFontColor(jobNameColor).setHorizontalAlignment('center');
+  sheet.getRange(r + 1, 3).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(jobNameColor);
+  sheet.getRange(r + 1, 4).setFontWeight('bold').setFontSize(18).setFontColor(jobNameColor).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  sheet.getRange(r + 1, 6).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(jobNameColor).setHorizontalAlignment('center');
+  sheet.getRange(r + 1, 7).setFontWeight('bold').setFontSize(18).setFontColor(jobNameColor).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r + 1, fmt.rowHeightLabel);
 
-  // Row 3: Prep Bay(s) (A3:B3), Prep Tech (C3:D3, D overflow), 1st AC (F3:G3, G overflow); B3 center justify
-  sheet.getRange(r + 2, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
-  sheet.getRange(r + 2, 2).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setHorizontalAlignment('center');
-  sheet.getRange(r + 2, 3).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
-  sheet.getRange(r + 2, 4).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
-  sheet.getRange(r + 2, 6).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000').setHorizontalAlignment('center');
-  sheet.getRange(r + 2, 7).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  sheet.getRange(r + 2, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(jobNameColor);
+  sheet.getRange(r + 2, 2).setFontWeight('bold').setFontSize(18).setFontColor(jobNameColor).setHorizontalAlignment('center');
+  sheet.getRange(r + 2, 3).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(jobNameColor);
+  sheet.getRange(r + 2, 4).setFontWeight('bold').setFontSize(18).setFontColor(jobNameColor).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  sheet.getRange(r + 2, 6).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(jobNameColor).setHorizontalAlignment('center');
+  sheet.getRange(r + 2, 7).setFontWeight('bold').setFontSize(18).setFontColor(jobNameColor).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r + 2, fmt.rowHeightLabel);
 
-  // Row 4: Prep Notes (A4:B4, B overflow)
-  sheet.getRange(r + 3, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(fmt.labelColor || '#000000');
-  sheet.getRange(r + 3, 2).setFontWeight('bold').setFontSize(18).setFontColor(fmt.valueColor || '#000000').setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  sheet.getRange(r + 3, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(jobNameColor);
+  sheet.getRange(r + 3, 2).setFontWeight('bold').setFontSize(18).setFontColor(jobNameColor).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r + 3, fmt.rowHeightLabel);
 
   // Only border in the block: divider under Prep Notes (row r+3).
@@ -1046,9 +1051,9 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   const equipmentDataFirstRow = eqHeaderRow + 1;
   const equipmentDataLastRow = equipmentBlockEndRow;
 
-  // Format all equipment data rows (dynamic count): background, black font; bold column A only for category label rows (e.g. "Cameras:")
+  // Format all equipment data rows (dynamic count): background, contrasting font (same as job name for dark jobBg)
   for (let row = equipmentDataFirstRow; row <= equipmentDataLastRow; row++) {
-    sheet.getRange(row, 1, 1, numCols).setBackground(jobBg).setFontColor('#000000');
+    sheet.getRange(row, 1, 1, numCols).setBackground(jobBg).setFontColor(jobNameColor);
     sheet.setRowHeight(row, fmt.rowHeightCategory);
   }
   const aVals = numEquipmentBlockRows > 0 ? sheet.getRange(equipmentDataFirstRow, 1, numEquipmentBlockRows, 1).getValues() : [];
@@ -1061,16 +1066,25 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
     }
   }
   if (numEquipmentBlockRows > 0) {
-    sheet.getRange(equipmentDataFirstRow, 1, numEquipmentBlockRows, numCols).setFontColor('#000000');
+    sheet.getRange(equipmentDataFirstRow, 1, numEquipmentBlockRows, numCols).setFontColor(jobNameColor);
   }
 
-  // --- Subbed Equipment: Locating Agent header uses same style as equipment header; data row(s) use job block background (jobBg) ---
+  // --- Subbed Equipment: Locating Agent header uses same style as equipment header; data row(s) use job block background and contrasting text ---
   applyTableHeaderStyle(subHeaderRow);
   const subDataFirstRow = subHeaderRow + 1;
   const subDataLastRow = blockEndRow - 1;
+  const strikeFlags = subStrikethroughFlags || [];
   for (let row = subDataFirstRow; row <= subDataLastRow; row++) {
-    sheet.getRange(row, 1, 1, numCols).setBackground(jobBg).setFontColor('#000000');
+    sheet.getRange(row, 1, 1, numCols).setBackground(jobBg).setFontColor(jobNameColor);
     sheet.setRowHeight(row, fmt.rowHeightCategory);
+    const subIndex = row - subDataFirstRow;
+    if (subIndex < strikeFlags.length && strikeFlags[subIndex]) {
+      for (let c = 1; c <= numCols; c++) {
+        const rng = sheet.getRange(row, c);
+        const style = rng.getTextStyle().setStrikethrough(true);
+        rng.setTextStyle(style);
+      }
+    }
   }
   // --- Black horizontal separator at end of each job block (one row only; getRange 4-arg = row, column, numRows, numColumns) ---
   sheet.getRange(blockEndRow, 1, 1, numCols).setBackground('#000000');
@@ -1122,10 +1136,12 @@ function writePrepBaySchemaTest() {
     prepNotes: 'Preps 3/1 - 3/6  (sample data)'
   };
 
+  const block1 = buildJobBlockRows(job1);
+  const block2 = buildJobBlockRows(job2);
   const titleRow = padRow([getPrepSheetTitle(new Date())]);
   const allRows = [titleRow]
-    .concat(buildJobBlockRows(job1))
-    .concat(buildJobBlockRows(job2));
+    .concat(block1.rows)
+    .concat(block2.rows);
 
   const numRows = allRows.length;
   const numCols = 10;
@@ -1145,8 +1161,8 @@ function writePrepBaySchemaTest() {
   const job1HeaderBg = getOrderNumberBackgroundFromPrepBay(prepBaySheetName, job1.orderNumber);
   const job2HeaderBg = getOrderNumberBackgroundFromPrepBay(prepBaySheetName, job2.orderNumber);
 
-  applyJobBlockFormatting(sheet, 2, fmt, job1HeaderBg);
-  applyJobBlockFormatting(sheet, 2 + ROWS_PER_JOB_BLOCK, fmt, job2HeaderBg);
+  applyJobBlockFormatting(sheet, 2, fmt, job1HeaderBg, block1.rows.length, block1.subStrikethroughFlags);
+  applyJobBlockFormatting(sheet, 2 + block1.rows.length, fmt, job2HeaderBg, block2.rows.length, block2.subStrikethroughFlags);
 
   Logger.log('Prep Bay Schema test written: ' + numRows + ' rows');
 }
@@ -1182,12 +1198,14 @@ function refreshSinglePrepForecastSheet(sheetName, workdayOffset) {
 
   const allRows = [padRow([getPrepSheetTitle(targetDate)])];
   const blockRowCounts = [];
+  const subStrikethroughFlagsPerBlock = [];
   jobs.forEach(function (job) {
     const normOrder = String(job.orderNumber || '').replace(/[^0-9]/g, '');
     const cameras = equipmentData[normOrder] || [];
-    const blockRows = buildJobBlockRowsWithCameras(job, cameras);
-    blockRowCounts.push(blockRows.length);
-    allRows.push.apply(allRows, blockRows);
+    const blockResult = buildJobBlockRowsWithCameras(job, cameras);
+    blockRowCounts.push(blockResult.rows.length);
+    allRows.push.apply(allRows, blockResult.rows);
+    subStrikethroughFlagsPerBlock.push(blockResult.subStrikethroughFlags || []);
   });
 
   let sheet = ss.getSheetByName(sheetName);
@@ -1208,7 +1226,7 @@ function refreshSinglePrepForecastSheet(sheetName, workdayOffset) {
     for (var j = 0; j < jobs.length; j++) {
       var normOrderJ = String(jobs[j].orderNumber || '').replace(/[^0-9]/g, '');
       var jobHeaderBg = orderBackgroundMap[normOrderJ] || null;
-      applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBg, blockRowCounts[j]);
+      applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBg, blockRowCounts[j], subStrikethroughFlagsPerBlock[j]);
       Logger.log('    Block ' + (j + 1) + ': order ' + (jobs[j].orderNumber || '') + ', rows ' + blockRowCounts[j] + ', startRow ' + startRow);
       startRow += blockRowCounts[j];
     }
@@ -1288,7 +1306,8 @@ function runJobBlockTest() {
   const equipmentData = readEquipmentSchedulingData(today);
   const cameras = equipmentData[normOrder] || [];
 
-  const blockRows = buildJobBlockRowsWithCameras(job, cameras);
+  const blockResult = buildJobBlockRowsWithCameras(job, cameras);
+  const blockRows = blockResult.rows;
   const numRows = blockRows.length;
 
   sheet.clear();
@@ -1298,7 +1317,7 @@ function runJobBlockTest() {
   applySchemaColumnWidths(sheet, fmt);
 
   const jobHeaderBg = getOrderNumberBackgroundFromPrepBay(prepBaySheetName, job.orderNumber);
-  applyJobBlockFormatting(sheet, 1, fmt, jobHeaderBg, numRows);
+  applyJobBlockFormatting(sheet, 1, fmt, jobHeaderBg, numRows, blockResult.subStrikethroughFlags);
 
   SpreadsheetApp.flush();
   Logger.log('Job Block Test: wrote 1 job block (' + numRows + ' rows) for order ' + (job.orderNumber || '') + ' from ' + prepBaySheetName);
