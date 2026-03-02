@@ -79,23 +79,57 @@ const FMT_DEFAULTS = {
 };
 
 /**
+ * Relative luminance (0–1) of a hex color. Used for contrast and dark/light decisions.
+ * @param {string} hex - 3 or 6 char hex with optional #
+ * @returns {number} Luminance in 0..1 range, or 0.5 if invalid
+ */
+function getLuminance(hex) {
+  if (!hex || typeof hex !== 'string') return 0.5;
+  var h = hex.replace(/^#/, '').trim();
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  if (h.length !== 6) return 0.5;
+  var r = parseInt(h.slice(0, 2), 16);
+  var g = parseInt(h.slice(2, 4), 16);
+  var b = parseInt(h.slice(4, 6), 16);
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return 0.5;
+  var rs = r / 255 <= 0.03928 ? r / 255 / 12.92 : Math.pow((r / 255 + 0.055) / 1.055, 2.4);
+  var gs = g / 255 <= 0.03928 ? g / 255 / 12.92 : Math.pow((g / 255 + 0.055) / 1.055, 2.4);
+  var bs = b / 255 <= 0.03928 ? b / 255 / 12.92 : Math.pow((b / 255 + 0.055) / 1.055, 2.4);
+  return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
+}
+
+/**
+ * Returns text colors that are readable and complimentary (not harsh black/white) on the given background.
+ * Follows WCAG-style luminance and typographic hierarchy: primary = most prominent, tertiary = supporting.
+ * @param {string} hexBackground - Hex color e.g. '#e8f0fe' or '#344a5e'
+ * @param {string} lightBgPrimary - Primary text color when background is light (e.g. job name blue)
+ * @returns {{ primary: string, secondary: string, tertiary: string }} primary = job name, secondary = order # / key values, tertiary = labels
+ */
+function getContrastingColors(hexBackground, lightBgPrimary) {
+  var defaultPrimary = lightBgPrimary || '#1a73e8';
+  var darkPrimary = '#ffffff';   // highest emphasis on dark bg
+  var darkSecondary = '#f1f5f9'; // soft white, still strong contrast
+  var darkTertiary = '#e2e8f0'; // slightly softer for labels
+  var lightSecondary = '#1e293b'; // rich dark
+  var lightTertiary = '#334155';  // softer dark for labels
+  var lum = getLuminance(hexBackground);
+  var isDark = lum < 0.4;
+  if (isDark) {
+    return { primary: darkPrimary, secondary: darkSecondary, tertiary: darkTertiary };
+  }
+  return { primary: defaultPrimary, secondary: lightSecondary, tertiary: lightTertiary };
+}
+
+/**
  * Returns a text color that contrasts with the given background (from prep bay assignment).
- * Dark backgrounds -> white (#ffffff); light backgrounds -> defaultJobNameColor (e.g. blue).
+ * Dark backgrounds -> white; light backgrounds -> defaultJobNameColor. Kept for callers that need a single color.
  * @param {string} hexBackground - Hex color e.g. '#e8f0fe' or '#344a5e'
  * @param {string} defaultJobNameColor - Fallback when background is light (e.g. FMT_DEFAULTS.jobNameValueColor)
- * @returns {string} Hex color for job name text
+ * @returns {string} Hex color for text (same as primary in getContrastingColors)
  */
 function getContrastingJobNameColor(hexBackground, defaultJobNameColor) {
-  if (!hexBackground || typeof hexBackground !== 'string') return defaultJobNameColor || '#1a73e8';
-  var hex = hexBackground.replace(/^#/, '').trim();
-  if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-  if (hex.length !== 6) return defaultJobNameColor || '#1a73e8';
-  var r = parseInt(hex.slice(0, 2), 16);
-  var g = parseInt(hex.slice(2, 4), 16);
-  var b = parseInt(hex.slice(4, 6), 16);
-  if (isNaN(r) || isNaN(g) || isNaN(b)) return defaultJobNameColor || '#1a73e8';
-  var luminance = (0.299 * r + 0.587 * g + 0.116 * b) / 255;
-  return luminance < 0.45 ? '#ffffff' : (defaultJobNameColor || '#1a73e8');
+  var colors = getContrastingColors(hexBackground, defaultJobNameColor);
+  return colors.primary;
 }
 
 /** Equipment categories (v2 schema) — rows can grow dynamically per job */
@@ -995,30 +1029,34 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
 
   // --- Job header (rows 1–4): A1:B3 left as-is; Marketing Agent / Prep Tech in C2:D3; DP / 1st AC in F2:G3; row 4 Prep Notes ---
   sheet.getRange(r, 1, 4, numCols).setBackground(jobBg);
-  var jobNameColor = getContrastingJobNameColor(jobBg, fmt.jobNameValueColor);
-  sheet.getRange(r, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(jobNameColor);
-  sheet.getRange(r, 2).setFontWeight('bold').setFontSize(fmt.jobNameValueSize).setFontColor(jobNameColor).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  var colors = getContrastingColors(jobBg, fmt.jobNameValueColor);
+  var primary = colors.primary;
+  var secondary = colors.secondary;
+  var tertiary = colors.tertiary;
+  var jobNameColor = primary;
+  sheet.getRange(r, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(tertiary);
+  sheet.getRange(r, 2).setFontWeight('bold').setFontSize(fmt.jobNameValueSize).setFontColor(primary).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r, fmt.rowHeightJobName);
 
-  // Row 2–4: same contrasting text as job name for dark jobBg (label/value on job header band)
-  sheet.getRange(r + 1, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(jobNameColor);
-  sheet.getRange(r + 1, 2).setFontWeight('bold').setFontSize(18).setFontColor(jobNameColor).setHorizontalAlignment('center');
-  sheet.getRange(r + 1, 3).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(jobNameColor);
-  sheet.getRange(r + 1, 4).setFontWeight('bold').setFontSize(18).setFontColor(jobNameColor).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
-  sheet.getRange(r + 1, 6).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(jobNameColor).setHorizontalAlignment('center');
-  sheet.getRange(r + 1, 7).setFontWeight('bold').setFontSize(18).setFontColor(jobNameColor).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  // Row 2–4: labels = tertiary, values (Order #, etc.) = secondary so job name (primary) stands out most
+  sheet.getRange(r + 1, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(tertiary);
+  sheet.getRange(r + 1, 2).setFontWeight('bold').setFontSize(18).setFontColor(secondary).setHorizontalAlignment('center');
+  sheet.getRange(r + 1, 3).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(tertiary);
+  sheet.getRange(r + 1, 4).setFontWeight('bold').setFontSize(18).setFontColor(secondary).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  sheet.getRange(r + 1, 6).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(tertiary).setHorizontalAlignment('center');
+  sheet.getRange(r + 1, 7).setFontWeight('bold').setFontSize(18).setFontColor(secondary).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r + 1, fmt.rowHeightLabel);
 
-  sheet.getRange(r + 2, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(jobNameColor);
-  sheet.getRange(r + 2, 2).setFontWeight('bold').setFontSize(18).setFontColor(jobNameColor).setHorizontalAlignment('center');
-  sheet.getRange(r + 2, 3).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(jobNameColor);
-  sheet.getRange(r + 2, 4).setFontWeight('bold').setFontSize(18).setFontColor(jobNameColor).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
-  sheet.getRange(r + 2, 6).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(jobNameColor).setHorizontalAlignment('center');
-  sheet.getRange(r + 2, 7).setFontWeight('bold').setFontSize(18).setFontColor(jobNameColor).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  sheet.getRange(r + 2, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(tertiary);
+  sheet.getRange(r + 2, 2).setFontWeight('bold').setFontSize(18).setFontColor(secondary).setHorizontalAlignment('center');
+  sheet.getRange(r + 2, 3).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(tertiary);
+  sheet.getRange(r + 2, 4).setFontWeight('bold').setFontSize(18).setFontColor(secondary).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  sheet.getRange(r + 2, 6).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(tertiary).setHorizontalAlignment('center');
+  sheet.getRange(r + 2, 7).setFontWeight('bold').setFontSize(18).setFontColor(secondary).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r + 2, fmt.rowHeightLabel);
 
-  sheet.getRange(r + 3, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(jobNameColor);
-  sheet.getRange(r + 3, 2).setFontWeight('bold').setFontSize(18).setFontColor(jobNameColor).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+  sheet.getRange(r + 3, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(tertiary);
+  sheet.getRange(r + 3, 2).setFontWeight('bold').setFontSize(18).setFontColor(secondary).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r + 3, fmt.rowHeightLabel);
 
   // Only border in the block: divider under Prep Notes (row r+3).
@@ -1081,7 +1119,7 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
     if (subIndex < strikeFlags.length && strikeFlags[subIndex]) {
       for (let c = 1; c <= numCols; c++) {
         const rng = sheet.getRange(row, c);
-        const style = rng.getTextStyle().setStrikethrough(true);
+        const style = rng.getTextStyle().copy().setStrikethrough(true).build();
         rng.setTextStyle(style);
       }
     }
