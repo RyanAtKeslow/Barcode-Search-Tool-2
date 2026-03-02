@@ -46,57 +46,58 @@ function parseSubBlockData(data) {
 }
 
 /**
- * Returns true if the row should be skipped: Requested Equipment (D or E) has strikethrough (cancelled).
- */
-function subBlockRowHasStrikethrough(sheet, dataStartRow, rowOffset) {
-  try {
-    const row = dataStartRow + rowOffset;
-    const cellD = sheet.getRange(row, 4).getTextStyle();
-    const cellE = sheet.getRange(row, 5).getTextStyle();
-    const d = cellD && cellD.isStrikethrough() === true;
-    const e = cellE && cellE.isStrikethrough() === true;
-    return !!(d || e);
-  } catch (err) {
-    return false;
-  }
-}
-
-/**
  * Scans entire SUB workbook (all non-template, non-hidden sheets, all blocks). Returns map normOrder -> items.
  * When the same quote appears in more than one block, we merge: all items from every matching block are included.
  */
 function scanSubWorkbookIntoMap() {
   const map = {};
+  let t0 = new Date().getTime();
   try {
     const ss = SpreadsheetApp.openById(SUB_SHEET_WORKBOOK_ID);
+    let t1 = new Date().getTime();
+    Logger.log('[Scan SUB] open SUB workbook: ' + (t1 - t0) + ' ms');
     const sheets = ss.getSheets();
+    Logger.log('[Scan SUB] getSheets() count: ' + sheets.length);
     for (let s = 0; s < sheets.length; s++) {
+      const sheetStart = new Date().getTime();
       const sheet = sheets[s];
-      if (sheet.getName() === SUB_SHEET_TEMPLATE_NAME) continue;
-      if (sheet.isSheetHidden()) continue;
+      const sheetName = sheet.getName();
+      if (sheetName === SUB_SHEET_TEMPLATE_NAME) {
+        Logger.log('[Scan SUB]   skip sheet (template): ' + sheetName);
+        continue;
+      }
+      if (sheet.isSheetHidden()) {
+        Logger.log('[Scan SUB]   skip sheet (hidden): ' + sheetName);
+        continue;
+      }
       const lastRow = sheet.getLastRow();
-      if (lastRow < SUB_BLOCK_FIRST_ROW + 1) continue;
+      if (lastRow < SUB_BLOCK_FIRST_ROW + 1) {
+        Logger.log('[Scan SUB]   skip sheet (no data): ' + sheetName);
+        continue;
+      }
+      let blocksWithQuote = 0;
       for (let k = 0; k < 18; k++) {
         const startRow = SUB_BLOCK_FIRST_ROW + k * SUB_BLOCK_ROW_COUNT;
         if (startRow + SUB_BLOCK_ROW_COUNT - 1 > lastRow) break;
         const quoteCell = sheet.getRange(startRow + 1, 2).getValue();
         const quoteNorm = String(quoteCell || '').replace(/[^0-9]/g, '');
         if (!quoteNorm) continue;
+        blocksWithQuote++;
         const dataStartRow = startRow + 3;
         const numDataRows = SUB_BLOCK_DATA_ROWS;
         const numCols = 16;
         const data = sheet.getRange(dataStartRow, 1, numDataRows, numCols).getValues();
-        const filtered = [];
-        for (let i = 0; i < data.length; i++) {
-          if (!subBlockRowHasStrikethrough(sheet, dataStartRow, i)) filtered.push(data[i]);
-        }
-        const items = parseSubBlockData(filtered);
+        const items = parseSubBlockData(data);
         if (items.length > 0) {
           if (!map[quoteNorm]) map[quoteNorm] = [];
           map[quoteNorm].push.apply(map[quoteNorm], items);
         }
       }
+      const sheetElapsed = new Date().getTime() - sheetStart;
+      Logger.log('[Scan SUB]   sheet "' + sheetName + '": ' + sheetElapsed + ' ms (blocksWithQuote=' + blocksWithQuote + ')');
     }
+    const scanTotal = new Date().getTime() - t0;
+    Logger.log('[Scan SUB] scanSubWorkbookIntoMap total: ' + scanTotal + ' ms');
   } catch (e) {
     Logger.log('scanSubWorkbookIntoMap: ' + e.message);
   }
@@ -109,27 +110,49 @@ function scanSubWorkbookIntoMap() {
  * Prep refresh (single-day and Initialize) only reads from the helper sheet and does not run this.
  */
 function runScanSubSheet() {
-  Logger.log('Scan SUB Sheet: starting full scan...');
+  const runStart = new Date().getTime();
+  Logger.log('[Scan SUB] ========== runScanSubSheet started ==========');
+
+  let t0 = new Date().getTime();
   const map = scanSubWorkbookIntoMap();
   const orderCount = Object.keys(map).length;
+  Logger.log('[Scan SUB] scan phase total: ' + (new Date().getTime() - t0) + ' ms');
+
+  t0 = new Date().getTime();
   const rows = [['OrderNumber', 'SubbedEquipment', 'Qty', 'Located', 'QuoteReceived', 'RunSheet', 'PackingSlip', 'Notes']];
   Object.keys(map).forEach(function (normOrder) {
     map[normOrder].forEach(function (item) {
       rows.push([normOrder, item.subbedEquipment, item.qty, item.located, item.quoteReceived, item.runSheet, item.packingSlip, item.notes]);
     });
   });
+  Logger.log('[Scan SUB] build rows array: ' + (new Date().getTime() - t0) + ' ms (rows=' + rows.length + ')');
+
+  t0 = new Date().getTime();
   const ss = SpreadsheetApp.openById(LA_PREP_STATUS_WORKBOOK_ID);
+  Logger.log('[Scan SUB] open LA Prep workbook: ' + (new Date().getTime() - t0) + ' ms');
+
   let sheet = ss.getSheetByName(SUB_HELPER_SHEET_NAME);
   if (!sheet) {
     sheet = ss.insertSheet(SUB_HELPER_SHEET_NAME);
-    Logger.log('Scan SUB Sheet: created ' + SUB_HELPER_SHEET_NAME);
+    Logger.log('[Scan SUB] created sheet: ' + SUB_HELPER_SHEET_NAME);
   }
+
+  t0 = new Date().getTime();
   sheet.clear();
+  Logger.log('[Scan SUB] sheet.clear(): ' + (new Date().getTime() - t0) + ' ms');
+
+  t0 = new Date().getTime();
   if (rows.length > 1) {
     sheet.getRange(1, 1, rows.length, 8).setValues(rows);
   } else {
     sheet.getRange(1, 1, 1, 8).setValues([rows[0]]);
   }
+  Logger.log('[Scan SUB] setValues(' + rows.length + 'x8): ' + (new Date().getTime() - t0) + ' ms');
+
+  t0 = new Date().getTime();
   SpreadsheetApp.flush();
-  Logger.log('Scan SUB Sheet: done. ' + orderCount + ' orders, ' + (rows.length - 1) + ' items.');
+  Logger.log('[Scan SUB] flush(): ' + (new Date().getTime() - t0) + ' ms');
+
+  const runTotal = new Date().getTime() - runStart;
+  Logger.log('[Scan SUB] ========== done. ' + orderCount + ' orders, ' + (rows.length - 1) + ' items. Total run: ' + runTotal + ' ms ==========');
 }
