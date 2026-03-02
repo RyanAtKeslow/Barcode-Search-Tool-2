@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 13px; padding: 12px; }
+    label { display: block; font-weight: bold; margin-bottom: 6px; }
+    textarea { width: 100%; height: 80px; margin-bottom: 10px; padding: 6px; box-sizing: border-box; }
+    button { padding: 8px 16px; font-size: 13px; cursor: pointer; }
+    .hint { color: #666; font-size: 11px; margin-top: 4px; }
+    #message { margin-top: 10px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <p><strong>Google Chat webhook URL</strong></p>
+  <label for="webhookUrl">Paste the incoming webhook URL for your Chat space. Leave blank to clear.</label>
+  <textarea id="webhookUrl" placeholder="https://chat.googleapis.com/..."></textarea>
+  <span class="hint">Get this from your Google Chat space: Manage webhooks → Add webhook.</span>
+  <p>
+    <button id="saveBtn">Save</button>
+  </p>
+  <div id="message"></div>
+  <script>
+    var saveBtn = document.getElementById('saveBtn');
+    var webhookUrl = document.getElementById('webhookUrl');
+    var message = document.getElementById('message');
+
+    function showMsg(text, isError) {
+      message.textContent = text || '';
+      message.style.color = isError ? '#c00' : '#333';
+    }
+
+    saveBtn.addEventListener('click', function() {
+      var url = (webhookUrl.value || '').trim();
+      saveBtn.disabled = true;
+      showMsg('Saving...');
+      google.script.run
+        .withSuccessHandler(function() {
+          showMsg(url ? 'Webhook URL saved.' : 'Webhook URL cleared.');
+          saveBtn.disabled = false;
+        })
+        .withFailureHandler(function(err) {
+          showMsg('Error: ' + (err && err.message ? err.message : String(err)), true);
+          saveBtn.disabled = false;
+        })
+        .saveNotificationsWebhookUrl(url);
+    });
+  </script>
+</body>
+</html>

@@ -87,15 +87,21 @@ function sendSubRentalsNotificationToGchat(newItems) {
 }
 
 /**
- * Menu: prompt for Google Chat webhook URL and save to Script Properties.
+ * Menu: open sidebar to set Google Chat webhook URL (avoids prompt so execution does not pause).
  */
 function setNotificationsWebhook() {
-  var ui = SpreadsheetApp.getUi();
-  var result = ui.prompt('Google Chat webhook URL', 'Paste the incoming webhook URL for your Chat space. Leave blank to clear.', ui.ButtonSet.OK_CANCEL);
-  if (result.getSelectedButton() !== ui.Button.OK) return;
-  var url = result.getResponseText().trim();
-  PropertiesService.getScriptProperties().setProperty(NOTIFICATIONS_GCHAT_WEBHOOK_KEY, url);
-  ui.alert(url ? 'Webhook URL saved.' : 'Webhook URL cleared.');
+  var html = HtmlService.createHtmlOutputFromFile('WebhookSidebar')
+    .setTitle('Set Google Chat webhook')
+    .setWidth(380);
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
+/**
+ * Called from WebhookSidebar: save webhook URL to Script Properties.
+ */
+function saveNotificationsWebhookUrl(url) {
+  var trimmed = (url != null ? String(url) : '').trim();
+  PropertiesService.getScriptProperties().setProperty(NOTIFICATIONS_GCHAT_WEBHOOK_KEY, trimmed);
 }
 
 /**
