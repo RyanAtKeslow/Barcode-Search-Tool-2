@@ -1090,8 +1090,9 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   const equipmentDataFirstRow = eqHeaderRow + 1;
   const equipmentDataLastRow = equipmentBlockEndRow;
 
-  // Equipment data rows: no background or text color (headers unchanged); row height and category label style only
+  // Equipment data rows: column A (category headers e.g. Cameras:, Lenses:) = same bg and text color as job name block; rest of row default
   for (let row = equipmentDataFirstRow; row <= equipmentDataLastRow; row++) {
+    sheet.getRange(row, 1).setBackground(jobBg).setFontColor(jobNameColor);
     sheet.setRowHeight(row, fmt.rowHeightCategory);
   }
   const aVals = numEquipmentBlockRows > 0 ? sheet.getRange(equipmentDataFirstRow, 1, numEquipmentBlockRows, 1).getValues() : [];
