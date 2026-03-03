@@ -954,7 +954,7 @@ function buildJobBlockRows(job) {
   if (subItems.length > 0) {
     subItems.forEach(function (item) {
       subStrikethroughFlags.push(item.strikethrough === true);
-      rows.push(padRow(['', item.addedBy || '', item.subbedEquipment, item.qty, item.locatingAgent || '', locatedDisplay(item.located), statusDisplay(item.quoteReceived), statusDisplay(item.runSheet), statusDisplay(item.packingSlip), item.notes, '']));
+      rows.push(padRow([item.addedBy || '', item.subbedEquipment, item.qty, item.locatingAgent || '', locatedDisplay(item.located), statusDisplay(item.quoteReceived), statusDisplay(item.runSheet), statusDisplay(item.packingSlip), item.notes, '']));
     });
   } else {
     rows.push(padRow(['', '', '', '', '', '', '', '', '', '']));
@@ -1018,7 +1018,7 @@ function buildJobBlockRowsWithCameras(job, equipmentList) {
   if (subItems.length > 0) {
     subItems.forEach(function (item) {
       subStrikethroughFlags.push(item.strikethrough === true);
-      rows.push(padRow(['', item.addedBy || '', item.subbedEquipment, item.qty, item.locatingAgent || '', locatedDisplay(item.located), statusDisplay(item.quoteReceived), statusDisplay(item.runSheet), statusDisplay(item.packingSlip), item.notes, '']));
+      rows.push(padRow([item.addedBy || '', item.subbedEquipment, item.qty, item.locatingAgent || '', locatedDisplay(item.located), statusDisplay(item.quoteReceived), statusDisplay(item.runSheet), statusDisplay(item.packingSlip), item.notes, '']));
     });
   } else {
     rows.push(padRow(['', '', '', '', '', '', '', '', '', '']));

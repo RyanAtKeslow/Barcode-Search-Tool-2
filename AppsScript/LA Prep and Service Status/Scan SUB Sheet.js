@@ -25,24 +25,25 @@ const SUB_DATA_OFFSET = 2;      // first data row = order row + 2
 // Column layout (header row 8): A=blank, B=Time Needed By, C=QTY, D:E=Requested Equipment, F=Billing Days (unused),
 // G=Added By, H=Agent Signoff, I=Called (unused), J=Located, K=Quote Received, L=Run Sheet w/ Shipping, M=Packing Slip, N:P=Notes, Q=Locating Agent (header in Q6; data starts Q9).
 const SUB_NUM_COLS = 17;        // A–Q
+const SUB_SHEET_MAX_ROW = 275;  // per-sheet cap; never scan past this row
 
 /**
- * Returns true if sheetName looks like a date (e.g. "Monday 3/2/26") and that date is before today.
- * Used to skip past-date sheets that haven't been hidden yet.
+ * Returns true if sheetName looks like a date (e.g. "Tuesday 3/3/26") and that date is before today.
+ * Uses the script timezone (Session.getScriptTimeZone()) so "today" is the calendar day where you are, not UTC.
  */
 function isPastDateSheetName(sheetName) {
   if (!sheetName || typeof sheetName !== 'string') return false;
   var match = String(sheetName).trim().match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
   if (!match) return false;
-  var month = parseInt(match[1], 10) - 1;
+  var month = parseInt(match[1], 10);
   var day = parseInt(match[2], 10);
   var year = parseInt(match[3], 10);
   if (year < 100) year += 2000;
-  var sheetDate = new Date(year, month, day);
-  var today = new Date();
-  today.setHours(0, 0, 0, 0);
-  sheetDate.setHours(0, 0, 0, 0);
-  return sheetDate.getTime() < today.getTime();
+  var sheetDateStr = year + '-' + (month < 10 ? '0' : '') + month + '-' + (day < 10 ? '0' : '') + day;
+  var tz = Session.getScriptTimeZone();
+  if (!tz) tz = 'America/Los_Angeles';
+  var todayStr = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  return sheetDateStr < todayStr;
 }
 
 /**
@@ -123,10 +124,11 @@ function scanSubWorkbookIntoMap() {
         Logger.log('[Scan SUB]   skip sheet (no data): ' + sheetName);
         continue;
       }
+      const maxRow = Math.min(lastRow, SUB_SHEET_MAX_ROW);
       let blocksWithQuote = 0;
       for (let k = 0; k < 18; k++) {
         const orderRow = SUB_BLOCK_FIRST_ROW + k * SUB_BLOCK_ROW_COUNT;
-        if (orderRow + SUB_DATA_OFFSET + SUB_BLOCK_DATA_ROWS - 1 > lastRow) break;
+        if (orderRow + SUB_DATA_OFFSET + SUB_BLOCK_DATA_ROWS - 1 > maxRow) break;
         const quoteCell = sheet.getRange(orderRow, 2).getValue();
         const quoteNorm = String(quoteCell || '').replace(/[^0-9]/g, '');
         if (!quoteNorm) continue;
