@@ -8,6 +8,7 @@
     #orderList { max-height: 280px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; margin: 8px 0; }
     #orderList label { display: block; margin: 4px 0; cursor: pointer; }
     #saveBtn { margin-top: 8px; padding: 8px 14px; }
+    #selectAllBtn, #selectNoneBtn { margin-right: 6px; padding: 4px 10px; }
     .hint { color: #666; font-size: 11px; margin-top: 4px; }
   </style>
 </head>
@@ -17,6 +18,10 @@
     <option value="">-- Choose a user --</option>
   </select>
   <p><strong>Orders to track</strong> <span class="hint">(from job blocks / Sub Equipment Helper)</span></p>
+  <p>
+    <button type="button" id="selectAllBtn">Select All</button>
+    <button type="button" id="selectNoneBtn">Select None</button>
+  </p>
   <div id="orderList"></div>
   <button id="saveBtn">Save</button>
   <script type="application/json" id="sidebar-data"><?!= (typeof sidebarData !== 'undefined' && sidebarData != null ? JSON.stringify(sidebarData).replace(/<\//g, '<\\/') : '{"users":[],"orders":[]}') ?></script>
@@ -27,6 +32,15 @@
     var userSelect = document.getElementById('userSelect');
     var orderList = document.getElementById('orderList');
     var saveBtn = document.getElementById('saveBtn');
+    var selectAllBtn = document.getElementById('selectAllBtn');
+    var selectNoneBtn = document.getElementById('selectNoneBtn');
+
+    selectAllBtn.addEventListener('click', function() {
+      orderList.querySelectorAll('.order-cb').forEach(function(cb) { cb.checked = true; });
+    });
+    selectNoneBtn.addEventListener('click', function() {
+      orderList.querySelectorAll('.order-cb').forEach(function(cb) { cb.checked = false; });
+    });
 
     (users || []).forEach(function(u) {
       var opt = document.createElement('option');
