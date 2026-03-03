@@ -10,6 +10,10 @@
     #saveBtn { margin-top: 8px; padding: 8px 14px; }
     #selectAllBtn, #selectNoneBtn { margin-right: 6px; padding: 4px 10px; }
     .hint { color: #666; font-size: 11px; margin-top: 4px; }
+    #message { margin-top: 10px; padding: 8px; border-radius: 4px; font-size: 13px; min-height: 1.2em; }
+    #message.success { background: #e6f4ea; color: #137333; border: 1px solid #137333; }
+    #message.error { background: #fce8e6; color: #c5221f; border: 1px solid #c5221f; }
+    #message:empty { display: none; }
   </style>
 </head>
 <body>
@@ -24,6 +28,7 @@
   </p>
   <div id="orderList"></div>
   <button id="saveBtn">Save</button>
+  <div id="message" role="status"></div>
   <script type="application/json" id="sidebar-data"><?!= (typeof sidebarData !== 'undefined' && sidebarData != null ? JSON.stringify(sidebarData).replace(/<\//g, '<\\/') : '{"users":[],"orders":[]}') ?></script>
   <script>
     var data = JSON.parse(document.getElementById('sidebar-data').textContent);
@@ -34,12 +39,21 @@
     var saveBtn = document.getElementById('saveBtn');
     var selectAllBtn = document.getElementById('selectAllBtn');
     var selectNoneBtn = document.getElementById('selectNoneBtn');
+    var messageEl = document.getElementById('message');
+
+    function showMessage(text, isError) {
+      messageEl.textContent = text || '';
+      messageEl.className = isError ? 'error' : 'success';
+      messageEl.style.display = text ? 'block' : 'none';
+    }
 
     selectAllBtn.addEventListener('click', function() {
+      showMessage('');
       orderList.querySelectorAll('.order-cb').forEach(function(cb) { cb.checked = true; });
     });
     selectNoneBtn.addEventListener('click', function() {
       orderList.querySelectorAll('.order-cb').forEach(function(cb) { cb.checked = false; });
+      showMessage('');
     });
 
     (users || []).forEach(function(u) {
@@ -61,6 +75,7 @@
     });
 
     userSelect.addEventListener('change', function() {
+      showMessage('');
       var row = userSelect.value;
       if (!row) return;
       var rowNum = parseInt(row, 10);
@@ -73,28 +88,35 @@
             cb.checked = !!set[cb.value];
           });
         })
-        .withFailureHandler(function(err) { alert('Could not load orders: ' + (err && err.message ? err.message : String(err))); })
+        .withFailureHandler(function(err) { showMessage('Could not load orders: ' + (err && err.message ? err.message : String(err)), true); })
         .getTrackedOrdersForRow(rowNum);
     });
 
     saveBtn.addEventListener('click', function() {
+      showMessage('');
       var row = userSelect.value;
       if (!row) {
-        alert('Select a user first.');
+        showMessage('Select a user first.', true);
         return;
       }
       var rowNum = parseInt(row, 10);
       if (isNaN(rowNum) || rowNum < 2) {
-        alert('Invalid selection.');
+        showMessage('Invalid selection.', true);
         return;
       }
       var selected = [];
       orderList.querySelectorAll('.order-cb:checked').forEach(function(cb) { selected.push(cb.value); });
+      saveBtn.disabled = true;
       google.script.run
         .withSuccessHandler(function() {
-          alert('Saved. Orders tracked: ' + (selected.length ? selected.join(', ') : 'none'));
+          var count = selected.length;
+          showMessage('Saved. ' + (count ? count + ' order' + (count === 1 ? '' : 's') + ' are now tracked for this user.' : 'No orders selected — tracking cleared for this user.'), false);
+          saveBtn.disabled = false;
         })
-        .withFailureHandler(function(err) { alert('Could not save: ' + (err && err.message ? err.message : String(err))); })
+        .withFailureHandler(function(err) {
+          showMessage('Could not save: ' + (err && err.message ? err.message : String(err)), true);
+          saveBtn.disabled = false;
+        })
         .saveTrackedOrdersForRow(rowNum, selected);
     });
   </script>

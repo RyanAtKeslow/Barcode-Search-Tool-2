@@ -11,6 +11,7 @@ var KESLOW_EMAIL_SUFFIX = '@keslowcamera.com';
 
 /**
  * Ensures the Notifications Settings sheet exists with headers. Columns: Name, Email, Orders, Serviced Equipment, Sub-Rentals.
+ * Column C = order numbers only (no validation). Column B has email note. D and E = checkboxes for opt-in.
  */
 function ensureNotificationsSettingsSheet() {
   var ss = SpreadsheetApp.openById(LA_PREP_STATUS_WORKBOOK_ID);
@@ -19,8 +20,16 @@ function ensureNotificationsSettingsSheet() {
     sheet = ss.insertSheet(NOTIFICATIONS_SETTINGS_SHEET_NAME);
     sheet.getRange(1, 1, 1, 5).setValues([['Name', 'Email', 'Orders', 'Serviced Equipment', 'Sub-Rentals']]);
     sheet.getRange(1, 1, 1, 5).setFontWeight('bold');
-    sheet.getRange(2, 2, 2, 2).setNote('Must be an @keslowcamera.com address. Other addresses are ignored.');
   }
+  // Email note on B2 only (column C is for order numbers, never email validation)
+  sheet.getRange(2, 2).setNote('Must be an @keslowcamera.com address. Other addresses are ignored.');
+  // Column C: clear any data validation so it never shows email rules (C is order numbers, comma-separated)
+  var lastRow = Math.max(sheet.getLastRow(), 2);
+  var cRange = sheet.getRange(2, 3, lastRow, 3);
+  if (cRange) cRange.clearDataValidations();
+  // Columns D and E: checkboxes for Serviced Equipment / Sub-Rentals opt-in
+  var deRange = sheet.getRange(2, 4, Math.max(lastRow, 50), 5);
+  deRange.insertCheckboxes();
   return sheet;
 }
 
