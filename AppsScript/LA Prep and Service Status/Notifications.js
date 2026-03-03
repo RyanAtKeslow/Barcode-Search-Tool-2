@@ -87,11 +87,12 @@ function sendSubRentalsNotificationToGchat(newItems) {
     var tracking = s.orderNumbers.some(function (ord) { return orderNumbers[ord]; });
     if (tracking) names.push(s.name || s.email);
   });
-  var text = 'New subbed equipment (run sheet confirmed) for today or tomorrow:\n\n';
+  var text = 'New subbed equipment (run sheet confirmed) for today:\n\n';
   newItems.forEach(function (item) {
-    text += '• Order ' + item.orderNumber + ' — ' + (item.subbedEquipment || 'Subbed item') + (item.qty ? ' (Qty ' + item.qty + ')' : '') + ' — Prep ' + item.prepDay + '\n';
+    var jobPart = (item.jobName && String(item.jobName).trim()) ? ' — ' + String(item.jobName).trim() + ' — ' : ' — ';
+    text += '• O# ' + item.orderNumber + jobPart + (item.subbedEquipment || 'Subbed item') + (item.qty ? ' (Qty ' + item.qty + ')' : '') + '\n';
   });
-  if (names.length > 0) text += '\nTracking: ' + names.join(', ');
+  if (names.length > 0) text += '\nTracking: ' + names.map(function (n) { return '@' + n; }).join(', ');
   try {
     UrlFetchApp.fetch(webhookUrl.trim(), {
       method: 'post',

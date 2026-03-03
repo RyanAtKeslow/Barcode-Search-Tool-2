@@ -570,20 +570,22 @@ function readSubSheetDataForOrder(orderNumber) {
 const SUB_ALERT_LAST_SEEN_KEY = 'SUB_ALERT_LAST_SEEN';
 
 /**
- * Gets new subbed-equipment items for today and tomorrow that have run sheet confirmed, and that we haven't alerted on yet.
- * @returns {{ newItems: Array<{orderNumber: string, subbedEquipment: string, qty: string, located: string, prepDay: string}>, allCurrentKeys: Array<string> }}
+ * Gets new subbed-equipment items for today only (run sheet confirmed) that we haven't alerted on yet.
+ * @returns {{ newItems: Array<{orderNumber: string, jobName: string, subbedEquipment: string, qty: string, located: string}>, allCurrentKeys: Array<string> }}
  */
 function getSubbedEquipmentAlerts() {
   const today = new Date();
-  const tomorrow = getDateForForecastOffset(today, 1);
   const todaySheet = getTodaySheetName(today);
-  const tomorrowSheet = getTodaySheetName(tomorrow);
   const todayData = readPrepBayDataForDate(todaySheet);
-  const tomorrowData = readPrepBayDataForDate(tomorrowSheet);
   const todayOrders = {};
-  const tomorrowOrders = {};
-  (todayData || []).forEach(function (r) { todayOrders[String(r.orderNumber || '').replace(/[^0-9]/g, '')] = true; });
-  (tomorrowData || []).forEach(function (r) { tomorrowOrders[String(r.orderNumber || '').replace(/[^0-9]/g, '')] = true; });
+  const todayOrderToJobName = {};
+  (todayData || []).forEach(function (r) {
+    const norm = String(r.orderNumber || '').replace(/[^0-9]/g, '');
+    if (norm) {
+      todayOrders[norm] = true;
+      todayOrderToJobName[norm] = (r.jobName && String(r.jobName).trim()) || '';
+    }
+  });
 
   const hasCheck = function (v) { return v === true || v === 'TRUE' || /✓|✔|yes|true|1/i.test(String(v || '')); };
   let lastSeen = [];
@@ -613,12 +615,15 @@ function getSubbedEquipmentAlerts() {
       const located = row[5] != null ? String(row[5]).trim() : '';
       const key = orderNumber + '|' + subbedEquipment + '|' + qty;
       allCurrentKeys.push(key);
-      const isToday = todayOrders[orderNumber];
-      const isTomorrow = tomorrowOrders[orderNumber];
-      if (!isToday && !isTomorrow) continue; // only today or tomorrow
-      const prepDay = isToday && isTomorrow ? 'Today & Tomorrow' : (isToday ? 'Today' : 'Tomorrow');
+      if (!todayOrders[orderNumber]) continue; // only today (pickup today)
       if (!lastSeenSet[key]) {
-        newItems.push({ orderNumber: orderNumber, subbedEquipment: subbedEquipment, qty: qty, located: located, prepDay: prepDay });
+        newItems.push({
+          orderNumber: orderNumber,
+          jobName: todayOrderToJobName[orderNumber] || '',
+          subbedEquipment: subbedEquipment,
+          qty: qty,
+          located: located
+        });
       }
     }
   } catch (e) {
@@ -646,9 +651,10 @@ function showSubbedEquipmentAlertIfAny() {
     try { PropertiesService.getScriptProperties().setProperty(SUB_ALERT_LAST_SEEN_KEY, JSON.stringify(allCurrentKeys)); } catch (e) { }
     return;
   }
-  let message = 'New subbed equipment (run sheet confirmed) for today or tomorrow:\n\n';
+  let message = 'New subbed equipment (run sheet confirmed) for today:\n\n';
   newItems.forEach(function (item) {
-    message += '• Order ' + item.orderNumber + ' — ' + (item.subbedEquipment || 'Subbed item') + (item.qty ? ' (Qty ' + item.qty + ')' : '') + ' — Prep ' + item.prepDay + '\n';
+    var jobPart = (item.jobName && item.jobName.trim()) ? ' — ' + item.jobName.trim() + ' — ' : ' — ';
+    message += '• O# ' + item.orderNumber + jobPart + (item.subbedEquipment || 'Subbed item') + (item.qty ? ' (Qty ' + item.qty + ')' : '') + '\n';
   });
   message += '\nClick OK to clear.';
   try {
