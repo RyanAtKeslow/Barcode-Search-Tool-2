@@ -545,15 +545,17 @@ function readSubSheetDataForOrder(orderNumber) {
       const rowOrder = String(row[0] != null ? row[0] : '').replace(/[^0-9]/g, '');
       if (rowOrder !== normOrder) continue;
       const hasCheck = function (v) { return v === true || v === 'TRUE' || /✓|✔|yes|true|1/i.test(String(v || '')); };
-      const strikethrough = row[8] === true || row[8] === 'TRUE' || /✓|✔|yes|true|1/i.test(String(row[8] || ''));
+      const strikethrough = row[10] === true || row[10] === 'TRUE' || /✓|✔|yes|true|1/i.test(String(row[10] || ''));
       items.push({
-        subbedEquipment: row[1] != null ? String(row[1]).trim() : '',
-        qty: row[2] != null ? String(row[2]).trim() : '',
-        located: row[3] != null ? String(row[3]).trim() : '',
-        quoteReceived: hasCheck(row[4]),
-        runSheet: hasCheck(row[5]),
-        packingSlip: hasCheck(row[6]),
-        notes: row[7] != null ? String(row[7]).trim() : '',
+        addedBy: row[1] != null ? String(row[1]).trim() : '',
+        subbedEquipment: row[2] != null ? String(row[2]).trim() : '',
+        qty: row[3] != null ? String(row[3]).trim() : '',
+        locatingAgent: row[4] != null ? String(row[4]).trim() : '',
+        located: row[5] != null ? String(row[5]).trim() : '',
+        quoteReceived: hasCheck(row[6]),
+        runSheet: hasCheck(row[7]),
+        packingSlip: hasCheck(row[8]),
+        notes: row[9] != null ? String(row[9]).trim() : '',
         strikethrough: strikethrough
       });
     }
@@ -604,11 +606,11 @@ function getSubbedEquipmentAlerts() {
       const row = data[i];
       const orderNumber = String(row[0] != null ? row[0] : '').replace(/[^0-9]/g, '');
       if (!orderNumber) continue;
-      const runSheet = hasCheck(row[5]);
+      const runSheet = hasCheck(row[7]);
       if (!runSheet) continue; // only when run out slip has been confirmed
-      const subbedEquipment = row[1] != null ? String(row[1]).trim() : '';
-      const qty = row[2] != null ? String(row[2]).trim() : '';
-      const located = row[3] != null ? String(row[3]).trim() : '';
+      const subbedEquipment = row[2] != null ? String(row[2]).trim() : '';
+      const qty = row[3] != null ? String(row[3]).trim() : '';
+      const located = row[5] != null ? String(row[5]).trim() : '';
       const key = orderNumber + '|' + subbedEquipment + '|' + qty;
       allCurrentKeys.push(key);
       const isToday = todayOrders[orderNumber];
@@ -902,8 +904,17 @@ function padRow(arr) {
 }
 
 /** Returns '✓' for truthy/checked (true, 'TRUE', ✓, yes, 1), else '' so we never write "FALSE" to the sheet. */
+/** For status columns: false/FALSE → '', true/✓/truthy → '✓'. Prints the ✓ character, not checkboxes. */
 function statusDisplay(v) {
+  if (v === false || v === 'FALSE' || v === null || v === undefined) return '';
   return (v === true || v === 'TRUE' || /✓|✔|yes|true|1/i.test(String(v || '')) ? '✓' : '');
+}
+
+/** For Located (E): if value is checkmark/boolean show '✓' or '', else show as text (vendor name). */
+function locatedDisplay(v) {
+  var s = String(v || '').trim();
+  if (v === true || v === 'TRUE' || v === false || v === 'FALSE' || /^✓|✔|yes|true|1|0$/i.test(s)) return statusDisplay(v);
+  return s;
 }
 
 /**
@@ -927,17 +938,26 @@ function buildJobBlockRows(job) {
     rows.push(padRow([cat + ':', '', '', '', '', '', '']));
   });
 
-  // Sub-rental section: header then one row per SUB item (from SUB sheet) or one empty row if none.
-  rows.push(padRow(['Locating Agent', 'Subbed Equipment', 'Quantity', 'Located', 'Quote Received', 'Run Sheet Out', 'Packing Slip', 'Notes', '']));
+  // Sub-rental section: header then one row per SUB item. Data source (SUB sheet: order in B7 then +13 rows; header row 8; data rows 9–18; cols A–Q) → Helper → job block:
+  // A Added By       = SUB G (row[6])         → Helper AddedBy      → item.addedBy
+  // B Subbed Equip   = SUB D:E (row[3]+[4])   → Helper SubbedEquip → item.subbedEquipment (Requested Equipment)
+  // C Quantity       = SUB C (row[2])         → Helper Qty          → item.qty
+  // D Locating Agent = SUB Q (row[16])        → Helper LocatingAgent→ item.locatingAgent (Q9–Q18)
+  // E Located        = SUB J (row[9])        → Helper Located      → locatedDisplay(item.located)
+  // F Quote Received = SUB K (row[10])        → Helper QuoteReceived→ statusDisplay → '✓' or ''
+  // G Run Sheet Out  = SUB L (row[11])        → Helper RunSheet     → statusDisplay → '✓' or ''
+  // H Packing Slip   = SUB M (row[12])        → Helper PackingSlip  → statusDisplay → '✓' or ''
+  // I Notes          = SUB N:P (row[13–15])   → Helper Notes        → item.notes (wrap; job block merges I:J)
+  rows.push(padRow(['Added By', 'Subbed Equipment', 'Quantity', 'Locating Agent', 'Located', 'Quote Received', 'Run Sheet Out', 'Packing Slip', 'Notes', '']));
   const subItems = readSubSheetDataForOrder(job.orderNumber);
   const subStrikethroughFlags = [];
   if (subItems.length > 0) {
     subItems.forEach(function (item) {
       subStrikethroughFlags.push(item.strikethrough === true);
-      rows.push(padRow(['', item.subbedEquipment, item.qty, item.located || '', statusDisplay(item.quoteReceived), statusDisplay(item.runSheet), statusDisplay(item.packingSlip), item.notes, '', '']));
+      rows.push(padRow(['', item.addedBy || '', item.subbedEquipment, item.qty, item.locatingAgent || '', locatedDisplay(item.located), statusDisplay(item.quoteReceived), statusDisplay(item.runSheet), statusDisplay(item.packingSlip), item.notes, '']));
     });
   } else {
-    rows.push(padRow(['', '', '', '', '', '', '', '', '']));
+    rows.push(padRow(['', '', '', '', '', '', '', '', '', '']));
   }
   rows.push(padRow([])); // black separator row (formatted in applyJobBlockFormatting)
 
@@ -992,16 +1012,16 @@ function buildJobBlockRowsWithCameras(job, equipmentList) {
   const normalized = normalizeEquipmentByCategory(equipmentList, 'Cameras');
   rows.push.apply(rows, buildEquipmentBlockRows(normalized));
 
-  rows.push(padRow(['Locating Agent', 'Subbed Equipment', 'Quantity', 'Located', 'Quote Received', 'Run Sheet Out', 'Packing Slip', 'Notes', '']));
+  rows.push(padRow(['Added By', 'Subbed Equipment', 'Quantity', 'Locating Agent', 'Located', 'Quote Received', 'Run Sheet Out', 'Packing Slip', 'Notes', '']));
   const subItems = readSubSheetDataForOrder(job.orderNumber);
   const subStrikethroughFlags = [];
   if (subItems.length > 0) {
     subItems.forEach(function (item) {
       subStrikethroughFlags.push(item.strikethrough === true);
-      rows.push(padRow(['', item.subbedEquipment, item.qty, item.located || '', statusDisplay(item.quoteReceived), statusDisplay(item.runSheet), statusDisplay(item.packingSlip), item.notes, '', '']));
+      rows.push(padRow(['', item.addedBy || '', item.subbedEquipment, item.qty, item.locatingAgent || '', locatedDisplay(item.located), statusDisplay(item.quoteReceived), statusDisplay(item.runSheet), statusDisplay(item.packingSlip), item.notes, '']));
     });
   } else {
-    rows.push(padRow(['', '', '', '', '', '', '', '', '']));
+    rows.push(padRow(['', '', '', '', '', '', '', '', '', '']));
   }
   rows.push(padRow([])); // black separator row (formatted in applyJobBlockFormatting)
   return { rows: rows, subStrikethroughFlags: subStrikethroughFlags };
@@ -1071,14 +1091,14 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   };
   applyTableHeaderStyle(eqHeaderRow);
 
-  // Find Locating Agent / Subbed Equipment header row (column A = "Locating Agent") so equipment block length is dynamic
+  // Find Locating Agent / Subbed Equipment header row (column D = "Locating Agent") so equipment block length is dynamic
   const searchEndRow = Math.min(blockEndRow, sheet.getLastRow());
   const numRowsToSearch = searchEndRow - eqHeaderRow;
-  const colAVals = numRowsToSearch > 0 ? sheet.getRange(eqHeaderRow + 1, 1, numRowsToSearch, 1).getValues() : [];
-  // Fallback: Locating Agent is 2 rows above black bar (sub data, black)
+  const colDVals = numRowsToSearch > 0 ? sheet.getRange(eqHeaderRow + 1, 4, numRowsToSearch, 1).getValues() : [];
+  // Fallback: Locating Agent row is 2 rows above black bar (sub data, black)
   let subHeaderRow = blockEndRow - 2;
-  for (let i = 0; i < colAVals.length; i++) {
-    if (String(colAVals[i][0]).trim() === 'Locating Agent') {
+  for (let i = 0; i < colDVals.length; i++) {
+    if (String(colDVals[i][0]).trim() === 'Locating Agent') {
       subHeaderRow = eqHeaderRow + 1 + i;
       break;
     }
@@ -1105,13 +1125,20 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
     }
   }
 
-  // --- Subbed Equipment: Locating Agent header unchanged; data row(s) no background or text color ---
+  // --- Subbed Equipment: Locating Agent header unchanged; data row(s) no background or text color. Notes (I:J) merged + wrap. ---
   applyTableHeaderStyle(subHeaderRow);
+  sheet.getRange(subHeaderRow, 9, 1, 2).merge();
   const subDataFirstRow = subHeaderRow + 1;
   const subDataLastRow = blockEndRow - 1;
   const strikeFlags = subStrikethroughFlags || [];
   for (let row = subDataFirstRow; row <= subDataLastRow; row++) {
     sheet.setRowHeight(row, fmt.rowHeightCategory);
+    sheet.getRange(row, 3).setHorizontalAlignment('center');
+    sheet.getRange(row, 6).setHorizontalAlignment('center');
+    sheet.getRange(row, 7).setHorizontalAlignment('center');
+    sheet.getRange(row, 8).setHorizontalAlignment('center');
+    var notesRange = sheet.getRange(row, 9, 1, 2);
+    notesRange.merge().setWrap(true);
     const subIndex = row - subDataFirstRow;
     if (subIndex < strikeFlags.length && strikeFlags[subIndex]) {
       for (let c = 1; c <= numCols; c++) {
