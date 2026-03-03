@@ -948,7 +948,7 @@ function buildJobBlockRows(job) {
   // G Run Sheet Out  = SUB L (row[11])        → Helper RunSheet     → statusDisplay → '✓' or ''
   // H Packing Slip   = SUB M (row[12])        → Helper PackingSlip  → statusDisplay → '✓' or ''
   // I Notes          = SUB N:P (row[13–15])   → Helper Notes        → item.notes (wrap; job block merges I:J)
-  rows.push(padRow(['Added By', 'Subbed Equipment', 'Quantity', 'Locating Agent', 'Located', 'Quote Received', 'Run Sheet Out', 'Packing Slip', 'Notes', '']));
+  rows.push(padRow(['Added By', 'Subbed Equipment', 'Quantity', 'Locating Agent', 'Located At', 'Quote Received', 'Run Sheet Out', 'Packing Slip', 'Notes', '']));
   const subItems = readSubSheetDataForOrder(job.orderNumber);
   const subStrikethroughFlags = [];
   if (subItems.length > 0) {
@@ -1012,7 +1012,7 @@ function buildJobBlockRowsWithCameras(job, equipmentList) {
   const normalized = normalizeEquipmentByCategory(equipmentList, 'Cameras');
   rows.push.apply(rows, buildEquipmentBlockRows(normalized));
 
-  rows.push(padRow(['Added By', 'Subbed Equipment', 'Quantity', 'Locating Agent', 'Located', 'Quote Received', 'Run Sheet Out', 'Packing Slip', 'Notes', '']));
+  rows.push(padRow(['Added By', 'Subbed Equipment', 'Quantity', 'Locating Agent', 'Located At', 'Quote Received', 'Run Sheet Out', 'Packing Slip', 'Notes', '']));
   const subItems = readSubSheetDataForOrder(job.orderNumber);
   const subStrikethroughFlags = [];
   if (subItems.length > 0) {
