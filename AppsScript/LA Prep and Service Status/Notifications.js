@@ -23,13 +23,22 @@ function ensureNotificationsSettingsSheet() {
   }
   // Email note on B2 only (column C is for order numbers, never email validation)
   sheet.getRange(2, 2).setNote('Must be an @keslowcamera.com address. Other addresses are ignored.');
-  // Column C: clear any data validation so it never shows email rules (C is order numbers, comma-separated)
   var lastRow = Math.max(sheet.getLastRow(), 2);
-  var cRange = sheet.getRange(2, 3, lastRow, 3);
+  var normalWidth = 100;
+  // Column B: 2.5x width, text clipping
+  sheet.setColumnWidth(2, normalWidth * 2.5);
+  sheet.getRange(2, 2, Math.max(lastRow, 500), 1).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+  // Column C: clear any data validation; set width to 4x normal and text clipping
+  var cRange = sheet.getRange(2, 3, lastRow, 1);
   if (cRange) cRange.clearDataValidations();
-  // Columns D and E: checkboxes for Serviced Equipment / Sub-Rentals opt-in
-  var deRange = sheet.getRange(2, 4, Math.max(lastRow, 50), 5);
+  sheet.setColumnWidth(3, normalWidth * 4);
+  sheet.getRange(2, 3, Math.max(lastRow, 500), 1).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+  // Columns D and E only: checkboxes for Serviced Equipment / Sub-Rentals opt-in (getRange 4-arg = row, col, numRows, numColumns)
+  var deRange = sheet.getRange(2, 4, Math.max(lastRow, 50), 2);
   deRange.insertCheckboxes();
+  // Remove any checkboxes that were wrongly applied to F,G,H in the past
+  var fghRange = sheet.getRange(2, 6, Math.max(lastRow, 50), 3);
+  fghRange.clearContent().clearDataValidations();
   return sheet;
 }
 
