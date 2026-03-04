@@ -1061,12 +1061,14 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   var secondary = colors.secondary;
   var tertiary = colors.tertiary;
   var jobNameColor = primary;
-  sheet.getRange(r, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(tertiary);
+  // Left-side headers (column A) on jobBg: black on light backgrounds, white on dark
+  var labelFg = getLuminance(jobBg) >= 0.4 ? '#000000' : '#ffffff';
+  sheet.getRange(r, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(labelFg);
   sheet.getRange(r, 2).setFontWeight('bold').setFontSize(fmt.jobNameValueSize).setFontColor(primary).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r, fmt.rowHeightJobName);
 
-  // Row 2–4: labels = tertiary, values (Order #, etc.) = secondary so job name (primary) stands out most
-  sheet.getRange(r + 1, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(tertiary);
+  // Row 2–4: column A labels = labelFg on jobBg; other labels = tertiary; values = secondary
+  sheet.getRange(r + 1, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(labelFg);
   sheet.getRange(r + 1, 2).setFontWeight('bold').setFontSize(18).setFontColor(secondary).setHorizontalAlignment('center');
   sheet.getRange(r + 1, 3).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(tertiary);
   sheet.getRange(r + 1, 4).setFontWeight('bold').setFontSize(18).setFontColor(secondary).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
@@ -1074,7 +1076,7 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   sheet.getRange(r + 1, 7).setFontWeight('bold').setFontSize(18).setFontColor(secondary).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r + 1, fmt.rowHeightLabel);
 
-  sheet.getRange(r + 2, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(tertiary);
+  sheet.getRange(r + 2, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(labelFg);
   sheet.getRange(r + 2, 2).setFontWeight('bold').setFontSize(18).setFontColor(secondary).setHorizontalAlignment('center');
   sheet.getRange(r + 2, 3).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(tertiary);
   sheet.getRange(r + 2, 4).setFontWeight('bold').setFontSize(18).setFontColor(secondary).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
@@ -1082,7 +1084,7 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   sheet.getRange(r + 2, 7).setFontWeight('bold').setFontSize(18).setFontColor(secondary).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r + 2, fmt.rowHeightLabel);
 
-  sheet.getRange(r + 3, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(tertiary);
+  sheet.getRange(r + 3, 1).setFontWeight('bold').setFontSize(fmt.labelSize).setFontColor(labelFg);
   sheet.getRange(r + 3, 2).setFontWeight('bold').setFontSize(18).setFontColor(secondary).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.setRowHeight(r + 3, fmt.rowHeightLabel);
 
@@ -1116,9 +1118,9 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   const equipmentDataFirstRow = eqHeaderRow + 1;
   const equipmentDataLastRow = equipmentBlockEndRow;
 
-  // Equipment data rows: column A (category headers e.g. Cameras:, Lenses:) = same bg and text color as job name block; rest of row default
+  // Equipment data rows: column A (category headers e.g. Cameras:, Lenses:) = jobBg, labelFg (black/white by luminance)
   for (let row = equipmentDataFirstRow; row <= equipmentDataLastRow; row++) {
-    sheet.getRange(row, 1).setBackground(jobBg).setFontColor(jobNameColor);
+    sheet.getRange(row, 1).setBackground(jobBg).setFontColor(labelFg);
     sheet.setRowHeight(row, fmt.rowHeightCategory);
   }
   const aVals = numEquipmentBlockRows > 0 ? sheet.getRange(equipmentDataFirstRow, 1, numEquipmentBlockRows, 1).getValues() : [];
@@ -1131,7 +1133,7 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
     }
   }
 
-  // --- Subbed Equipment: Locating Agent header unchanged; data row(s) no background or text color. Notes (I:J) merged + wrap. ---
+  // --- Subbed Equipment: header row (incl. A "Added By") = dark blue table style; data row(s) column A = jobBg + labelFg. Notes (I:J) merged + wrap. ---
   applyTableHeaderStyle(subHeaderRow);
   sheet.getRange(subHeaderRow, 9, 1, 2).merge();
   const subDataFirstRow = subHeaderRow + 1;
@@ -1139,6 +1141,7 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
   const strikeFlags = subStrikethroughFlags || [];
   for (let row = subDataFirstRow; row <= subDataLastRow; row++) {
     sheet.setRowHeight(row, fmt.rowHeightCategory);
+    sheet.getRange(row, 1).setBackground(jobBg).setFontColor(labelFg);
     sheet.getRange(row, 3).setHorizontalAlignment('center');
     sheet.getRange(row, 6).setHorizontalAlignment('center');
     sheet.getRange(row, 7).setHorizontalAlignment('center');
