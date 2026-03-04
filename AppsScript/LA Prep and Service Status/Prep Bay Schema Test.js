@@ -439,6 +439,7 @@ function normalizeBayNumber(bay) {
 /**
  * Reads Prep Bay Assignment for a given date sheet name.
  * Schema: A=Bay, B=Job Name, C=Order, D=Agent, E=Cameras, F=1st AC, G=DP, H=Prep Tech, I=Notes.
+ * Includes rows with an order number, or rows with blank order when column C has a background and B has text (e.g. internal training, special guests).
  * @param {string} sheetName - e.g. "Fri 2/20"
  * @returns {Array<Object>} [{ bayNumber, bayName, jobName, orderNumber, marketingAgent, firstAC, cinematographer, prepTech, notes }, ...]
  */
@@ -451,6 +452,9 @@ function readPrepBayDataForDate(sheetName) {
       return [];
     }
     const data = sheet.getDataRange().getValues();
+    const numRows = data.length;
+    const colC = 3;
+    const backgroundsC = numRows > 0 ? sheet.getRange(1, colC, numRows, colC).getBackgrounds() : [];
     const out = [];
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
@@ -462,9 +466,14 @@ function readPrepBayDataForDate(sheetName) {
       const cinematographer = row[6] ? String(row[6]).trim() : '';
       const prepTech = row[7] ? String(row[7]).trim() : '';
       const notes = row[8] ? String(row[8]).trim() : '';
-      if (!bay || bay.toUpperCase() === 'BAY' || !jobName) continue;
+      if (!bay || bay.toUpperCase() === 'BAY') continue;
       const bayNumber = normalizeBayNumber(bay);
       if (bayNumber == null) continue;
+      if (!jobName) continue;
+      // If order is blank, include only when row has a background (something in that bay: training, special guests, etc.)
+      const bgC = backgroundsC[i] && backgroundsC[i][0] ? String(backgroundsC[i][0]).trim() : '';
+      const hasBackground = !!bgC && bgC.toLowerCase() !== '#ffffff';
+      if (!orderNumber && !hasBackground) continue;
       out.push({ bayNumber: bayNumber, bayName: bay, jobName: jobName, orderNumber: orderNumber, marketingAgent: marketingAgent, firstAC: firstAC, cinematographer: cinematographer, prepTech: prepTech, notes: notes });
     }
     out.sort(function (a, b) { return a.bayNumber - b.bayNumber; });
@@ -513,9 +522,13 @@ function readPrepBayDataAndBackgroundMap(sheetName) {
       const cinematographer = row[6] ? String(row[6]).trim() : '';
       const prepTech = row[7] ? String(row[7]).trim() : '';
       const notes = row[8] ? String(row[8]).trim() : '';
-      if (!bay || bay.toUpperCase() === 'BAY' || !jobName) continue;
+      if (!bay || bay.toUpperCase() === 'BAY') continue;
       const bayNumber = normalizeBayNumber(bay);
       if (bayNumber == null) continue;
+      if (!jobName) continue;
+      const bgC = backgroundsC[i] && backgroundsC[i][0] ? String(backgroundsC[i][0]).trim() : '';
+      const hasBackground = !!bgC && bgC.toLowerCase() !== '#ffffff';
+      if (!orderNumber && !hasBackground) continue;
       out.push({ bayNumber: bayNumber, bayName: bay, jobName: jobName, orderNumber: orderNumber, marketingAgent: marketingAgent, firstAC: firstAC, cinematographer: cinematographer, prepTech: prepTech, notes: notes });
     }
     out.sort(function (a, b) { return a.bayNumber - b.bayNumber; });
