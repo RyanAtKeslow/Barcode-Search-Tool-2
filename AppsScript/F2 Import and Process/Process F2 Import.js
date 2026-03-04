@@ -8,7 +8,7 @@
  * 4. Looks up Serial Numbers from Barcode & Serial Database
  * 5. Cross-references with Equipment Scheduling Chart for verification
  * 6. Cross-references with Prep Bay Assignments (secondary check)
- * 7. Writes to "F2 Imports" sheet with deduplication (Barcode + Creation Timestamp)
+ * 7. Writes to "F2 Imports" sheet with deduplication (one row per barcode; keep most recent by Created/Start/End Timestamp). Barcodes may contain hyphens and alphanumerics (e.g. ANG25250-5, CINE7-3); barcode column is stored as plain text to avoid date coercion.
  * 8. Creates alerts for mismatches
  * 9. Moves processed files to "Processed" subfolder
  * 10. Updates RTR Database with Order #s
@@ -113,16 +113,61 @@ function processF2Imports() {
     
     Logger.log(`📊 Found ${unprocessedFiles.length} unprocessed file(s)`);
     
-    // Step 3: Process each file (raw import only)
+    // Phase A: Convert all files to Google Sheets (no wait yet)
+    const convertedList = [];
     for (const file of unprocessedFiles) {
       try {
+        Logger.log(`\n📄 Converting file: ${file.getName()}`);
+        Logger.log(`📊 File size: ${file.getSize()} bytes`);
+        Logger.log("🔄 Converting Excel to Google Sheets...");
+        const convertedFile = convertExcelToSheets(file, folder);
+        if (convertedFile) {
+          Logger.log(`✅ Converted to Google Sheet: ${convertedFile.id}`);
+          convertedList.push({ file: file, convertedFile: convertedFile });
+        } else {
+          Logger.log(`⚠️ Conversion returned null for ${file.getName()}`);
+        }
+      } catch (error) {
+        Logger.log(`❌ Error converting ${file.getName()}: ${error.toString()}`);
+        // Continue with next file
+      }
+    }
+    
+    if (convertedList.length === 0) {
+      Logger.log("⚠️ No files were converted. Exiting.");
+      return;
+    }
+    
+    // Phase B: Single 20-second wait for conversion processing
+    Logger.log("⏳ Waiting 20 seconds for initial conversion processing...");
+    Utilities.sleep(20000);
+    Logger.log("✅ Wait complete.");
+    
+    // Phase C: Load serial map once for all files
+    Logger.log("📚 Loading Serial Number map from Barcode & Serial Database...");
+    const serialNumberMap = loadSerialNumberMap();
+    
+    // Phase D: For each converted sheet: read, lookup, write, move, cleanup
+    for (const item of convertedList) {
+      const file = item.file;
+      const convertedFile = item.convertedFile;
+      try {
         Logger.log(`\n📄 Processing file: ${file.getName()}`);
-        processF2FileRaw(file, folder);
+        processOneConvertedFile(file, folder, convertedFile, serialNumberMap);
         Logger.log(`✅ Successfully processed: ${file.getName()}`);
       } catch (error) {
         Logger.log(`❌ Error processing ${file.getName()}: ${error.toString()}`);
         Logger.log(`Stack trace: ${error.stack}`);
-        // Continue with next file even if one fails
+      } finally {
+        if (convertedFile && convertedFile.id) {
+          try {
+            Logger.log("🗑️ Cleaning up temporary converted sheet...");
+            DriveApp.getFileById(convertedFile.id).setTrashed(true);
+            Logger.log("✅ Converted sheet cleaned up");
+          } catch (cleanupError) {
+            Logger.log(`⚠️ Error cleaning up converted sheet: ${cleanupError.toString()}`);
+          }
+        }
       }
     }
     
@@ -264,84 +309,69 @@ function findUnprocessedExcelFiles(folder) {
 }
 
 /**
- * Processes a single F2 Excel file - RAW DATA ONLY (simplified for speed)
+ * Processes one already-converted sheet: read raw data, apply serial lookup, write to F2 Imports, move file to Processed.
+ * Used by the batched flow after all files are converted and serial map is loaded once.
+ * @param {GoogleAppsScript.Drive.File} file - The original Excel file
+ * @param {GoogleAppsScript.Drive.Folder} folder - The folder containing the file
+ * @param {Object} convertedFile - { id } from convertExcelToSheets
+ * @param {Map<string, string>} serialNumberMap - Pre-loaded barcode → serial map
+ */
+function processOneConvertedFile(file, folder, convertedFile, serialNumberMap) {
+  Logger.log("📖 Reading raw data from converted sheet...");
+  const rawData = readF2Data(convertedFile.id);
+  Logger.log(`📊 Found ${rawData.length} total records (importing all)`);
+
+  if (rawData.length === 0) {
+    Logger.log("⚠️ No data found in this file");
+    moveFileToProcessed(file, folder);
+    return;
+  }
+
+  const dataWithMetadata = rawData.map(record => {
+    record.ImportDate = new Date();
+    record.ImportTimestamp = new Date().toISOString();
+    record.SourceFile = file.getName();
+    const barcode = record.AssetBarcode ? record.AssetBarcode.toString().trim() : '';
+    if (barcode && serialNumberMap.has(barcode)) {
+      record.SerialNumber = serialNumberMap.get(barcode);
+    } else {
+      record.SerialNumber = '';
+    }
+    return record;
+  });
+
+  Logger.log("💾 Writing raw data to F2 Imports sheet...");
+  writeToF2ImportsSheet(dataWithMetadata);
+  moveFileToProcessed(file, folder);
+  Logger.log(`✅ Processed ${dataWithMetadata.length} raw records`);
+}
+
+/**
+ * Processes a single F2 Excel file - RAW DATA ONLY (convert, wait, load map, process).
+ * Used for single-file runs; the main processF2Imports() uses batched convert + one wait + one map load instead.
  * @param {GoogleAppsScript.Drive.File} file - The Excel file to process
  * @param {GoogleAppsScript.Drive.Folder} folder - The folder containing the file
  */
 function processF2FileRaw(file, folder) {
   let convertedFile = null;
-  
   try {
     Logger.log(`📊 File size: ${file.getSize()} bytes`);
-    
-    // Step 1: Convert Excel to Google Sheets
     Logger.log("🔄 Converting Excel to Google Sheets...");
     convertedFile = convertExcelToSheets(file, folder);
-    
-    if (!convertedFile) {
-      throw new Error("Failed to convert Excel file to Google Sheets");
-    }
-    
+    if (!convertedFile) throw new Error("Failed to convert Excel file to Google Sheets");
     Logger.log(`✅ Converted to Google Sheet: ${convertedFile.id}`);
-    
-    // Step 2: Wait for conversion to complete
     waitForSheetReady(convertedFile.id);
-    
-    // Step 3: Read ALL raw data (no filtering)
-    Logger.log("📖 Reading raw data from converted sheet...");
-    const rawData = readF2Data(convertedFile.id);
-    
-    Logger.log(`📊 Found ${rawData.length} total records (importing all)`);
-    
-    if (rawData.length === 0) {
-      Logger.log("⚠️ No data found in this file");
-      // Still move file to Processed folder
-      moveFileToProcessed(file, folder);
-      return;
-    }
-  
-    // Step 4: Load Serial Number map for lookups
     Logger.log("📚 Loading Serial Number map from Barcode & Serial Database...");
     const serialNumberMap = loadSerialNumberMap();
-    
-    // Step 5: Add basic import metadata and Serial Number lookup
-    const dataWithMetadata = rawData.map(record => {
-      // Add minimal metadata
-      record.ImportDate = new Date();
-      record.ImportTimestamp = new Date().toISOString();
-      record.SourceFile = file.getName();
-      
-      // Look up Serial Number from barcode and add to record for column AD
-      const barcode = record.AssetBarcode ? record.AssetBarcode.toString().trim() : '';
-      if (barcode && serialNumberMap.has(barcode)) {
-        record.SerialNumber = serialNumberMap.get(barcode);
-      } else {
-        record.SerialNumber = ''; // Empty if not found in database
-      }
-      
-      return record;
-    });
-  
-    // Step 6: Write to F2 Imports sheet (raw data with dual headers, deduplication applied)
-    Logger.log("💾 Writing raw data to F2 Imports sheet...");
-    writeToF2ImportsSheet(dataWithMetadata);
-  
-    // Step 7: Move file to Processed folder
-    moveFileToProcessed(file, folder);
-    
-    Logger.log(`✅ Processed ${dataWithMetadata.length} raw records`);
-    
+    processOneConvertedFile(file, folder, convertedFile, serialNumberMap);
   } finally {
-    // Always clean up converted sheet, even if there was an error
     if (convertedFile && convertedFile.id) {
       try {
         Logger.log("🗑️ Cleaning up temporary converted sheet...");
-        const convertedFileObj = DriveApp.getFileById(convertedFile.id);
-        convertedFileObj.setTrashed(true);
+        DriveApp.getFileById(convertedFile.id).setTrashed(true);
         Logger.log("✅ Converted sheet cleaned up");
       } catch (cleanupError) {
         Logger.log(`⚠️ Error cleaning up converted sheet: ${cleanupError.toString()}`);
-        // Don't throw - cleanup failure shouldn't break the process
       }
     }
   }
@@ -441,7 +471,8 @@ function readF2Data(sheetId) {
     const sheet = SpreadsheetApp.openById(sheetId);
     const dataSheet = sheet.getSheets()[0];
     const dataRange = dataSheet.getDataRange();
-    const values = dataRange.getValues();
+    // Use display values so barcode column is never returned as Date (e.g. "CINE7-3" or "ANG25250-5" can be auto-parsed as dates)
+    const values = dataRange.getDisplayValues();
     
     if (values.length < 2) {
       Logger.log("⚠️ No data rows found (only header row)");
@@ -706,16 +737,71 @@ function verifyAgainstPrepBay(orderNumber, prepBayData) {
 }
 
 /**
- * Writes data to F2 Imports sheet with deduplication based on Barcode + Creation Timestamp
+ * Parses a timestamp string to a number for comparison (or null if invalid).
+ * @param {*} val - Cell value (string or Date)
+ * @returns {number|null} getTime() or null
+ */
+function parseF2Timestamp(val) {
+  if (val == null || val === '') return null;
+  var d = val instanceof Date ? val : new Date(String(val).trim());
+  return isNaN(d.getTime()) ? null : d.getTime();
+}
+
+/**
+ * Returns true if the "new" record should replace the "existing" record.
+ * Order: (1) Created Timestamp more recent, (2) same Created then Start more recent or exists when existing doesn't, (3) same Start then End more recent or exists when existing doesn't.
+ * @param {{ creation: string, start: string, end: string }} existing
+ * @param {{ creation: string, start: string, end: string }} newRecord
+ * @returns {boolean}
+ */
+function isF2NewRecordBetter(existing, newRecord) {
+  var cNew = parseF2Timestamp(newRecord.creation);
+  var cEx = parseF2Timestamp(existing.creation);
+  if (cNew != null && cEx != null && cNew > cEx) return true;
+  if (cNew != null && cEx != null && cNew < cEx) return false;
+  var sNew = parseF2Timestamp(newRecord.start);
+  var sEx = parseF2Timestamp(existing.start);
+  if (sNew != null && sEx != null && sNew > sEx) return true;
+  if (sNew != null && sEx != null && sNew < sEx) return false;
+  if (sNew != null && sEx == null) return true;
+  if (sNew == null && sEx != null) return false;
+  var eNew = parseF2Timestamp(newRecord.end);
+  var eEx = parseF2Timestamp(existing.end);
+  if (eNew != null && eEx != null && eNew > eEx) return true;
+  if (eNew != null && eEx == null) return true;
+  return false;
+}
+
+/**
+ * Writes data to F2 Imports sheet with deduplication: one row per barcode.
+ * Keeps the row with the most recent Created Timestamp; ties broken by Start then End Timestamp.
+ * Rows with PrepKind_lu "Cancel" are omitted. Replaces existing row when new data is better.
  * Row 1: Original Excel headers (with Serial Number inserted at column AD)
  * Row 2: Common database header names (mapped)
- * Row 3+: Imported data (with Serial Number populated in column AD from lookup)
- * Column layout: AA=PrepDate, AB=ServicePriority, AC=Barcode, AD=Serial Number, AE=Equipment Name, etc.
- * Deduplication: Records with same AssetBarcode AND z_log_CreateHost_ts_ae are considered duplicates
+ * Row 3+: Imported data
  * @param {Array<Object>} data - Array of enriched service records
  */
 function writeToF2ImportsSheet(data) {
   try {
+    // Omit Cancel lines (PrepKind_lu === "Cancel")
+    var cancelCount = 0;
+    var dataFiltered = data.filter(function (r) {
+      var pk = (r.PrepKind_lu != null ? String(r.PrepKind_lu).trim() : '');
+      if (pk.toLowerCase() === 'cancel') {
+        cancelCount++;
+        return false;
+      }
+      return true;
+    });
+    if (cancelCount > 0) {
+      Logger.log('⏭️ Omitted ' + cancelCount + ' record(s) with Prep Kind "Cancel"');
+    }
+    if (dataFiltered.length === 0) {
+      Logger.log('ℹ️ No records to write after filtering.');
+      return;
+    }
+    data = dataFiltered;
+
     const spreadsheet = SpreadsheetApp.openById(F2_DESTINATION_SPREADSHEET_ID);
     let sheet = spreadsheet.getSheetByName(F2_IMPORTS_SHEET_NAME);
     
@@ -806,146 +892,135 @@ function writeToF2ImportsSheet(data) {
       Logger.log(`📋 Wrote mapped headers (Row 2, starting at column AA): ${mappedHeaders.join(', ')}`);
     }
     
-    // Step 1: Load existing records for deduplication
-    // Create a Map of existing records: key = barcode|creationTimestamp, value = {startTimestamp, endTimestamp}
-    const existingRecords = new Map();
-    const lastRow = sheet.getLastRow();
-    
-    // Find column indices for key fields
+    // Step 1: Load existing records keyed by barcode only; keep best row per barcode, delete duplicate rows
     const barcodeColIndex = orderedHeaders.indexOf('AssetBarcode');
     const creationTimestampColIndex = orderedHeaders.indexOf('z_log_CreateHost_ts_ae');
     const startTimestampColIndex = orderedHeaders.indexOf('TimestampStart_ts');
     const endTimestampColIndex = orderedHeaders.indexOf('TimestampEnd_ts');
-    
+    const lastRow = sheet.getLastRow();
+    /** @type {Map<string, { rowIndex: number, creation: string, start: string, end: string }>} */
+    const existingByBarcode = new Map();
+    /** @type {number[]} rows to delete (duplicate barcode rows, keep best) */
+    const rowsToDelete = [];
+
     if (lastRow >= 3 && barcodeColIndex !== -1 && creationTimestampColIndex !== -1) {
-      // Get existing data (rows 3 onwards) starting from column AA
-      const existingRows = sheet.getRange(3, START_COLUMN, lastRow - 2, orderedHeaders.length).getValues();
-      
+      const numDataRows = Math.max(0, lastRow - 2);
+      // Use display values so barcode is always a string (avoids Date coercion for values like "CINE7-3" or "ANG25250-5")
+      const existingRows = sheet.getRange(3, START_COLUMN, numDataRows, orderedHeaders.length).getDisplayValues();
+      /** @type {Map<string, Array<{ rowIndex: number, creation: string, start: string, end: string }>>} */
+      const byBarcode = new Map();
       for (let i = 0; i < existingRows.length; i++) {
         const row = existingRows[i];
         const barcode = row[barcodeColIndex] ? row[barcodeColIndex].toString().trim() : '';
-        const creationTimestamp = row[creationTimestampColIndex] ? row[creationTimestampColIndex].toString().trim() : '';
-        
-        if (barcode && creationTimestamp) {
-          // Create unique key: barcode|creationTimestamp
-          const key = `${barcode}|${creationTimestamp}`;
-          
-          // Get timestamps from existing record
-          const startTimestamp = (startTimestampColIndex !== -1 && row[startTimestampColIndex]) 
-            ? row[startTimestampColIndex].toString().trim() : '';
-          const endTimestamp = (endTimestampColIndex !== -1 && row[endTimestampColIndex]) 
-            ? row[endTimestampColIndex].toString().trim() : '';
-          
-          // Store the record with its timestamps
-          existingRecords.set(key, {
-            startTimestamp: startTimestamp,
-            endTimestamp: endTimestamp
-          });
-        }
+        if (!barcode) continue;
+        const creation = row[creationTimestampColIndex] ? row[creationTimestampColIndex].toString().trim() : '';
+        const start = (startTimestampColIndex !== -1 && row[startTimestampColIndex]) ? row[startTimestampColIndex].toString().trim() : '';
+        const end = (endTimestampColIndex !== -1 && row[endTimestampColIndex]) ? row[endTimestampColIndex].toString().trim() : '';
+        const rowIndex = 3 + i;
+        const entry = { rowIndex: rowIndex, creation: creation, start: start, end: end };
+        if (!byBarcode.has(barcode)) byBarcode.set(barcode, []);
+        byBarcode.get(barcode).push(entry);
       }
-      Logger.log(`📚 Loaded ${existingRecords.size} existing records for deduplication check`);
+      // For each barcode keep the best row; mark the rest for deletion
+      byBarcode.forEach(function (entries, barcode) {
+        var best = entries[0];
+        for (var e = 1; e < entries.length; e++) {
+          if (isF2NewRecordBetter(best, entries[e])) best = entries[e];
+        }
+        existingByBarcode.set(barcode, { rowIndex: best.rowIndex, creation: best.creation, start: best.start, end: best.end });
+        entries.forEach(function (ent) {
+          if (ent.rowIndex !== best.rowIndex) rowsToDelete.push(ent.rowIndex);
+        });
+      });
+      Logger.log('📚 Loaded ' + existingByBarcode.size + ' existing barcode row(s) for deduplication');
     }
-    
-    // Step 2: Filter out duplicates from new data, with timestamp comparison
-    const uniqueRecords = [];
-    const duplicateCount = { count: 0 };
-    const updatedCount = { count: 0 };
-    
-    for (const record of data) {
+
+    // Step 2: Decide for each incoming record: replace existing row (if better) or append (if new barcode). Merge same barcode in batch to best.
+    /** @type {Map<number, Object>} rowIndex -> record to write */
+    const replaceMap = new Map();
+    /** @type {Map<string, Object>} barcode -> best record to append */
+    const appendByBarcode = new Map();
+    var duplicateCount = 0;
+
+    for (var idx = 0; idx < data.length; idx++) {
+      const record = data[idx];
       const barcode = record.AssetBarcode ? record.AssetBarcode.toString().trim() : '';
-      const creationTimestamp = record.z_log_CreateHost_ts_ae ? record.z_log_CreateHost_ts_ae.toString().trim() : '';
-      
-      if (!barcode || !creationTimestamp) {
-        // If missing key fields, include the record (can't deduplicate without both)
-        uniqueRecords.push(record);
+      if (!barcode) {
+        appendByBarcode.set('__no_barcode_' + idx, record);
         continue;
       }
-      
-      // Create unique key: barcode|creationTimestamp
-      const key = `${barcode}|${creationTimestamp}`;
-      
-      if (existingRecords.has(key)) {
-        // Found a record with same barcode and creation timestamp
-        // Check if timestamps differ or are missing
-        const existingRecord = existingRecords.get(key);
-        const newStartTimestamp = record.TimestampStart_ts ? record.TimestampStart_ts.toString().trim() : '';
-        const newEndTimestamp = record.TimestampEnd_ts ? record.TimestampEnd_ts.toString().trim() : '';
-        
-        // Check if we should allow this record (update/add needed)
-        let shouldAllow = false;
-        
-        // Check Start Timestamp
-        if (!existingRecord.startTimestamp && newStartTimestamp) {
-          // Existing record has no start timestamp, new one does - allow it
-          shouldAllow = true;
-        } else if (existingRecord.startTimestamp && newStartTimestamp && 
-                   existingRecord.startTimestamp !== newStartTimestamp) {
-          // Both have start timestamps but they differ - allow it
-          shouldAllow = true;
-        }
-        
-        // Check End Timestamp
-        if (!existingRecord.endTimestamp && newEndTimestamp) {
-          // Existing record has no end timestamp, new one does - allow it
-          shouldAllow = true;
-        } else if (existingRecord.endTimestamp && newEndTimestamp && 
-                   existingRecord.endTimestamp !== newEndTimestamp) {
-          // Both have end timestamps but they differ - allow it
-          shouldAllow = true;
-        }
-        
-        if (shouldAllow) {
-          // Timestamps differ or missing - allow this record (it's an update)
-          uniqueRecords.push(record);
-          updatedCount.count++;
-          // Update the existing record in the map with new timestamps
-          existingRecords.set(key, {
-            startTimestamp: newStartTimestamp || existingRecord.startTimestamp,
-            endTimestamp: newEndTimestamp || existingRecord.endTimestamp
-          });
+      const creation = record.z_log_CreateHost_ts_ae ? record.z_log_CreateHost_ts_ae.toString().trim() : '';
+      const start = record.TimestampStart_ts ? record.TimestampStart_ts.toString().trim() : '';
+      const end = record.TimestampEnd_ts ? record.TimestampEnd_ts.toString().trim() : '';
+      const newRec = { creation: creation, start: start, end: end };
+
+      if (existingByBarcode.has(barcode)) {
+        const existing = existingByBarcode.get(barcode);
+        if (isF2NewRecordBetter(existing, newRec)) {
+          replaceMap.set(existing.rowIndex, record);
+          existingByBarcode.set(barcode, { rowIndex: existing.rowIndex, creation: creation, start: start, end: end });
         } else {
-          // Exact duplicate - skip it
-          duplicateCount.count++;
+          duplicateCount++;
         }
       } else {
-        // Not a duplicate - add to unique records and mark as seen
-        const newStartTimestamp = record.TimestampStart_ts ? record.TimestampStart_ts.toString().trim() : '';
-        const newEndTimestamp = record.TimestampEnd_ts ? record.TimestampEnd_ts.toString().trim() : '';
-        uniqueRecords.push(record);
-        existingRecords.set(key, {
-          startTimestamp: newStartTimestamp,
-          endTimestamp: newEndTimestamp
-        });
+        if (appendByBarcode.has(barcode)) {
+          const cur = appendByBarcode.get(barcode);
+          const curTs = {
+            creation: cur.z_log_CreateHost_ts_ae ? String(cur.z_log_CreateHost_ts_ae).trim() : '',
+            start: cur.TimestampStart_ts ? String(cur.TimestampStart_ts).trim() : '',
+            end: cur.TimestampEnd_ts ? String(cur.TimestampEnd_ts).trim() : ''
+          };
+          if (isF2NewRecordBetter(curTs, newRec)) appendByBarcode.set(barcode, record);
+        } else {
+          appendByBarcode.set(barcode, record);
+        }
       }
     }
-    
-    if (duplicateCount.count > 0) {
-      Logger.log(`🔄 Skipped ${duplicateCount.count} exact duplicate record(s) based on Barcode + Creation Timestamp`);
+
+    if (duplicateCount > 0) {
+      Logger.log('🔄 Skipped ' + duplicateCount + ' record(s) (barcode already present with same or newer timestamps)');
     }
-    if (updatedCount.count > 0) {
-      Logger.log(`🔄 Allowed ${updatedCount.count} record(s) with updated timestamps (Start or End Timestamp differs or was missing)`);
+
+    // Barcode column (plain text) so values like "ANG25250-5" or "CINE7-3" are never coerced to dates
+    const barcodeCol1Based = START_COLUMN + barcodeColIndex;
+
+    // Step 3: Apply replacements (write to existing rows)
+    const orderedReplaceRows = Array.from(replaceMap.keys()).sort(function (a, b) { return a - b; });
+    for (var r = 0; r < orderedReplaceRows.length; r++) {
+      const rowIndex = orderedReplaceRows[r];
+      const record = replaceMap.get(rowIndex);
+      const rowData = orderedHeaders.map(function (h) { return record[h] != null ? record[h] : ''; });
+      sheet.getRange(rowIndex, START_COLUMN, 1, orderedHeaders.length).setValues([rowData]);
+      sheet.getRange(rowIndex, barcodeCol1Based, 1, 1).setNumberFormat('@');
     }
-    
-    // Step 3: Write only unique records
-    const rowsToWrite = [];
-    
-    for (const record of uniqueRecords) {
-      const rowData = [];
-      for (const header of orderedHeaders) {
-        // Write Serial Number value (looked up from Barcode & Serial Database)
-        rowData.push(record[header] || '');
+    if (orderedReplaceRows.length > 0) {
+      Logger.log('✏️ Replaced ' + orderedReplaceRows.length + ' existing row(s) with newer data');
+    }
+
+    // Step 3b: Delete duplicate barcode rows (from bottom to top so indices stay valid)
+    if (rowsToDelete.length > 0) {
+      rowsToDelete.sort(function (a, b) { return b - a; });
+      for (var d = 0; d < rowsToDelete.length; d++) {
+        sheet.deleteRow(rowsToDelete[d]);
       }
-      rowsToWrite.push(rowData);
+      Logger.log('🗑️ Removed ' + rowsToDelete.length + ' duplicate barcode row(s) (kept most recent per barcode)');
     }
-    
-    // Append all new unique rows (starting after row 2, or after last data row) at column AA
+
+    // Step 4: Append new barcode rows (and any no-barcode rows)
+    const appendRecords = Array.from(appendByBarcode.values());
+    const rowsToWrite = appendRecords.map(function (record) {
+      return orderedHeaders.map(function (h) { return record[h] != null ? record[h] : ''; });
+    });
+
     if (rowsToWrite.length > 0) {
       const currentLastRow = sheet.getLastRow();
-      const startRow = currentLastRow < 2 ? 3 : currentLastRow + 1; // Start at row 3 if sheet only has headers
+      const startRow = currentLastRow < 2 ? 3 : currentLastRow + 1;
       sheet.getRange(startRow, START_COLUMN, rowsToWrite.length, orderedHeaders.length).setValues(rowsToWrite);
-      Logger.log(`💾 Added ${rowsToWrite.length} new unique record(s) (Column AD populated with Serial Numbers, starting at column AA)`);
-    } else {
-      Logger.log(`ℹ️ No new unique records to add (all were duplicates)`);
+      sheet.getRange(startRow, barcodeCol1Based, rowsToWrite.length, 1).setNumberFormat('@');
+      Logger.log('💾 Added ' + rowsToWrite.length + ' new record(s) (one per barcode, starting at column AA)');
+    }
+    if (orderedReplaceRows.length === 0 && rowsToWrite.length === 0) {
+      Logger.log('ℹ️ No new or updated records to write');
     }
     
   } catch (error) {
