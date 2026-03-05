@@ -3,11 +3,33 @@
  * [With Added Logging]
  */
 
+/**
+ * Gets the active spreadsheet with retry to handle transient "Service Spreadsheets timed out" errors.
+ * @param {number} maxAttempts - Maximum number of attempts (default 3).
+ * @returns {GoogleAppsScript.Spreadsheet.Spreadsheet} The active spreadsheet.
+ */
+function getActiveSpreadsheetWithRetry(maxAttempts) {
+  maxAttempts = maxAttempts || 3;
+  var lastError;
+  for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      var ss = SpreadsheetApp.getActiveSpreadsheet();
+      if (attempt > 1) Logger.log("Spreadsheet access succeeded on attempt " + attempt);
+      return ss;
+    } catch (e) {
+      lastError = e;
+      Logger.log("WARN: Spreadsheet access attempt " + attempt + " failed: " + e.toString());
+      if (attempt < maxAttempts) Utilities.sleep(1000 * attempt);
+    }
+  }
+  throw lastError;
+}
+
 function resetReceivingBay() {
   var startTime = new Date().getTime();
   Logger.log("=== Reset Receiving Bay: Script Started ===");
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getActiveSpreadsheetWithRetry(3);
   var activeSheet = ss.getActiveSheet();
   
   // Check if we're in the correct sheet
@@ -79,7 +101,7 @@ function resetReceivingBay() {
 function continueResetShippingBay(selectedCellA1, startTime) {
   Logger.log("=== continueResetShippingBay: Processing bay reset for cell " + selectedCellA1 + " ===");
   
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getActiveSpreadsheetWithRetry(3);
   var activeSheet = ss.getActiveSheet();
   var usernameCell = activeSheet.getRange(selectedCellA1);
   
@@ -259,6 +281,8 @@ function continueResetShippingBay(selectedCellA1, startTime) {
   Logger.log("  - Skipped items (case/pelican): " + skippedItems);
   Logger.log("  - Total barcodes for CSV: " + csvData.length);
 
+  SpreadsheetApp.flush();
+
   // --- Appending Data ---
 
   // Homeless Gear
@@ -270,20 +294,30 @@ function continueResetShippingBay(selectedCellA1, startTime) {
 
   if (dataToAppend.length > 0) {
     var lastDataRow = columnBValues.filter(row => row[0].toString().trim() !== "").length;
-    var targetRange = homelessGearSheet.getRange(lastDataRow + 1, 1, dataToAppend.length, 5);
+    var targetRange = homelessGearSheet.getRange(lastDataRow + 1, 1, lastDataRow + dataToAppend.length, 5);
     targetRange.setValues(dataToAppend);
     Logger.log("Appended " + dataToAppend.length + " items to HOMELESS GEAR sheet starting at row " + (lastDataRow + 1));
   } else {
     Logger.log("No homeless gear items to append");
   }
 
-  // Update quantities for existing L&F items
+  // Update quantities for existing L&F items (batched: one read, apply in memory, one write)
   if (quantityUpdates.length > 0) {
     Logger.log("Updating quantities for " + quantityUpdates.length + " existing Lost & Found items");
-    quantityUpdates.forEach(update => {
-      lostAndFoundSheet.getRange(update.row, 4).setValue(update.newQuantity);
-      lostAndFoundSheet.getRange(update.row, 5).setValue(update.jobInfo);
-    });
+    var updateByRow = {};
+    quantityUpdates.forEach(function (u) { updateByRow[u.row] = { newQuantity: u.newQuantity, jobInfo: u.jobInfo }; });
+    var firstRow = Math.min.apply(null, quantityUpdates.map(function (u) { return u.row; }));
+    var lastRow = Math.max.apply(null, quantityUpdates.map(function (u) { return u.row; }));
+    var range = lostAndFoundSheet.getRange(firstRow, 4, lastRow, 5);
+    var values = range.getValues();
+    for (var r = 0; r < values.length; r++) {
+      var rowNum = firstRow + r;
+      if (updateByRow[rowNum]) {
+        values[r][0] = updateByRow[rowNum].newQuantity;
+        values[r][1] = updateByRow[rowNum].jobInfo;
+      }
+    }
+    range.setValues(values);
     Logger.log("Completed quantity updates for " + quantityUpdates.length + " items");
   } else {
     Logger.log("No Lost & Found quantity updates needed");
@@ -292,15 +326,18 @@ function continueResetShippingBay(selectedCellA1, startTime) {
   // Append new Lost & Found items
   if (lostAndFoundItems.length > 0) {
     var lastDataRowLF = lostAndFoundSheet.getRange("B:B").getValues().filter(row => row[0].toString().trim() !== "").length;
-    var targetRangeLF = lostAndFoundSheet.getRange(lastDataRowLF + 1, 1, lostAndFoundItems.length, 7);
+    var endRowLF = lastDataRowLF + lostAndFoundItems.length;
+    var targetRangeLF = lostAndFoundSheet.getRange(lastDataRowLF + 1, 1, endRowLF, 7);
     targetRangeLF.setValues(lostAndFoundItems);
 
-    var checkboxRange = lostAndFoundSheet.getRange(lastDataRowLF + 1, 6, lostAndFoundItems.length, 1);
+    var checkboxRange = lostAndFoundSheet.getRange(lastDataRowLF + 1, 6, endRowLF, 6);
     checkboxRange.insertCheckboxes();
     Logger.log("Appended " + lostAndFoundItems.length + " items to Lost & Found sheet starting at row " + (lastDataRowLF + 1));
   } else {
     Logger.log("No Lost & Found items to append");
   }
+
+  SpreadsheetApp.flush();
 
   // --- Update Analytics ---
   var statusCount = lostAndFoundItems.length;
