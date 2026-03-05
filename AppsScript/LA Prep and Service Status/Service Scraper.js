@@ -17,31 +17,125 @@
 const SERVICE_SCRAPER_WORKBOOK_ID = '1j_slMWpLIbjqbvGdAurozTh_1vv17SASshCZSkTUNw0';
 const F2_IMPORTS_BACKUP_SHEET_NAME = 'F2 Imports backup';
 
-/** F2 backup column indices (0-based). Row 2 display: Prep Date, Service Priority, Barcode, Serial Number, Equipment Name, Equipment Category, Order Number, ... */
+/** F2 backup column indices (0-based). Row 2: Prep Date, Service Priority, Barcode, Serial Number, Equipment Name, Equipment Category, Order Number, Job Name, Puller, Prep Tech, Service Tech, ..., Created, Start, End Timestamp, ..., Prep Kind, ... */
 const F2_COL_BARCODE = 2;
 const F2_COL_EQUIPMENT_NAME = 4;
 const F2_COL_EQUIPMENT_CATEGORY = 5;
 const F2_COL_ORDER = 6;
+const F2_COL_PREP_TECH = 9;
+const F2_COL_SERVICE_TECH = 10;
+const F2_COL_END_TIMESTAMP = 14;
 const F2_COL_PREP_KIND = 17;
 
 /**
- * Maps F2 Equipment Category (column F) to job-block left-side header. Extend as needed.
+ * Maps F2 Equipment Category (column F) to job-block left-side header.
  * Cameras are skipped (already filled by Prep Bay Schema Test from Equipment Scheduling Chart).
+ * When in doubt, categories map to Ungrouped. Sort values (weights) live in F2; this is classification only.
  */
 const F2_EQUIPMENT_CATEGORY_TO_JOB_BLOCK = {
+  // Cameras
   'Cameras': 'Cameras',
   'Digital Cameras': 'Cameras',
+  '16mm Cameras': 'Cameras',
+  '35mm Cameras': 'Cameras',
+  'DSLR': 'Cameras',
+  'Speed Controls': 'Cameras',
+  'Video Taps': 'Cameras',
+  'Sound Magazines': 'Cameras',
+  'MOS Magazines': 'Cameras',
+  'SR Magazines': 'Cameras',
+  'Venice Accessory': 'Cameras',
+  // Lenses
   'Lenses': 'Lenses',
+  'Anamorphic Zooms': 'Lenses',
+  'Anamorphic Primes': 'Lenses',
+  'Full Frame Anamorphic Primes': 'Lenses',
+  '35mm Zooms': 'Lenses',
+  '35mm Primes': 'Lenses',
+  'Full Frame Zooms': 'Lenses',
+  'Full Frame Primes': 'Lenses',
+  'Telephoto': 'Lenses',
+  '16mm Zooms': 'Lenses',
+  '16mm Primes': 'Lenses',
+  'Lens Accessories': 'Lenses',
+  'Specialty Lens': 'Lenses',
+  'Probe': 'Lenses',
+  '1/3 Primes': 'Lenses',
+  '2/3 Primes': 'Lenses',
+  '2/3 Zooms': 'Lenses',
+  'C-Mount Lenses': 'Lenses',
+  // Heads
   'Heads': 'Heads',
+  'Head Accessories': 'Heads',
   'Tripods': 'Heads',
+  // Focus
   'Focus': 'Focus',
+  'Wireless Lens Control': 'Focus',
+  'Wireless lens Control': 'Focus',
+  'Wireless Lens Control Accessories': 'Focus',
+  'Wireless lens Control Accessories': 'Focus',
+  'Follow Focus': 'Focus',
+  'Micro Force': 'Focus',
+  'Microforce': 'Focus',
+  // Matte Boxes
   'Matte Boxes': 'Matte Boxes',
+  'Matte Box Accessories': 'Matte Boxes',
+  // Monitors
   'Monitors': 'Monitors',
+  'Monitor Accessories': 'Monitors',
+  // Media
   'Media': 'Media',
+  // Wireless Video
   'Wireless Video': 'Wireless Video',
+  'Wireless Video Accessories': 'Wireless Video',
+  'Wireless': 'Wireless Video',
+  // Dir. Viewfinder
   'Dir. Viewfinder': 'Dir. Viewfinder',
   'Director Viewfinder': 'Dir. Viewfinder',
-  'Ungrouped': 'Ungrouped'
+  "Director's Viewfinder": 'Dir. Viewfinder',
+  "Director's Viewfinder Accessories": 'Dir. Viewfinder',
+  // Ungrouped (when in doubt)
+  'Ungrouped': 'Ungrouped',
+  'Ground Glasses': 'Ungrouped',
+  'Filters': 'Ungrouped',
+  'DIT AKS': 'Ungrouped',
+  'Electronic Accessories': 'Ungrouped',
+  'Camera Accessories': 'Ungrouped',
+  'Cables': 'Ungrouped',
+  'Battery Plate': 'Ungrouped',
+  'Batteries': 'Ungrouped',
+  'Hand Held': 'Ungrouped',
+  'Rain Covers': 'Ungrouped',
+  'Flightpack': 'Ungrouped',
+  'Balance Plates': 'Ungrouped',
+  'Extension Eyepieces': 'Ungrouped',
+  'Iris Rods': 'Ungrouped',
+  'Cart/Grip AKS': 'Ungrouped',
+  'Unknown': 'Ungrouped',
+  'No Category': 'Ungrouped',
+  '3D AKS': 'Ungrouped',
+  'Alexa Accessories': 'Ungrouped',
+  'Alexa Mini Accessories': 'Ungrouped',
+  'Amira Accessories': 'Ungrouped',
+  'Audio': 'Ungrouped',
+  'Battery Accessories': 'Ungrouped',
+  'Cases': 'Ungrouped',
+  'Computer': 'Ungrouped',
+  'Epic Accessories': 'Ungrouped',
+  'Epic Camera': 'Ungrouped',
+  'Iconix & Accessories': 'Ungrouped',
+  'Intercom': 'Ungrouped',
+  'Lights': 'Ungrouped',
+  'Magazine Accessories': 'Ungrouped',
+  'Manuals': 'Ungrouped',
+  'Microphones': 'Ungrouped',
+  'Office Equipment': 'Ungrouped',
+  'Pedestal': 'Ungrouped',
+  'RED Accessories': 'Ungrouped',
+  'Red Media': 'Ungrouped',
+  'Red One & Accessories': 'Ungrouped',
+  'Sony F55 Accessories': 'Ungrouped',
+  'Sony F65 Accessories': 'Ungrouped'
 };
 
 /** Prep sheet configs: name and days offset (0 = today, 1 = tomorrow, etc.). Must match PREP_FORECAST_SHEETS in Prep Bay Schema Test. */
@@ -69,6 +163,40 @@ const JOB_BLOCK_EQUIPMENT_HEADERS = [
 
 /** Prep Kind values that mean "Ready to Rent" (satisfies serviced-for-order when asset is scheduled). */
 const RTR_PREP_KINDS = ['ready to rent', 'rtr'];
+
+/** Job block equipment columns: D=Pulled?, E=RTR?, F=Serviced for Order?, G=Completion Timestamp, H=Technician (1-based). */
+const JOB_COL_PULLED = 4;
+const JOB_COL_RTR = 5;
+const JOB_COL_SERVICED = 6;
+const JOB_COL_COMPLETION_TIMESTAMP = 7;
+const JOB_COL_TECHNICIAN = 8;
+
+/**
+ * Formats F2 End Timestamp (display string, may be military time) to "mm/dd hh:mm am/pm".
+ * @param {string|number|Date} val - Raw value from F2 backup
+ * @returns {string} Formatted string or '' if invalid
+ */
+function formatCompletionTimestamp(val) {
+  if (val == null || val === '') return '';
+  var d = null;
+  if (val instanceof Date) {
+    d = val;
+  } else {
+    var s = String(val).trim();
+    if (!s) return '';
+    d = new Date(s);
+    if (isNaN(d.getTime())) return '';
+  }
+  var month = d.getMonth() + 1;
+  var day = d.getDate();
+  var hours = d.getHours();
+  var minutes = d.getMinutes();
+  var ampm = hours >= 12 ? 'pm' : 'am';
+  hours = hours % 12;
+  if (hours === 0) hours = 12;
+  var mm = minutes < 10 ? '0' + minutes : String(minutes);
+  return month + '/' + day + ' ' + hours + ':' + mm + ' ' + ampm;
+}
 
 /**
  * Normalizes an order number to digits only.
@@ -151,7 +279,7 @@ function mapF2CategoryToJobBlockHeader(f2Category) {
 
 /**
  * Finds F2 backup rows whose Order Number (column G) is in the given set.
- * Commits matching lines to memory with orderNumber, equipmentName, barcode, equipmentCategory, jobBlockHeader.
+ * Commits matching lines with orderNumber, equipmentName, barcode, jobBlockHeader, prepKind, endTimestamp, technician.
  * @param {Object.<string, boolean>} orderNumbersSet - normalized order numbers we care about
  * @returns {{ matchingRows: Array, totalRowsRead: number }}
  */
@@ -167,12 +295,20 @@ function getF2MatchingRows(orderNumbersSet) {
     var barcode = row[F2_COL_BARCODE] != null ? String(row[F2_COL_BARCODE]).trim() : '';
     var equipmentCategory = row[F2_COL_EQUIPMENT_CATEGORY] != null ? String(row[F2_COL_EQUIPMENT_CATEGORY]).trim() : '';
     var jobBlockHeader = mapF2CategoryToJobBlockHeader(equipmentCategory);
+    var prepKind = row[F2_COL_PREP_KIND] != null ? String(row[F2_COL_PREP_KIND]).trim() : '';
+    var endTimestamp = row[F2_COL_END_TIMESTAMP] != null ? row[F2_COL_END_TIMESTAMP] : '';
+    var serviceTech = row[F2_COL_SERVICE_TECH] != null ? String(row[F2_COL_SERVICE_TECH]).trim() : '';
+    var prepTech = row[F2_COL_PREP_TECH] != null ? String(row[F2_COL_PREP_TECH]).trim() : '';
+    var technician = serviceTech || prepTech || '';
     matchingRows.push({
       orderNumber: orderNorm,
       equipmentName: equipmentName,
       barcode: barcode,
       equipmentCategory: equipmentCategory,
-      jobBlockHeader: jobBlockHeader
+      jobBlockHeader: jobBlockHeader,
+      prepKind: prepKind,
+      endTimestamp: endTimestamp,
+      technician: technician
     });
   }
   return { matchingRows: matchingRows, totalRowsRead: rows.length };
@@ -180,8 +316,9 @@ function getF2MatchingRows(orderNumbersSet) {
 
 /**
  * Groups F2 matching rows by order and by job-block header. Excludes Cameras (already from Equipment Chart).
- * @param {Array.<{orderNumber: string, equipmentName: string, barcode: string, jobBlockHeader: string}>} matchingRows
- * @returns {Object.<string, Object.<string, Array.<{equipmentName: string, barcode: string}>>>} orderNorm -> header -> [{ equipmentName, barcode }]
+ * Each item includes equipmentName, barcode, prepKind, endTimestamp, technician for writing D–H.
+ * @param {Array} matchingRows
+ * @returns {Object.<string, Object.<string, Array.<{equipmentName: string, barcode: string, prepKind: string, endTimestamp: *, technician: string}>>>}
  */
 function getF2ItemsByOrderByCategory(matchingRows) {
   var byOrder = {};
@@ -191,7 +328,13 @@ function getF2ItemsByOrderByCategory(matchingRows) {
     if (!byOrder[norm]) byOrder[norm] = {};
     var header = r.jobBlockHeader;
     if (!byOrder[norm][header]) byOrder[norm][header] = [];
-    byOrder[norm][header].push({ equipmentName: r.equipmentName, barcode: r.barcode });
+    byOrder[norm][header].push({
+      equipmentName: r.equipmentName,
+      barcode: r.barcode,
+      prepKind: r.prepKind || '',
+      endTimestamp: r.endTimestamp,
+      technician: r.technician || ''
+    });
   });
   return byOrder;
 }
@@ -259,9 +402,29 @@ function parsePrepSheetBlocks(sheet, lastRow) {
 }
 
 /**
+ * Sets Pulled? (D), RTR? (E), Completion Timestamp (G), Technician (H) for one serviced-equipment row.
+ * D = TRUE (checkbox); E = "✓" if Prep Kind is RTR and End Timestamp exists; G = formatted timestamp; H = technician.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {number} row - 1-based row index
+ * @param {{ prepKind: string, endTimestamp: *, technician: string }} item - From getF2ItemsByOrderByCategory
+ */
+function setServicedEquipmentStatusCells(sheet, row, item) {
+  var pulledRange = sheet.getRange(row, JOB_COL_PULLED);
+  pulledRange.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
+  pulledRange.setValue(true);
+  var hasCompletion = item.endTimestamp != null && String(item.endTimestamp).trim() !== '';
+  var rtr = isPrepKindRTR(item.prepKind) && hasCompletion;
+  sheet.getRange(row, JOB_COL_RTR).setValue(rtr ? '✓' : '');
+  sheet.getRange(row, JOB_COL_COMPLETION_TIMESTAMP).setValue(formatCompletionTimestamp(item.endTimestamp));
+  sheet.getRange(row, JOB_COL_TECHNICIAN).setValue(item.technician || '');
+}
+
+/**
  * Writes F2 serviced equipment (Equipment Name, Barcode) into one Prep sheet. For each job block,
  * fills columns B and C for non-Camera categories; when a category has more than one item, inserts
  * a row after the first and moves everything below down, then writes the extra item(s).
+ * Skips writing B/C if the row already has the same Equipment Name and Barcode (avoids reprinting).
+ * Sets D=Pulled checkbox, E=RTR?, G=Completion Timestamp, H=Technician for each row.
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
  * @param {string} sheetName - for logging
  * @param {string[]} orderNumbersOnSheet - normalized order numbers that appear on this sheet
@@ -295,15 +458,25 @@ function writeF2ServicedEquipmentToPrepSheet(sheet, sheetName, orderNumbersOnShe
       if (!items || items.length === 0) continue;
       var numCols = 10;
       var jobBg = sheet.getRange(row, 1).getBackground();
-      sheet.getRange(row, 2).setValue(items[0].equipmentName);
-      sheet.getRange(row, 3).setValue(items[0].barcode);
+      var item0 = items[0];
+      var existingB = sheet.getRange(row, 2).getDisplayValue();
+      var existingC = sheet.getRange(row, 3).getDisplayValue();
+      var skipFirst = (existingB === item0.equipmentName && existingC === item0.barcode);
+      if (!skipFirst) {
+        sheet.getRange(row, 2).setValue(item0.equipmentName);
+        sheet.getRange(row, 3).setValue(item0.barcode);
+      }
+      setServicedEquipmentStatusCells(sheet, row, item0);
       blockItems += 1;
       for (var i = 1; i < items.length; i++) {
+        var categoryRowLabelFg = sheet.getRange(row, 1).getFontColor();
         sheet.insertRowAfter(row);
-        sheet.getRange(row + 1, 2).setValue(items[i].equipmentName);
-        sheet.getRange(row + 1, 3).setValue(items[i].barcode);
-        sheet.getRange(row + 1, 1, 1, numCols).setBackground(jobBg);
         row += 1;
+        var it = items[i];
+        sheet.getRange(row, 2).setValue(it.equipmentName);
+        sheet.getRange(row, 3).setValue(it.barcode);
+        sheet.getRange(row, 1).setBackground(jobBg).setFontColor(categoryRowLabelFg);
+        setServicedEquipmentStatusCells(sheet, row, it);
         blockItems++;
         blockInserted++;
         for (var j = catIndex + 1; j < block.categoryRows.length; j++) {
