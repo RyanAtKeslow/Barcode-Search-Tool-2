@@ -31,7 +31,11 @@ const VALID_EQUIPMENT_CATEGORIES = ['Digital Cameras', '35mm Cameras', '16mm Cam
 
 // Sheet names
 const F2_IMPORTS_SHEET_NAME = 'F2 Imports';
+const F2_IMPORTS_BACKUP_SHEET_NAME = 'F2 Imports backup';
 const BARCODE_SERIAL_SHEET_NAME = 'Barcode & Serial Database';
+
+// Backup workbook (LA Prep and Service Status)
+const F2_BACKUP_SPREADSHEET_ID = '1j_slMWpLIbjqbvGdAurozTh_1vv17SASshCZSkTUNw0';
 
 // Header mapping: Original F2 Excel headers -> Common database names
 // Row 1: Original Excel headers (18 columns + Serial Number, same for Complete and Incomplete exports)
@@ -171,6 +175,7 @@ function processF2Imports() {
       }
     }
     
+    syncF2ImportsToBackup();
     Logger.log("\n✅ F2 Import completed");
     
   } catch (error) {
@@ -332,8 +337,8 @@ function processOneConvertedFile(file, folder, convertedFile, serialNumberMap) {
     record.ImportTimestamp = new Date().toISOString();
     record.SourceFile = file.getName();
     const barcode = record.AssetBarcode ? record.AssetBarcode.toString().trim() : '';
-    if (barcode && serialNumberMap.has(barcode)) {
-      record.SerialNumber = serialNumberMap.get(barcode);
+    if (barcode && serialNumberMap.has(barcode.toLowerCase())) {
+      record.SerialNumber = serialNumberMap.get(barcode.toLowerCase());
     } else {
       record.SerialNumber = '';
     }
@@ -544,7 +549,7 @@ function loadSerialNumberMap() {
       const serialNumber = data[i][7] ? data[i][7].toString().trim() : '';
       
       if (barcode && serialNumber) {
-        serialMap.set(barcode, serialNumber);
+        serialMap.set(barcode.toLowerCase(), serialNumber);
       }
     }
     
@@ -913,21 +918,22 @@ function writeToF2ImportsSheet(data) {
         const row = existingRows[i];
         const barcode = row[barcodeColIndex] ? row[barcodeColIndex].toString().trim() : '';
         if (!barcode) continue;
+        const barcodeKey = barcode.toLowerCase();
         const creation = row[creationTimestampColIndex] ? row[creationTimestampColIndex].toString().trim() : '';
         const start = (startTimestampColIndex !== -1 && row[startTimestampColIndex]) ? row[startTimestampColIndex].toString().trim() : '';
         const end = (endTimestampColIndex !== -1 && row[endTimestampColIndex]) ? row[endTimestampColIndex].toString().trim() : '';
         const rowIndex = 3 + i;
         const entry = { rowIndex: rowIndex, creation: creation, start: start, end: end };
-        if (!byBarcode.has(barcode)) byBarcode.set(barcode, []);
-        byBarcode.get(barcode).push(entry);
+        if (!byBarcode.has(barcodeKey)) byBarcode.set(barcodeKey, []);
+        byBarcode.get(barcodeKey).push(entry);
       }
-      // For each barcode keep the best row; mark the rest for deletion
-      byBarcode.forEach(function (entries, barcode) {
+      // For each barcode keep the best row; mark the rest for deletion (key is case-insensitive so 100MMSLS-37 and 100mmsls-37 match)
+      byBarcode.forEach(function (entries, barcodeKey) {
         var best = entries[0];
         for (var e = 1; e < entries.length; e++) {
           if (isF2NewRecordBetter(best, entries[e])) best = entries[e];
         }
-        existingByBarcode.set(barcode, { rowIndex: best.rowIndex, creation: best.creation, start: best.start, end: best.end });
+        existingByBarcode.set(barcodeKey, { rowIndex: best.rowIndex, creation: best.creation, start: best.start, end: best.end });
         entries.forEach(function (ent) {
           if (ent.rowIndex !== best.rowIndex) rowsToDelete.push(ent.rowIndex);
         });
@@ -949,30 +955,31 @@ function writeToF2ImportsSheet(data) {
         appendByBarcode.set('__no_barcode_' + idx, record);
         continue;
       }
+      const barcodeKey = barcode.toLowerCase();
       const creation = record.z_log_CreateHost_ts_ae ? record.z_log_CreateHost_ts_ae.toString().trim() : '';
       const start = record.TimestampStart_ts ? record.TimestampStart_ts.toString().trim() : '';
       const end = record.TimestampEnd_ts ? record.TimestampEnd_ts.toString().trim() : '';
       const newRec = { creation: creation, start: start, end: end };
 
-      if (existingByBarcode.has(barcode)) {
-        const existing = existingByBarcode.get(barcode);
+      if (existingByBarcode.has(barcodeKey)) {
+        const existing = existingByBarcode.get(barcodeKey);
         if (isF2NewRecordBetter(existing, newRec)) {
           replaceMap.set(existing.rowIndex, record);
-          existingByBarcode.set(barcode, { rowIndex: existing.rowIndex, creation: creation, start: start, end: end });
+          existingByBarcode.set(barcodeKey, { rowIndex: existing.rowIndex, creation: creation, start: start, end: end });
         } else {
           duplicateCount++;
         }
       } else {
-        if (appendByBarcode.has(barcode)) {
-          const cur = appendByBarcode.get(barcode);
+        if (appendByBarcode.has(barcodeKey)) {
+          const cur = appendByBarcode.get(barcodeKey);
           const curTs = {
             creation: cur.z_log_CreateHost_ts_ae ? String(cur.z_log_CreateHost_ts_ae).trim() : '',
             start: cur.TimestampStart_ts ? String(cur.TimestampStart_ts).trim() : '',
             end: cur.TimestampEnd_ts ? String(cur.TimestampEnd_ts).trim() : ''
           };
-          if (isF2NewRecordBetter(curTs, newRec)) appendByBarcode.set(barcode, record);
+          if (isF2NewRecordBetter(curTs, newRec)) appendByBarcode.set(barcodeKey, record);
         } else {
-          appendByBarcode.set(barcode, record);
+          appendByBarcode.set(barcodeKey, record);
         }
       }
     }
@@ -1038,6 +1045,100 @@ function arraysEqual(a, b) {
     if (a[i] !== b[i]) return false;
   }
   return true;
+}
+
+/**
+ * Syncs F2 Imports data to the backup workbook (LA Prep and Service Status).
+ * Creates "F2 Imports backup" sheet if missing. Writes from column A with same one-per-barcode
+ * deduplication (case-insensitive, keep most recent by Created/Start/End timestamp).
+ */
+function syncF2ImportsToBackup() {
+  try {
+    const START_COLUMN_MAIN = 27; // AA
+    const mainSpreadsheet = SpreadsheetApp.openById(F2_DESTINATION_SPREADSHEET_ID);
+    const mainSheet = mainSpreadsheet.getSheetByName(F2_IMPORTS_SHEET_NAME);
+    if (!mainSheet) {
+      Logger.log('⚠️ F2 Imports sheet not found in main workbook; skipping backup.');
+      return;
+    }
+    const mainLastRow = mainSheet.getLastRow();
+    const mainLastCol = mainSheet.getLastColumn();
+    if (mainLastRow < 3 || mainLastCol < START_COLUMN_MAIN) {
+      Logger.log('⚠️ No F2 Imports data to copy; skipping backup.');
+      return;
+    }
+    const numCols = mainLastCol - START_COLUMN_MAIN + 1;
+    const mainHeaderRow1 = mainSheet.getRange(1, START_COLUMN_MAIN, 1, numCols).getDisplayValues()[0];
+    const mainHeaderRow2 = mainSheet.getRange(2, START_COLUMN_MAIN, 2, numCols).getDisplayValues()[0];
+    const numDataRows = Math.max(0, mainLastRow - 2);
+    const mainDataRows = mainSheet.getRange(3, START_COLUMN_MAIN, numDataRows, numCols).getDisplayValues();
+
+    const backupSpreadsheet = SpreadsheetApp.openById(F2_BACKUP_SPREADSHEET_ID);
+    let backupSheet = backupSpreadsheet.getSheetByName(F2_IMPORTS_BACKUP_SHEET_NAME);
+    if (!backupSheet) {
+      backupSheet = backupSpreadsheet.insertSheet(F2_IMPORTS_BACKUP_SHEET_NAME);
+      Logger.log('📄 Created sheet "' + F2_IMPORTS_BACKUP_SHEET_NAME + '" in backup workbook.');
+    }
+
+    const barcodeColIndex = mainHeaderRow1.indexOf('AssetBarcode');
+    const creationTimestampColIndex = mainHeaderRow1.indexOf('z_log_CreateHost_ts_ae');
+    const startTimestampColIndex = mainHeaderRow1.indexOf('TimestampStart_ts');
+    const endTimestampColIndex = mainHeaderRow1.indexOf('TimestampEnd_ts');
+    if (barcodeColIndex === -1) {
+      Logger.log('⚠️ AssetBarcode column not found in main headers; skipping backup.');
+      return;
+    }
+
+    /** @type {Map<string, { rowData: Array, creation: string, start: string, end: string }>} */
+    const merged = new Map();
+
+    const backupLastRow = backupSheet.getLastRow();
+    if (backupLastRow >= 3) {
+      const backupNumDataRows = Math.max(0, backupLastRow - 2);
+      const backupRows = backupSheet.getRange(3, 1, backupNumDataRows, numCols).getDisplayValues();
+      for (let i = 0; i < backupRows.length; i++) {
+        const row = backupRows[i];
+        const barcode = row[barcodeColIndex] ? row[barcodeColIndex].toString().trim() : '';
+        if (!barcode) continue;
+        const barcodeKey = barcode.toLowerCase();
+        const creation = row[creationTimestampColIndex] ? row[creationTimestampColIndex].toString().trim() : '';
+        const start = (startTimestampColIndex !== -1 && row[startTimestampColIndex]) ? row[startTimestampColIndex].toString().trim() : '';
+        const end = (endTimestampColIndex !== -1 && row[endTimestampColIndex]) ? row[endTimestampColIndex].toString().trim() : '';
+        merged.set(barcodeKey, { rowData: row, creation: creation, start: start, end: end });
+      }
+    }
+
+    for (let i = 0; i < mainDataRows.length; i++) {
+      const row = mainDataRows[i];
+      const barcode = row[barcodeColIndex] ? row[barcodeColIndex].toString().trim() : '';
+      if (!barcode) continue;
+      const barcodeKey = barcode.toLowerCase();
+      const creation = row[creationTimestampColIndex] ? row[creationTimestampColIndex].toString().trim() : '';
+      const start = (startTimestampColIndex !== -1 && row[startTimestampColIndex]) ? row[startTimestampColIndex].toString().trim() : '';
+      const end = (endTimestampColIndex !== -1 && row[endTimestampColIndex]) ? row[endTimestampColIndex].toString().trim() : '';
+      const newRec = { creation: creation, start: start, end: end };
+      const existing = merged.get(barcodeKey);
+      if (!existing || isF2NewRecordBetter(existing, newRec)) {
+        merged.set(barcodeKey, { rowData: row, creation: creation, start: start, end: end });
+      }
+    }
+
+    const rowsToWrite = Array.from(merged.values()).map(function (v) { return v.rowData; });
+    const backupDataRows = backupSheet.getLastRow();
+    if (backupDataRows >= 3) {
+      backupSheet.getRange(3, 1, backupDataRows, backupSheet.getLastColumn()).clearContent();
+    }
+    backupSheet.getRange(1, 1, 1, numCols).setValues([mainHeaderRow1]);
+    backupSheet.getRange(2, 1, 2, numCols).setValues([mainHeaderRow2]);
+    if (rowsToWrite.length > 0) {
+      backupSheet.getRange(3, 1, rowsToWrite.length, numCols).setValues(rowsToWrite);
+      const barcodeColBackup = 1 + barcodeColIndex;
+      backupSheet.getRange(3, barcodeColBackup, rowsToWrite.length, 1).setNumberFormat('@');
+    }
+    Logger.log('📋 F2 Imports backup: wrote ' + rowsToWrite.length + ' row(s) to "' + F2_IMPORTS_BACKUP_SHEET_NAME + '" (one per barcode, column A).');
+  } catch (error) {
+    Logger.log('⚠️ Error syncing F2 Imports to backup: ' + error.toString());
+  }
 }
 
 /**
