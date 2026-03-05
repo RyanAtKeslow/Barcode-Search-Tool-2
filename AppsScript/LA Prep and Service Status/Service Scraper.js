@@ -22,7 +22,7 @@ const F2_COL_BARCODE = 2;
 const F2_COL_EQUIPMENT_NAME = 4;
 const F2_COL_EQUIPMENT_CATEGORY = 5;
 const F2_COL_ORDER = 6;
-const F2_COL_PREP_TECH = 9;
+/** Column K (0-based index 10) = Service Tech; column J = Prep Tech (not used for job block column H). */
 const F2_COL_SERVICE_TECH = 10;
 const F2_COL_END_TIMESTAMP = 14;
 const F2_COL_PREP_KIND = 17;
@@ -297,9 +297,8 @@ function getF2MatchingRows(orderNumbersSet) {
     var jobBlockHeader = mapF2CategoryToJobBlockHeader(equipmentCategory);
     var prepKind = row[F2_COL_PREP_KIND] != null ? String(row[F2_COL_PREP_KIND]).trim() : '';
     var endTimestamp = row[F2_COL_END_TIMESTAMP] != null ? row[F2_COL_END_TIMESTAMP] : '';
-    var serviceTech = row[F2_COL_SERVICE_TECH] != null ? String(row[F2_COL_SERVICE_TECH]).trim() : '';
-    var prepTech = row[F2_COL_PREP_TECH] != null ? String(row[F2_COL_PREP_TECH]).trim() : '';
-    var technician = serviceTech || prepTech || '';
+    // Column H (Service Tech) comes only from F2 backup column K (Service Tech), not column J (Prep Tech).
+    var technician = row[F2_COL_SERVICE_TECH] != null ? String(row[F2_COL_SERVICE_TECH]).trim() : '';
     matchingRows.push({
       orderNumber: orderNorm,
       equipmentName: equipmentName,
