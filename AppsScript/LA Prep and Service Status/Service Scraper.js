@@ -402,19 +402,14 @@ function parsePrepSheetBlocks(sheet, lastRow) {
 }
 
 /**
- * Sets Pulled? (D), RTR? (E), Completion Timestamp (G), Technician (H) for one serviced-equipment row.
- * D = TRUE (checkbox); E = "✓" if Prep Kind is RTR and End Timestamp exists; G = formatted timestamp; H = technician.
+ * Sets Completion Timestamp (G) and Technician (H) for one serviced-equipment row.
+ * Status columns D/E/F are handled by formulas created in Prep Bay Schema Test; Service Scraper
+ * only fills out additional detail columns that are not formula-driven.
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
  * @param {number} row - 1-based row index
  * @param {{ prepKind: string, endTimestamp: *, technician: string }} item - From getF2ItemsByOrderByCategory
  */
 function setServicedEquipmentStatusCells(sheet, row, item) {
-  var pulledRange = sheet.getRange(row, JOB_COL_PULLED);
-  pulledRange.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
-  pulledRange.setValue(true);
-  var hasCompletion = item.endTimestamp != null && String(item.endTimestamp).trim() !== '';
-  var rtr = isPrepKindRTR(item.prepKind) && hasCompletion;
-  sheet.getRange(row, JOB_COL_RTR).setValue(rtr ? '✓' : '');
   sheet.getRange(row, JOB_COL_COMPLETION_TIMESTAMP).setValue(formatCompletionTimestamp(item.endTimestamp));
   sheet.getRange(row, JOB_COL_TECHNICIAN).setValue(item.technician || '');
 }
@@ -470,8 +465,12 @@ function writeF2ServicedEquipmentToPrepSheet(sheet, sheetName, orderNumbersOnShe
       blockItems += 1;
       for (var i = 1; i < items.length; i++) {
         var categoryRowLabelFg = sheet.getRange(row, 1).getFontColor();
+        var srcRow = row;
         sheet.insertRowAfter(row);
         row += 1;
+        // Copy Pulled?/RTR?/Serviced? formulas and hidden order column K from the source row.
+        sheet.getRange(srcRow, JOB_COL_PULLED, 1, 3).copyTo(sheet.getRange(row, JOB_COL_PULLED, 1, 3));
+        sheet.getRange(srcRow, 11, 1, 1).copyTo(sheet.getRange(row, 11, 1, 1));
         var it = items[i];
         sheet.getRange(row, 2).setValue(it.equipmentName);
         sheet.getRange(row, 3).setValue(it.barcode);

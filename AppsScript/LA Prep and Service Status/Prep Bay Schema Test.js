@@ -19,6 +19,9 @@ const CAMERA_BODIES_ONLY_WORKBOOK_ID = '1FYA76P4B7vFUCDmxDwc6Ly6-tm7F6f5c5v0eNYj
 /** Subbed equipment: refresh reads from "Sub Equipment Helper" sheet (same workbook = fast). That sheet is updated by the separate Scan SUB Sheet script (menu or time-driven trigger every 5–10 min). */
 const SUB_HELPER_SHEET_NAME = 'Sub Equipment Helper';
 
+/** Prep forecast helper sheet: used as an off-screen buffer so visible Prep sheets update in one fast copy. */
+const PREP_HELPER_SHEET_NAME = 'Prep Helper';
+
 /** Forecast sheet names and workday offset (0 = today, 1 = next workday; weekends and federal holidays skipped) */
 const PREP_FORECAST_SHEETS = [
   { name: 'Prep Today', daysOffset: 0 },
@@ -1147,6 +1150,47 @@ function applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBgOverride, bloc
     }
   }
 
+  // Hidden per-row order number (column K) + status formulas for Pulled? (D), RTR? (E), Serviced for Order? (F).
+  // This lets formulas dynamically reflect the latest F2 Imports backup data, even as Service Scraper inserts rows.
+  if (orderNumber != null && orderNumber !== '') {
+    var normOrderForFormulas = String(orderNumber).replace(/[^0-9]/g, '');
+    if (normOrderForFormulas) {
+      var f2SheetName = "'F2 Imports backup'";
+      var f2StartRow = 3;
+      var f2EndRow = 2000;
+      var f2BarcodeRange = f2SheetName + "!$C$" + f2StartRow + ":$C$" + f2EndRow;
+      var f2OrderRange = f2SheetName + "!$G$" + f2StartRow + ":$G$" + f2EndRow;
+      var f2PrepKindRange = f2SheetName + "!$R$" + f2StartRow + ":$R$" + f2EndRow;
+      var f2EndRange = f2SheetName + "!$O$" + f2StartRow + ":$O$" + f2EndRow;
+      for (var rowIdx = equipmentDataFirstRow; rowIdx <= equipmentDataLastRow; rowIdx++) {
+        var cRef = '$C' + rowIdx;
+        var kRef = '$K' + rowIdx;
+        // Hidden order number column (K) carries the job's order number per equipment row.
+        sheet.getRange(rowIdx, 11).setValue(normOrderForFormulas);
+        var pulledFormula =
+          '=IF(AND(' + cRef + '<>"",COUNTIFS(' +
+          f2BarcodeRange + ',' + cRef + ',' +
+          f2OrderRange + ',' + kRef +
+          ')>0),"✓","")';
+        var rtrFormula =
+          '=IF(AND(' + cRef + '<>"",COUNTIFS(' +
+          f2BarcodeRange + ',' + cRef + ',' +
+          f2OrderRange + ',' + kRef + ',' +
+          f2PrepKindRange + ',"Ready to Rent",' +
+          f2EndRange + ',"<>")>0),"✓","")';
+        var servicedFormula =
+          '=IF(AND(' + cRef + '<>"",COUNTIFS(' +
+          f2BarcodeRange + ',' + cRef + ',' +
+          f2OrderRange + ',' + kRef + ',' +
+          f2PrepKindRange + ',"Prep",' +
+          f2EndRange + ',"<>")>0),"✓","")';
+        sheet.getRange(rowIdx, 4).setFormula(pulledFormula);
+        sheet.getRange(rowIdx, 5).setFormula(rtrFormula);
+        sheet.getRange(rowIdx, 6).setFormula(servicedFormula);
+      }
+    }
+  }
+
   // --- Subbed Equipment: header row (incl. A "Added By") = dark blue table style; data row(s) column A = jobBg + labelFg. Notes (I:J) merged + wrap. ---
   applyTableHeaderStyle(subHeaderRow);
   sheet.getRange(subHeaderRow, 9, 1, 2).merge();
@@ -1294,6 +1338,33 @@ function refreshSinglePrepForecastSheet(sheetName, workdayOffset) {
     allRows.push.apply(allRows, blockResult.rows);
     subStrikethroughFlagsPerBlock.push(blockResult.subStrikethroughFlags || []);
   });
+  // Use a hidden helper sheet as an off-screen buffer so the visible Prep sheet updates in one fast copy.
+  let helper = ss.getSheetByName(PREP_HELPER_SHEET_NAME);
+  if (!helper) {
+    helper = ss.insertSheet(PREP_HELPER_SHEET_NAME);
+    helper.hideSheet();
+    Logger.log('  Created helper sheet: ' + PREP_HELPER_SHEET_NAME);
+  }
+  helper.clear();
+
+  if (allRows.length > 0) {
+    Logger.log('  Writing ' + allRows.length + ' rows to helper, formatting ' + jobs.length + ' job blocks');
+    helper.getRange(1, 1, allRows.length, numCols).setValues(allRows);
+    if (allRows.length > 1) helper.getRange(2, 1, allRows.length, numCols).setWrap(true);
+    applySchemaColumnWidths(helper, fmt);
+    // Row 1: A1 = day name as plain text (bold, 32, black, overflow). Force number format to text so it overflows.
+    helper.getRange(1, 1).setNumberFormat('@').setFontWeight('bold').setFontSize(32).setFontColor('#000000').setWrap(false).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
+    var startRow = 2;
+    for (var j = 0; j < jobs.length; j++) {
+      var normOrderJ = String(jobs[j].orderNumber || '').replace(/[^0-9]/g, '');
+      var jobHeaderBg = orderBackgroundMap[normOrderJ] || null;
+      applyJobBlockFormatting(helper, startRow, fmt, jobHeaderBg, blockRowCounts[j], subStrikethroughFlagsPerBlock[j], jobs[j].orderNumber);
+      Logger.log('    [helper] Block ' + (j + 1) + ': order ' + (jobs[j].orderNumber || '') + ', rows ' + blockRowCounts[j] + ', startRow ' + startRow);
+      startRow += blockRowCounts[j];
+    }
+  } else {
+    Logger.log('  No jobs for this date; helper sheet cleared');
+  }
 
   let sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
@@ -1302,32 +1373,23 @@ function refreshSinglePrepForecastSheet(sheetName, workdayOffset) {
   }
 
   sheet.clear();
-  if (allRows.length > 0) {
-    Logger.log('  Writing ' + allRows.length + ' rows, formatting ' + jobs.length + ' job blocks');
-    sheet.getRange(1, 1, allRows.length, numCols).setValues(allRows);
-    if (allRows.length > 1) sheet.getRange(2, 1, allRows.length, numCols).setWrap(true);
-    applySchemaColumnWidths(sheet, fmt);
-    // Row 1: A1 = day name as plain text (bold, 32, black, overflow). Force number format to text so it overflows.
-    sheet.getRange(1, 1).setNumberFormat('@').setFontWeight('bold').setFontSize(32).setFontColor('#000000').setWrap(false).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
-    var startRow = 2;
-    for (var j = 0; j < jobs.length; j++) {
-      var normOrderJ = String(jobs[j].orderNumber || '').replace(/[^0-9]/g, '');
-      var jobHeaderBg = orderBackgroundMap[normOrderJ] || null;
-      applyJobBlockFormatting(sheet, startRow, fmt, jobHeaderBg, blockRowCounts[j], subStrikethroughFlagsPerBlock[j], jobs[j].orderNumber);
-      Logger.log('    Block ' + (j + 1) + ': order ' + (jobs[j].orderNumber || '') + ', rows ' + blockRowCounts[j] + ', startRow ' + startRow);
-      startRow += blockRowCounts[j];
-    }
+  var helperLastRow = helper.getLastRow();
+  if (helperLastRow > 0) {
+    Logger.log('  Copying ' + helperLastRow + ' helper rows to visible sheet ' + sheetName);
+    helper.getRange(1, 1, helperLastRow, numCols).copyTo(sheet.getRange(1, 1), SpreadsheetApp.CopyPasteType.PASTE_NORMAL, false);
   } else {
-    Logger.log('  No jobs for this date; sheet cleared');
+    Logger.log('  Helper has no rows; visible sheet left empty');
   }
 
   var maxRow = sheet.getMaxRows();
-  var lastDataRow = allRows.length || 0;
+  var lastDataRow = helperLastRow || 0;
   if (lastDataRow < maxRow) {
     var trailingRows = maxRow - lastDataRow;
     var trailing = sheet.getRange(lastDataRow + 1, 1, trailingRows, numCols);
     trailing.clearContent().clearFormat().clearDataValidations();
   }
+
+  helper.clear();
 
   SpreadsheetApp.flush();
   showSubbedEquipmentAlertIfAny();
