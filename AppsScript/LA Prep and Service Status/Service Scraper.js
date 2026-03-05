@@ -500,14 +500,14 @@ function writeF2ServicedEquipmentToPrepSheet(sheet, sheetName, orderNumbersOnShe
 }
 
 /**
- * Deletes all rows beyond row 2000 on the given sheet.
+ * Deletes all physical rows beyond row 2000 so the sheet has at most 2000 rows.
+ * Uses getMaxRows() (physical row count), not getLastRow() (last row with content), so blank rows are removed.
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
  * @returns {number} Number of rows deleted (0 if none)
  */
 function deleteRowsBeyond2000(sheet) {
-  var lastRow = sheet.getLastRow();
-  if (lastRow <= 2000) return 0;
   var maxRows = sheet.getMaxRows();
+  if (maxRows <= 2000) return 0;
   var numToDelete = maxRows - 2000;
   sheet.deleteRows(2001, numToDelete);
   return numToDelete;
@@ -518,16 +518,16 @@ function deleteRowsBeyond2000(sheet) {
  */
 function deleteAllPrepSheetsRowsBeyond2000() {
   var ss = SpreadsheetApp.openById(SERVICE_SCRAPER_WORKBOOK_ID);
-  Logger.log('Trimming Prep sheets to 2000 rows max:');
+  Logger.log('Trimming Prep sheets to 2000 rows max (by physical row count):');
   PREP_SHEET_CONFIGS.forEach(function (config) {
     var sheet = ss.getSheetByName(config.name);
     if (sheet) {
-      var lastRow = sheet.getLastRow();
-      if (lastRow <= 2000) {
-        Logger.log('  ' + config.name + ': ' + lastRow + ' rows (no trim)');
+      var maxRows = sheet.getMaxRows();
+      if (maxRows <= 2000) {
+        Logger.log('  ' + config.name + ': ' + maxRows + ' rows (no trim)');
       } else {
         var deleted = deleteRowsBeyond2000(sheet);
-        Logger.log('  ' + config.name + ': trimmed to 2000 rows (deleted ' + deleted + ')');
+        Logger.log('  ' + config.name + ': trimmed to 2000 rows (deleted ' + deleted + ' blank/extra rows)');
       }
     }
   });
