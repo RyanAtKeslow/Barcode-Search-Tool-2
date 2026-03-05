@@ -153,7 +153,7 @@ function mapF2CategoryToJobBlockHeader(f2Category) {
  * Finds F2 backup rows whose Order Number (column G) is in the given set.
  * Commits matching lines to memory with orderNumber, equipmentName, barcode, equipmentCategory, jobBlockHeader.
  * @param {Object.<string, boolean>} orderNumbersSet - normalized order numbers we care about
- * @returns {{ matchingRows: Array.<{orderNumber: string, equipmentName: string, barcode: string, equipmentCategory: string, jobBlockHeader: string}> }}
+ * @returns {{ matchingRows: Array, totalRowsRead: number }}
  */
 function getF2MatchingRows(orderNumbersSet) {
   var rows = getF2BackupDataRows();
@@ -175,7 +175,7 @@ function getF2MatchingRows(orderNumbersSet) {
       jobBlockHeader: jobBlockHeader
     });
   }
-  return { matchingRows: matchingRows };
+  return { matchingRows: matchingRows, totalRowsRead: rows.length };
 }
 
 /**
@@ -272,12 +272,19 @@ function writeF2ServicedEquipmentToPrepSheet(sheet, sheetName, orderNumbersOnShe
   orderNumbersOnSheet.forEach(function (n) { orderSet[n] = true; });
   var lastRow = Math.min(sheet.getLastRow(), 2500);
   var blocks = parsePrepSheetBlocks(sheet, lastRow);
+  Logger.log('  [' + sheetName + '] Parsed ' + blocks.length + ' job block(s), ' + orderNumbersOnSheet.length + ' order(s) on sheet');
+  var blocksUpdated = 0;
+  var totalItemsWritten = 0;
+  var totalRowsInserted = 0;
   for (var b = 0; b < blocks.length; b++) {
     var block = blocks[b];
     var orderNorm = block.orderNumber;
     if (!orderNorm || !orderSet[orderNorm]) continue;
     var itemsByCat = f2ByOrderByCat[orderNorm];
     if (!itemsByCat) continue;
+    blocksUpdated++;
+    var blockItems = 0;
+    var blockInserted = 0;
     for (var h = 0; h < NON_CAMERA_HEADERS.length; h++) {
       var header = NON_CAMERA_HEADERS[h];
       var catIndex = JOB_BLOCK_EQUIPMENT_HEADERS.indexOf(header);
@@ -290,12 +297,15 @@ function writeF2ServicedEquipmentToPrepSheet(sheet, sheetName, orderNumbersOnShe
       var jobBg = sheet.getRange(row, 1).getBackground();
       sheet.getRange(row, 2).setValue(items[0].equipmentName);
       sheet.getRange(row, 3).setValue(items[0].barcode);
+      blockItems += 1;
       for (var i = 1; i < items.length; i++) {
         sheet.insertRowAfter(row);
         sheet.getRange(row + 1, 2).setValue(items[i].equipmentName);
         sheet.getRange(row + 1, 3).setValue(items[i].barcode);
         sheet.getRange(row + 1, 1, 1, numCols).setBackground(jobBg);
         row += 1;
+        blockItems++;
+        blockInserted++;
         for (var j = catIndex + 1; j < block.categoryRows.length; j++) {
           if (block.categoryRows[j] != null) block.categoryRows[j]++;
         }
@@ -309,19 +319,27 @@ function writeF2ServicedEquipmentToPrepSheet(sheet, sheetName, orderNumbersOnShe
         }
       }
     }
+    totalItemsWritten += blockItems;
+    totalRowsInserted += blockInserted;
+    if (blockItems > 0) {
+      Logger.log('    Order ' + orderNorm + ': ' + blockItems + ' item(s) written' + (blockInserted > 0 ? ', ' + blockInserted + ' row(s) inserted' : ''));
+    }
   }
+  Logger.log('  [' + sheetName + '] Updated ' + blocksUpdated + ' block(s), ' + totalItemsWritten + ' item(s) written, ' + totalRowsInserted + ' row(s) inserted');
 }
 
 /**
  * Deletes all rows beyond row 2000 on the given sheet.
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @returns {number} Number of rows deleted (0 if none)
  */
 function deleteRowsBeyond2000(sheet) {
   var lastRow = sheet.getLastRow();
-  if (lastRow <= 2000) return;
+  if (lastRow <= 2000) return 0;
   var maxRows = sheet.getMaxRows();
   var numToDelete = maxRows - 2000;
   sheet.deleteRows(2001, numToDelete);
+  return numToDelete;
 }
 
 /**
@@ -329,11 +347,17 @@ function deleteRowsBeyond2000(sheet) {
  */
 function deleteAllPrepSheetsRowsBeyond2000() {
   var ss = SpreadsheetApp.openById(SERVICE_SCRAPER_WORKBOOK_ID);
+  Logger.log('Trimming Prep sheets to 2000 rows max:');
   PREP_SHEET_CONFIGS.forEach(function (config) {
     var sheet = ss.getSheetByName(config.name);
     if (sheet) {
-      deleteRowsBeyond2000(sheet);
-      Logger.log('  Trimmed ' + config.name + ' to 2000 rows');
+      var lastRow = sheet.getLastRow();
+      if (lastRow <= 2000) {
+        Logger.log('  ' + config.name + ': ' + lastRow + ' rows (no trim)');
+      } else {
+        var deleted = deleteRowsBeyond2000(sheet);
+        Logger.log('  ' + config.name + ': trimmed to 2000 rows (deleted ' + deleted + ')');
+      }
     }
   });
 }
@@ -352,18 +376,40 @@ function deleteAllPrepSheetsRowsBeyond2000() {
  * }}
  */
 function runServiceScraper() {
+  Logger.log('--- Service Scraper started ---');
+
   var orderNumbersByDay = getOrderNumbersByDay();
+  Logger.log('Order numbers by day:');
+  Object.keys(orderNumbersByDay).forEach(function (name) {
+    Logger.log('  ' + name + ': ' + (orderNumbersByDay[name].length) + ' order(s)');
+  });
+
   var allOrderNumbersSet = getAllOrderNumbersSet(orderNumbersByDay);
+  var totalOrders = Object.keys(allOrderNumbersSet).length;
+  Logger.log('Total unique orders (all 5 sheets): ' + totalOrders);
+
   var matchResult = getF2MatchingRows(allOrderNumbersSet);
   var matchingRows = matchResult.matchingRows;
-  var equipmentCategoryMatrix = buildEquipmentCategoryMatrix(matchingRows);
-  var f2ByOrderByCat = getF2ItemsByOrderByCategory(matchingRows);
+  Logger.log('F2 backup: ' + (matchResult.totalRowsRead || 0) + ' data row(s) read, ' + matchingRows.length + ' matched to prep orders');
 
+  var equipmentCategoryMatrix = buildEquipmentCategoryMatrix(matchingRows);
+  if (equipmentCategoryMatrix.distinctF2EquipmentCategories.length > 0) {
+    Logger.log('F2 Equipment Categories in matches: ' + equipmentCategoryMatrix.distinctF2EquipmentCategories.join(', '));
+  }
+
+  var f2ByOrderByCat = getF2ItemsByOrderByCategory(matchingRows);
+  var ordersWithF2Data = Object.keys(f2ByOrderByCat).length;
+  Logger.log('Orders with F2 serviced equipment (non-Camera): ' + ordersWithF2Data);
+
+  Logger.log('Writing to Prep sheets:');
   var ss = SpreadsheetApp.openById(SERVICE_SCRAPER_WORKBOOK_ID);
   var writtenSheets = [];
   PREP_SHEET_CONFIGS.forEach(function (config) {
     var sheet = ss.getSheetByName(config.name);
-    if (!sheet) return;
+    if (!sheet) {
+      Logger.log('  [' + config.name + '] Sheet not found, skipped');
+      return;
+    }
     var ordersOnSheet = orderNumbersByDay[config.name] || [];
     writeF2ServicedEquipmentToPrepSheet(sheet, config.name, ordersOnSheet, f2ByOrderByCat);
     writtenSheets.push(config.name);
@@ -371,13 +417,7 @@ function runServiceScraper() {
 
   deleteAllPrepSheetsRowsBeyond2000();
 
-  Logger.log('Service Scraper — order numbers by day:');
-  Object.keys(orderNumbersByDay).forEach(function (name) {
-    Logger.log('  ' + name + ': ' + (orderNumbersByDay[name].length) + ' orders');
-  });
-  Logger.log('F2 matching rows: ' + matchingRows.length);
-  Logger.log('Wrote Equipment Name/Barcode to: ' + writtenSheets.join(', '));
-  Logger.log('Trimmed all Prep sheets to 2000 rows max.');
+  Logger.log('--- Service Scraper completed ---');
 
   return {
     orderNumbersByDay: orderNumbersByDay,
