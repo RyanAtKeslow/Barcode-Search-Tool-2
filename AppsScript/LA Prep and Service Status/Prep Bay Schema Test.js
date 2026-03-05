@@ -1381,7 +1381,8 @@ function refreshSinglePrepForecastSheet(sheetName, workdayOffset) {
   var helperLastRow = helper.getLastRow();
   if (helperLastRow > 0) {
     Logger.log('  Copying ' + helperLastRow + ' helper rows to visible sheet ' + sheetName);
-    helper.getRange(1, 1, helperLastRow, numCols).copyTo(sheet.getRange(1, 1), SpreadsheetApp.CopyPasteType.PASTE_NORMAL, false);
+    // Copy A through K (11 cols) so hidden order numbers in column K are present for status formulas (D/E/F).
+    helper.getRange(1, 1, helperLastRow, 11).copyTo(sheet.getRange(1, 1), SpreadsheetApp.CopyPasteType.PASTE_NORMAL, false);
   } else {
     Logger.log('  Helper has no rows; visible sheet left empty');
   }
