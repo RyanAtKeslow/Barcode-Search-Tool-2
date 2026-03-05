@@ -364,7 +364,28 @@ function getF2MatchingRows(orderNumbersSet) {
 }
 
 /**
+ * Deduplicates items by barcode within a category, keeping the entry with the latest endTimestamp.
+ * Prevents the same equipment from being written multiple times when F2 has duplicate rows (e.g. rescans).
+ * @param {Array.<{equipmentName: string, barcode: string, prepKind: string, endTimestamp: *, technician: string}>} items
+ * @returns {Array.<{equipmentName: string, barcode: string, prepKind: string, endTimestamp: *, technician: string}>}
+ */
+function dedupeItemsByBarcode(items) {
+  if (!items || items.length === 0) return [];
+  var byBarcode = {};
+  items.forEach(function (it) {
+    var bc = String(it.barcode || '').trim();
+    if (!bc) return;
+    var existing = byBarcode[bc];
+    if (!existing || getTimestampTime(it.endTimestamp) > getTimestampTime(existing.endTimestamp)) {
+      byBarcode[bc] = it;
+    }
+  });
+  return Object.keys(byBarcode).map(function (bc) { return byBarcode[bc]; });
+}
+
+/**
  * Groups F2 matching rows by order and by job-block header. Excludes Cameras (already from Equipment Chart).
+ * Deduplicates by barcode within each (order, category) so the same equipment is not written multiple times.
  * Each item includes equipmentName, barcode, prepKind, endTimestamp, technician for writing D–H.
  * @param {Array} matchingRows
  * @returns {Object.<string, Object.<string, Array.<{equipmentName: string, barcode: string, prepKind: string, endTimestamp: *, technician: string}>>>}
@@ -383,6 +404,12 @@ function getF2ItemsByOrderByCategory(matchingRows) {
       prepKind: r.prepKind || '',
       endTimestamp: r.endTimestamp,
       technician: r.technician || ''
+    });
+  });
+  // Deduplicate by barcode per category so we don't print the same equipment multiple times
+  Object.keys(byOrder).forEach(function (order) {
+    Object.keys(byOrder[order]).forEach(function (header) {
+      byOrder[order][header] = dedupeItemsByBarcode(byOrder[order][header]);
     });
   });
   return byOrder;
