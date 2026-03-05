@@ -50,7 +50,7 @@ const ROWS_PER_JOB_BLOCK = 18;
  * Job block row names (by column A content; used for clarity and locating rows).
  * Row 1: Job Name (A1:B1). Row 2: Order # (A2:B2), Marketing Agent (C2:D2), DP (F2:G2). Row 3: Prep Bay(s) (A3:B3), Prep Tech (C3:D3), 1st AC (F3:G3). Row 4: Prep Notes (A4:B4).
  * Equipment Header (A empty) | equipment rows | Locating Agent | sub data row(s) | black bar.
- * Status columns (no checkboxes): Equipment D,E,F,G = Pulled?, RTR?, Serviced for Order?, Completion Timestamp. Sub D,E,F,G = Located, Quote Received, Run Sheet Out, Packing Slip.
+ * Status columns (no checkboxes): Equipment D,E,F,G,H = Pulled?, RTR?, Serviced for Order?, Completion Timestamp, Service Tech. Sub D,E,F,G = Located, Quote Received, Run Sheet Out, Packing Slip.
  * Refresh leaves these cells blank; a separate database/verification script should write "✓" or "Yes" when verified.
  */
 
@@ -953,7 +953,7 @@ function buildJobBlockRows(job) {
   rows.push(padRow(['Prep Notes:', job.prepNotes || '']));
 
   // Equipment table header (no blank row before). Status cols D,E,F,G left blank; DB script writes "✓" when verified.
-  rows.push(padRow(['', 'Equipment Name', 'Barcode', 'Pulled?', 'RTR?', 'Serviced for Order?', 'Completion Timestamp']));
+  rows.push(padRow(['', 'Equipment Name', 'Barcode', 'Pulled?', 'RTR?', 'Serviced for Order?', 'Completion Timestamp', 'Service Tech']));
   EQUIPMENT_CATEGORIES.forEach(function (cat) {
     rows.push(padRow([cat + ':', '', '', '', '', '', '']));
   });
@@ -1028,7 +1028,7 @@ function buildJobBlockRowsWithCameras(job, equipmentList) {
   rows.push(padRow(['Prep Bay(s):', job.prepBaysDisplay || '', 'Prep Tech:', job.prepTech || '', '', '1st AC:', job.firstAC || '']));
   rows.push(padRow(['Prep Notes:', job.prepNotes || '']));
 
-  rows.push(padRow(['', 'Equipment Name', 'Barcode', 'Pulled?', 'RTR?', 'Serviced for Order?', 'Completion Timestamp']));
+  rows.push(padRow(['', 'Equipment Name', 'Barcode', 'Pulled?', 'RTR?', 'Serviced for Order?', 'Completion Timestamp', 'Service Tech']));
   const normalized = normalizeEquipmentByCategory(equipmentList, 'Cameras');
   rows.push.apply(rows, buildEquipmentBlockRows(normalized));
 
