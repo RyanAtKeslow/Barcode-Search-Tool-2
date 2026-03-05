@@ -46,7 +46,7 @@ const F2_BACKUP_SPREADSHEET_ID = '1j_slMWpLIbjqbvGdAurozTh_1vv17SASshCZSkTUNw0';
 //   Column C (3): AssetBarcode -> Barcode
 //   Column D (4): SerialNumber -> Serial Number (populated from Barcode & Serial Database lookup)
 //   Column E (5): EquipmentName_lu -> Equipment Name
-//   Column F (6): EquipmentCategory_lu -> Camera Type
+//   Column F (6): EquipmentCategory_lu -> Equipment Category
 //   Column G (7): OrderNumber_lu -> Order Number
 //   Column H (8): JobName_lu -> Job Name
 //   Column I (9): Puller_lu -> Puller
@@ -65,7 +65,7 @@ const HEADER_MAPPING = {
   'ServicePriority_aet': 'Service Priority',
   'AssetBarcode': 'Barcode',
   'EquipmentName_lu': 'Equipment Name',
-  'EquipmentCategory_lu': 'Camera Type',
+  'EquipmentCategory_lu': 'Equipment Category',
   'OrderNumber_lu': 'Order Number',
   'JobName_lu': 'Job Name',
   'Puller_lu': 'Puller',
@@ -151,13 +151,14 @@ function processF2Imports() {
     Logger.log("📚 Loading Serial Number map from Barcode & Serial Database...");
     const serialNumberMap = loadSerialNumberMap();
     
-    // Phase D: For each converted sheet: read, lookup, write, move, cleanup
+    // Phase D: For each converted sheet: read, lookup, write to main, sync to backup, move, cleanup
     for (const item of convertedList) {
       const file = item.file;
       const convertedFile = item.convertedFile;
       try {
         Logger.log(`\n📄 Processing file: ${file.getName()}`);
         processOneConvertedFile(file, folder, convertedFile, serialNumberMap);
+        syncF2ImportsToBackup();
         Logger.log(`✅ Successfully processed: ${file.getName()}`);
       } catch (error) {
         Logger.log(`❌ Error processing ${file.getName()}: ${error.toString()}`);
@@ -175,7 +176,6 @@ function processF2Imports() {
       }
     }
     
-    syncF2ImportsToBackup();
     Logger.log("\n✅ F2 Import completed");
     
   } catch (error) {
@@ -1069,7 +1069,7 @@ function syncF2ImportsToBackup() {
     }
     const numCols = mainLastCol - START_COLUMN_MAIN + 1;
     const mainHeaderRow1 = mainSheet.getRange(1, START_COLUMN_MAIN, 1, numCols).getDisplayValues()[0];
-    const mainHeaderRow2 = mainSheet.getRange(2, START_COLUMN_MAIN, 2, numCols).getDisplayValues()[0];
+    const mainHeaderRow2 = mainSheet.getRange(2, START_COLUMN_MAIN, 1, numCols).getDisplayValues()[0];
     const numDataRows = Math.max(0, mainLastRow - 2);
     const mainDataRows = mainSheet.getRange(3, START_COLUMN_MAIN, numDataRows, numCols).getDisplayValues();
 
@@ -1129,7 +1129,7 @@ function syncF2ImportsToBackup() {
       backupSheet.getRange(3, 1, backupDataRows, backupSheet.getLastColumn()).clearContent();
     }
     backupSheet.getRange(1, 1, 1, numCols).setValues([mainHeaderRow1]);
-    backupSheet.getRange(2, 1, 2, numCols).setValues([mainHeaderRow2]);
+    backupSheet.getRange(2, 1, 1, numCols).setValues([mainHeaderRow2]);
     if (rowsToWrite.length > 0) {
       backupSheet.getRange(3, 1, rowsToWrite.length, numCols).setValues(rowsToWrite);
       const barcodeColBackup = 1 + barcodeColIndex;
