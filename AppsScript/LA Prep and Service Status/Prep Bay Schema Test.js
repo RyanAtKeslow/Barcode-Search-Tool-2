@@ -174,6 +174,7 @@ function addPrepMenus() {
     .addItem('Refresh Four Days Out', 'refreshPrepFourDaysOut')
     .addSeparator()
     .addItem('Scan SUB Sheet', 'runScanSubSheet')
+    .addItem('Run Service Scraper', 'runServiceScraper')
     .addToUi();
 
   // Admin menu: only for ryan@keslowcamera.com
