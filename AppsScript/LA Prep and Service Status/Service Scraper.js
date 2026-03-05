@@ -199,6 +199,56 @@ function formatCompletionTimestamp(val) {
 }
 
 /**
+ * Returns a numeric value for timestamp comparison (higher = more recent). Used to pick "most recent" among grouped items.
+ * @param {string|number|Date} val - Raw value from F2 backup
+ * @returns {number} getTime() or 0 if unparseable
+ */
+function getTimestampTime(val) {
+  if (val == null || val === '') return 0;
+  if (val instanceof Date) return isNaN(val.getTime()) ? 0 : val.getTime();
+  var d = new Date(String(val).trim());
+  return isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
+/**
+ * For non-Camera, non-Lens categories: groups items by equipment name into single rows.
+ * Each group becomes one item: "Equipment Name (xN)" in B, comma-separated barcodes in C, most recent endTimestamp, no technician.
+ * @param {Array.<{equipmentName: string, barcode: string, endTimestamp: *}>} items
+ * @returns {Array.<{equipmentName: string, barcode: string, prepKind: string, endTimestamp: *, technician: string}>}
+ */
+function groupItemsByEquipmentName(items) {
+  if (!items || items.length === 0) return [];
+  var byName = {};
+  items.forEach(function (it) {
+    var name = String(it.equipmentName || '').trim();
+    if (!byName[name]) byName[name] = [];
+    byName[name].push(it);
+  });
+  var out = [];
+  Object.keys(byName).forEach(function (name) {
+    var list = byName[name];
+    var barcodes = list.map(function (it) { return String(it.barcode || '').trim(); }).filter(Boolean);
+    var latest = list[0];
+    var latestTime = getTimestampTime(latest.endTimestamp);
+    for (var i = 1; i < list.length; i++) {
+      var t = getTimestampTime(list[i].endTimestamp);
+      if (t > latestTime) {
+        latestTime = t;
+        latest = list[i];
+      }
+    }
+    out.push({
+      equipmentName: name + ' (x' + list.length + ')',
+      barcode: barcodes.join(', '),
+      prepKind: '',
+      endTimestamp: latest.endTimestamp,
+      technician: ''  // omit technician for grouped rows (multiple techs possible)
+    });
+  });
+  return out;
+}
+
+/**
  * Normalizes an order number to digits only.
  * @param {string} orderNumber
  * @returns {string}
@@ -415,10 +465,12 @@ function setServicedEquipmentStatusCells(sheet, row, item) {
 
 /**
  * Writes F2 serviced equipment (Equipment Name, Barcode) into one Prep sheet. For each job block,
- * fills columns B and C for non-Camera categories; when a category has more than one item, inserts
- * a row after the first and moves everything below down, then writes the extra item(s).
+ * fills columns B and C for non-Camera categories. Lenses: one row per item. Other categories
+ * (Heads, Focus, Matte Boxes, etc.): grouped by equipment name—one row per unique name with
+ * "Name (xN)" in B, comma-separated barcodes in C, most recent completion timestamp in G, H blank.
+ * When a category has more than one (grouped or ungrouped) row, inserts rows as needed.
  * Skips writing B/C if the row already has the same Equipment Name and Barcode (avoids reprinting).
- * Sets D=Pulled checkbox, E=RTR?, G=Completion Timestamp, H=Technician for each row.
+ * Sets G=Completion Timestamp, H=Technician (blank for grouped rows). D/E/F are formula-driven.
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
  * @param {string} sheetName - for logging
  * @param {string[]} orderNumbersOnSheet - normalized order numbers that appear on this sheet
@@ -450,9 +502,12 @@ function writeF2ServicedEquipmentToPrepSheet(sheet, sheetName, orderNumbersOnShe
       if (!row) continue;
       var items = itemsByCat[header];
       if (!items || items.length === 0) continue;
+      // For Lenses: one row per item. For Heads, Focus, Matte Boxes, etc.: group by equipment name (one row per unique name, "Name (xN)", comma-separated barcodes, latest timestamp, no tech).
+      var itemsToWrite = (header === 'Lenses') ? items : groupItemsByEquipmentName(items);
+      if (itemsToWrite.length === 0) continue;
       var numCols = 10;
       var jobBg = sheet.getRange(row, 1).getBackground();
-      var item0 = items[0];
+      var item0 = itemsToWrite[0];
       var existingB = sheet.getRange(row, 2).getDisplayValue();
       var existingC = sheet.getRange(row, 3).getDisplayValue();
       var skipFirst = (existingB === item0.equipmentName && existingC === item0.barcode);
@@ -462,7 +517,7 @@ function writeF2ServicedEquipmentToPrepSheet(sheet, sheetName, orderNumbersOnShe
       }
       setServicedEquipmentStatusCells(sheet, row, item0);
       blockItems += 1;
-      for (var i = 1; i < items.length; i++) {
+      for (var i = 1; i < itemsToWrite.length; i++) {
         var categoryRowLabelFg = sheet.getRange(row, 1).getFontColor();
         var srcRow = row;
         sheet.insertRowAfter(row);
@@ -470,7 +525,7 @@ function writeF2ServicedEquipmentToPrepSheet(sheet, sheetName, orderNumbersOnShe
         // Copy Pulled?/RTR?/Serviced? formulas and hidden order column K from the source row.
         sheet.getRange(srcRow, JOB_COL_PULLED, 1, 3).copyTo(sheet.getRange(row, JOB_COL_PULLED, 1, 3));
         sheet.getRange(srcRow, 11, 1, 1).copyTo(sheet.getRange(row, 11, 1, 1));
-        var it = items[i];
+        var it = itemsToWrite[i];
         sheet.getRange(row, 2).setValue(it.equipmentName);
         sheet.getRange(row, 3).setValue(it.barcode);
         sheet.getRange(row, 1).setBackground(jobBg).setFontColor(categoryRowLabelFg);

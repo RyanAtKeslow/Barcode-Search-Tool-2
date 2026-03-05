@@ -22,6 +22,11 @@ const SUB_HELPER_SHEET_NAME = 'Sub Equipment Helper';
 /** Prep forecast helper sheet: used as an off-screen buffer so visible Prep sheets update in one fast copy. */
 const PREP_HELPER_SHEET_NAME = 'Prep Helper';
 
+/** Pacific timezone for 6:50 AM gate (doors open 7 AM PST). */
+const PREP_REFRESH_TIMEZONE = 'America/Los_Angeles';
+/** Script property key: last date (yyyy-MM-dd, Pacific) we ran the scheduled prep refresh. */
+const PREP_REFRESH_LAST_RUN_KEY = 'prepRefreshLastRunDate';
+
 /** Forecast sheet names and workday offset (0 = today, 1 = next workday; weekends and federal holidays skipped) */
 const PREP_FORECAST_SHEETS = [
   { name: 'Prep Today', daysOffset: 0 },
@@ -1483,4 +1488,34 @@ function refreshPrepForecastSheets() {
     refreshSinglePrepForecastSheet(config.name, config.daysOffset);
   });
   Logger.log('refreshPrepForecastSheets done');
+}
+
+/**
+ * Lightweight entry for a 1-minute time-driven trigger. If current time is 6:50 AM Pacific (just before 7 AM doors),
+ * runs the full 5-day prep refresh once for that day. Uses script properties so it only runs once per calendar day.
+ * Set up: Triggers > Add trigger > pick "runPrepRefreshIfScheduled" or "scheduledPrepRefresh650" | Time-driven | Minute timer | Every minute.
+ */
+function runPrepRefreshIfScheduled() {
+  var now = new Date();
+  var tz = PREP_REFRESH_TIMEZONE;
+  var hour = parseInt(Utilities.formatDate(now, tz, 'H'), 10);
+  var minute = parseInt(Utilities.formatDate(now, tz, 'm'), 10);
+  if (hour !== 6 || minute !== 50) return;
+
+  var todayStr = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+  var props = PropertiesService.getScriptProperties();
+  var lastRun = props.getProperty(PREP_REFRESH_LAST_RUN_KEY);
+  if (lastRun === todayStr) return;
+
+  props.setProperty(PREP_REFRESH_LAST_RUN_KEY, todayStr);
+  Logger.log('runPrepRefreshIfScheduled: 6:50 AM Pacific — running full prep refresh');
+  refreshPrepForecastSheets();
+}
+
+/**
+ * Alias for runPrepRefreshIfScheduled. Use this in the trigger dropdown if easier to find (e.g. search "scheduled" or "650").
+ * Same behavior: run on a 1-minute trigger; at 6:50 AM Pacific runs the full 5-day prep refresh once.
+ */
+function scheduledPrepRefresh650() {
+  runPrepRefreshIfScheduled();
 }
