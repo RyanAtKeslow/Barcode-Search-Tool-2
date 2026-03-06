@@ -490,6 +490,45 @@ function setServicedEquipmentStatusCells(sheet, row, item) {
   sheet.getRange(row, JOB_COL_TECHNICIAN).setValue(item.technician || '');
 }
 
+/** Pushes barcode(s) from a cell value (single or comma-separated) into a set object. */
+function addBarcodesToSet(set, barcodeCellValue) {
+  var s = String(barcodeCellValue != null ? barcodeCellValue : '').trim();
+  if (!s) return;
+  s.split(/\s*,\s*/).forEach(function (bc) { if (bc.trim()) set[bc.trim()] = true; });
+}
+
+/**
+ * Returns the set of barcodes already present in column C for a category section in a block.
+ * Used so we never write the same barcode twice in a block (same job) or duplicate across runs.
+ * For Lenses each cell is one barcode; for grouped categories (Heads, etc.) cell may be "bc1, bc2".
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {{ categoryRows: number[], endRow: number }} block - Parsed block with 1-based category row indices
+ * @param {number} catIndex - Index into block.categoryRows for this category (e.g. 1 for Lenses)
+ * @returns {Object.<string, boolean>} Set of normalized barcode strings (trimmed, non-empty)
+ */
+function getExistingBarcodesInCategorySection(sheet, block, catIndex) {
+  var startRow = block.categoryRows[catIndex];
+  if (startRow == null) return {};
+  var nextCatRow = (catIndex + 1 < block.categoryRows.length && block.categoryRows[catIndex + 1] != null)
+    ? block.categoryRows[catIndex + 1]
+    : block.endRow;
+  var endRow = nextCatRow - 1;
+  if (endRow < startRow) return {};
+  var colC = sheet.getRange(startRow, 3, endRow, 3).getDisplayValues();
+  var set = {};
+  for (var i = 0; i < colC.length; i++) {
+    var val = String(colC[i][0] != null ? colC[i][0] : '').trim();
+    if (!val) continue;
+    // Grouped rows may have "barcode1, barcode2" in C
+    var parts = val.split(/\s*,\s*/);
+    for (var p = 0; p < parts.length; p++) {
+      var bc = parts[p].trim();
+      if (bc) set[bc] = true;
+    }
+  }
+  return set;
+}
+
 /**
  * Writes F2 serviced equipment (Equipment Name, Barcode) into one Prep sheet. For each job block,
  * fills columns B and C for non-Camera categories. Lenses: one row per item. Other categories
@@ -509,6 +548,17 @@ function writeF2ServicedEquipmentToPrepSheet(sheet, sheetName, orderNumbersOnShe
   var lastRow = Math.min(sheet.getLastRow(), 2500);
   var blocks = parsePrepSheetBlocks(sheet, lastRow);
   Logger.log('  [' + sheetName + '] Parsed ' + blocks.length + ' job block(s), ' + orderNumbersOnSheet.length + ' order(s) on sheet');
+  // Sheet-wide barcode set: same barcode must not appear in more than one job on this sheet (same day).
+  var barcodesOnSheet = {};
+  if (lastRow >= 2) {
+    var colCAll = sheet.getRange(2, 3, lastRow, 3).getDisplayValues();
+    for (var r = 0; r < colCAll.length; r++) {
+      var v = String(colCAll[r][0] != null ? colCAll[r][0] : '').trim();
+      if (v) {
+        v.split(/\s*,\s*/).forEach(function (bc) { if (bc.trim()) barcodesOnSheet[bc.trim()] = true; });
+      }
+    }
+  }
   var blocksUpdated = 0;
   var totalItemsWritten = 0;
   var totalRowsInserted = 0;
@@ -529,22 +579,32 @@ function writeF2ServicedEquipmentToPrepSheet(sheet, sheetName, orderNumbersOnShe
       if (!row) continue;
       var items = itemsByCat[header];
       if (!items || items.length === 0) continue;
+      // Skip items whose barcode already appears in this block (same job) or anywhere on this sheet (same day: one barcode per job). Prevents duplicates from repeated runs.
+      var existingBarcodes = getExistingBarcodesInCategorySection(sheet, block, catIndex);
+      var newItems = items.filter(function (it) {
+        var bc = String(it.barcode != null ? it.barcode : '').trim();
+        return bc && !existingBarcodes[bc] && !barcodesOnSheet[bc];
+      });
+      if (newItems.length === 0) continue;
       // For Lenses: one row per item. For Heads, Focus, Matte Boxes, etc.: group by equipment name (one row per unique name, "Name (xN)", comma-separated barcodes, latest timestamp, no tech).
-      var itemsToWrite = (header === 'Lenses') ? items : groupItemsByEquipmentName(items);
+      var itemsToWrite = (header === 'Lenses') ? newItems : groupItemsByEquipmentName(newItems);
       if (itemsToWrite.length === 0) continue;
       var numCols = 10;
       var jobBg = sheet.getRange(row, 1).getBackground();
-      var item0 = itemsToWrite[0];
-      var existingB = sheet.getRange(row, 2).getDisplayValue();
       var existingC = sheet.getRange(row, 3).getDisplayValue();
-      var skipFirst = (existingB === item0.equipmentName && existingC === item0.barcode);
-      if (!skipFirst) {
+      var categoryRowHasBarcode = (existingC != null && String(existingC).trim() !== '');
+      // If the category row already has a barcode, only insert new rows (do not overwrite). Otherwise use it for the first item.
+      var startIdx = categoryRowHasBarcode ? 0 : 1;
+      if (!categoryRowHasBarcode) {
+        var item0 = itemsToWrite[0];
         sheet.getRange(row, 2).setValue(item0.equipmentName);
         sheet.getRange(row, 3).setValue(item0.barcode);
+        addBarcodesToSet(barcodesOnSheet, item0.barcode);
+        setServicedEquipmentStatusCells(sheet, row, item0);
+        blockItems += 1;
       }
-      setServicedEquipmentStatusCells(sheet, row, item0);
-      blockItems += 1;
-      for (var i = 1; i < itemsToWrite.length; i++) {
+      for (var i = startIdx; i < itemsToWrite.length; i++) {
+        var it = itemsToWrite[i];
         var categoryRowLabelFg = sheet.getRange(row, 1).getFontColor();
         var srcRow = row;
         sheet.insertRowAfter(row);
@@ -552,9 +612,9 @@ function writeF2ServicedEquipmentToPrepSheet(sheet, sheetName, orderNumbersOnShe
         // Copy Pulled?/RTR?/Serviced? formulas and hidden order column K from the source row.
         sheet.getRange(srcRow, JOB_COL_PULLED, 1, 3).copyTo(sheet.getRange(row, JOB_COL_PULLED, 1, 3));
         sheet.getRange(srcRow, 11, 1, 1).copyTo(sheet.getRange(row, 11, 1, 1));
-        var it = itemsToWrite[i];
         sheet.getRange(row, 2).setValue(it.equipmentName);
         sheet.getRange(row, 3).setValue(it.barcode);
+        addBarcodesToSet(barcodesOnSheet, it.barcode);
         sheet.getRange(row, 1).setBackground(jobBg).setFontColor(categoryRowLabelFg);
         setServicedEquipmentStatusCells(sheet, row, it);
         blockItems++;
